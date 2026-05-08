@@ -96,10 +96,19 @@
       <label>
         <span>Periodo</span>
         <select id="rangePreset">
-          <option value="7">Últimos 7 días</option>
-          <option value="30" selected>Últimos 30 días</option>
-          <option value="90">Últimos 90 días</option>
-          <option value="365">Último año</option>
+          <option value="0">Hoy</option>
+          <option value="1">Ayer</option>
+          <option value="7">&#xDAltimos 7 d&#xED;as</option>
+          <option value="30" selected>&#xDAltimos 30 d&#xED;as</option>
+          <option value="90">&#xDAltimos 3 meses</option>
+          <option value="thismonth">Este mes</option>
+          <option value="lastmonth">El mes pasado</option>
+          <option value="thisquarter">Este trimestre</option>
+          <option value="lastquarter">&#xDAltimo trimestre</option>
+          <option value="thisyear">Este a&#xF1;o</option>
+          <option value="365">&#xDAltimo a&#xF1;o</option>
+          <option value="lastyear">A&#xF1;o pasado</option>
+          <option value="all">Desde el inicio</option>
           <option value="custom">Personalizado</option>
         </select>
       </label>
@@ -123,12 +132,12 @@
         </select>
       </label>
       <label>
-        <span>País</span>
+        <span>Pa&#xED;s</span>
         <select id="countryFilter"><option value="all">Todos</option></select>
       </label>
       <label class="search">
         <span>Buscar</span>
-        <input id="searchInput" type="search" placeholder="Cliente, curso, pedido, país, ciudad...">
+        <input id="searchInput" type="search" placeholder="Cliente, curso, pedido, pa&#xED;s, ciudad...">
       </label>
     </section>
 
@@ -220,26 +229,39 @@
 
     <!-- VISTA: CRM -->
     <section id="view-crm" class="view">
+
+      <!-- Ranking de cursos -->
+      <article class="panel" style="margin-bottom:14px">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Productos</p>
+            <h2>&#x1F3AF; Cursos m&#xE1;s vendidos</h2>
+          </div>
+          <span id="courseRankBadge" class="badge">—</span>
+        </div>
+        <div id="courseRankingList" class="payment-bars"></div>
+      </article>
+
       <section class="two-col">
         <article class="panel">
           <div class="panel-head">
             <div>
               <p class="eyebrow">Clientes</p>
-              <h2>Segmentación profesional</h2>
+              <h2>Segmentaci&#xF3;n profesional</h2>
             </div>
           </div>
           <div id="segmentsGrid" class="segments-grid"></div>
           <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
             <div>
               <p class="eyebrow">Comportamiento</p>
-              <h2>Ventas por día de la semana</h2>
+              <h2>Ventas por d&#xED;a de la semana</h2>
             </div>
           </div>
           <div id="weekdayBars" class="payment-bars"></div>
           <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
             <div>
-              <p class="eyebrow">Distribución</p>
-              <h2>Ingresos por método de pago</h2>
+              <p class="eyebrow">Distribuci&#xF3;n</p>
+              <h2>Ingresos por m&#xE9;todo de pago</h2>
             </div>
           </div>
           <div id="paymentBars" class="payment-bars"></div>
@@ -252,7 +274,7 @@
           <div id="orderSummary" class="order-summary-grid"></div>
           <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
             <div>
-              <p class="eyebrow">Retención</p>
+              <p class="eyebrow">Retenci&#xF3;n</p>
               <h2>Clientes por frecuencia</h2>
             </div>
           </div>
@@ -262,12 +284,26 @@
           <div class="panel-head">
             <div>
               <p class="eyebrow">Compradores</p>
-              <h2>Top clientes por valor</h2>
+              <h2>Lista de clientes</h2>
             </div>
-            <button id="exportCustomersBtn" class="chip">⬇ CSV</button>
+            <button id="exportCustomersBtn" class="chip">&#x2B07; CSV</button>
           </div>
-          <div class="crm-search">
-            <input id="crmSearch" type="search" placeholder="Buscar por nombre o email…" class="sf-input" style="width:100%">
+          <!-- Controles de ordenaci&#xF3;n + b&#xFA;squeda -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+            <input id="crmSearch" type="search" placeholder="&#x1F50D; Nombre o email..." class="sf-input" style="flex:1;min-width:160px">
+            <select id="crmSort" class="sf-input" style="min-width:190px;font-size:13px">
+              <option value="revenue">&#x1F4B0; Mayor gasto total</option>
+              <option value="orders">&#x1F6D2; M&#xE1;s compras</option>
+              <option value="recent">&#x1F552; M&#xE1;s reciente</option>
+              <option value="oldest">&#x23F3; M&#xE1;s antiguo</option>
+              <option value="name">&#x1F524; A&#x2013;Z</option>
+            </select>
+            <select id="crmLimit" class="sf-input" style="min-width:90px;font-size:13px">
+              <option value="20">Top 20</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100</option>
+              <option value="999">Todos</option>
+            </select>
           </div>
           <div id="customerList" class="customer-list"></div>
         </article>

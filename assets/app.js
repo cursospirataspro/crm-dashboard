@@ -226,17 +226,53 @@ async function fetchApi(r) {
 function range() {
   const preset = $("#rangePreset").value;
   const now    = new Date();
-  let from     = new Date(now);
-  let to       = new Date(now);
+  let from, to;
+
+  const startOf = (d, unit) => {
+    const r = new Date(d);
+    if (unit === "month")   { r.setDate(1); }
+    if (unit === "quarter") { r.setMonth(Math.floor(r.getMonth()/3)*3, 1); }
+    if (unit === "year")    { r.setMonth(0, 1); }
+    r.setHours(0, 0, 0, 0);
+    return r;
+  };
 
   if (preset === "custom") {
-    if ($("#fromDate").value) from = new Date($("#fromDate").value + "T00:00:00");
-    if ($("#toDate").value)   to   = new Date($("#toDate").value   + "T23:59:59");
+    from = $("#fromDate").value ? new Date($("#fromDate").value + "T00:00:00") : new Date(now - 30*86400000);
+    to   = $("#toDate").value   ? new Date($("#toDate").value   + "T23:59:59") : new Date(now);
+  } else if (preset === "0") {
+    from = new Date(now); from.setHours(0,0,0,0);
+    to   = new Date(now); to.setHours(23,59,59,999);
+  } else if (preset === "1") {
+    from = new Date(now - 86400000); from.setHours(0,0,0,0);
+    to   = new Date(now - 86400000); to.setHours(23,59,59,999);
+  } else if (preset === "thismonth") {
+    from = startOf(now, "month");
+    to   = new Date(now); to.setHours(23,59,59,999);
+  } else if (preset === "lastmonth") {
+    const lm = new Date(now); lm.setDate(0);
+    from = startOf(lm, "month");
+    to   = new Date(lm); to.setHours(23,59,59,999);
+  } else if (preset === "thisquarter") {
+    from = startOf(now, "quarter");
+    to   = new Date(now); to.setHours(23,59,59,999);
+  } else if (preset === "lastquarter") {
+    const lq = new Date(now); lq.setMonth(Math.floor(lq.getMonth()/3)*3 - 1, 1);
+    from = startOf(lq, "quarter");
+    const eq = new Date(from); eq.setMonth(eq.getMonth()+3, 0); eq.setHours(23,59,59,999);
+    to = eq;
+  } else if (preset === "thisyear") {
+    from = startOf(now, "year");
+    to   = new Date(now); to.setHours(23,59,59,999);
+  } else if (preset === "lastyear") {
+    from = new Date(now.getFullYear()-1, 0, 1, 0, 0, 0);
+    to   = new Date(now.getFullYear()-1, 11, 31, 23, 59, 59);
+  } else if (preset === "all") {
+    from = new Date("2015-01-01T00:00:00");
+    to   = new Date(now); to.setHours(23,59,59,999);
   } else {
-    from = new Date(now);
-    from.setDate(now.getDate() - Number(preset));
-    from.setHours(0, 0, 0, 0);
-    to.setHours(23, 59, 59, 999);
+    from = new Date(now - Number(preset) * 86400000); from.setHours(0,0,0,0);
+    to   = new Date(now); to.setHours(23,59,59,999);
   }
   return { from, to, fromISO: localDateStr(from), toISO: localDateStr(to) };
 }
@@ -366,6 +402,7 @@ function renderAll() {
   renderSegments();
   renderWeekdayChart();
   renderPaymentBars();
+  renderCourseRanking();
   renderCustomers();
   renderOportunidades();
   renderCourseMatrix();
@@ -984,37 +1021,112 @@ function nextPurchasePrediction(emailOrName) {
 
 function renderCustomers() {
   const allCustomers = Object.values(customerMap(state.orders));
-  const list = Object.values(customerMap(state.filtered))
-    .sort((a, b) => b.revenue - a.revenue).slice(0, 30);
+  const sortBy  = $("#crmSort")?.value   || "revenue";
+  const limit   = Number($("#crmLimit")?.value || 30);
+  const search  = ($("#crmSearch")?.value || "").trim().toLowerCase();
 
-  const search   = ($("#crmSearch")?.value || '').trim().toLowerCase();
-  const filtered = search
-    ? list.filter(c => c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search))
-    : list;
+  let list = Object.values(customerMap(state.filtered));
 
-  $("#customerList").innerHTML = filtered.map(c => {
+  // Ordenar
+  if (sortBy === "revenue")  list.sort((a, b) => b.revenue - a.revenue);
+  else if (sortBy === "orders")  list.sort((a, b) => b.orders  - a.orders);
+  else if (sortBy === "recent")  list.sort((a, b) => new Date(b.last) - new Date(a.last));
+  else if (sortBy === "oldest")  list.sort((a, b) => new Date(a.last) - new Date(b.last));
+  else if (sortBy === "name")    list.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Filtrar por búsqueda
+  if (search) list = list.filter(c =>
+    c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search)
+  );
+
+  // Limitar
+  const total = list.length;
+  list = list.slice(0, limit);
+
+  const maxRev = list[0]?.revenue || 1;
+
+  $("#customerList").innerHTML = list.map((c, i) => {
     const rfm  = rfmScore(c, allCustomers);
+    const pct  = Math.round((c.revenue / maxRev) * 100);
     const pred = nextPurchasePrediction(c.email || c.name);
     const predHtml = pred
       ? `<p style="${pred.daysLeft <= 0 ? 'color:var(--accent)' : 'color:var(--muted)'}">
-           ${pred.daysLeft > 0 ? `🗓 Próx. compra ~${pred.daysLeft}d` : `⚡ Compra esperada hace ${Math.abs(pred.daysLeft)}d`}
+           ${pred.daysLeft > 0 ? `&#x1F5D3; Pr&#xF3;x. compra ~${pred.daysLeft}d` : `&#x26A1; Compra esperada hace ${Math.abs(pred.daysLeft)}d`}
          </p>`
       : '';
-    return `<div class="customer" data-email="${esc(c.email || c.name)}">
-       <div class="avatar">${esc(c.name.slice(0,2).toUpperCase())}</div>
+    return `<div class="customer" data-email="${esc(c.email || c.name)}" style="cursor:pointer">
+       <div class="avatar" style="min-width:36px;font-size:13px;background:hsl(${(i*47)%360},50%,35%)">${esc(c.name.slice(0,2).toUpperCase())}</div>
        <div style="flex:1;min-width:0">
-         <h3>${esc(c.name)} <span class="rfm-badge ${rfm.cls}">${rfm.label}</span></h3>
-         <p>${esc(c.email)} · ${c.orders} pedido${c.orders!==1?"s":""} · ${c.courses.size} curso${c.courses.size!==1?"s":""}</p>
+         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+           <h3 style="margin:0">${esc(c.name)}</h3>
+           <span class="rfm-badge ${rfm.cls}">${rfm.label}</span>
+         </div>
+         <p style="margin:2px 0;font-size:12px;color:var(--muted)">${esc(c.email)} &middot; ${c.orders} pedido${c.orders!==1?"s":""} &middot; ${c.courses.size} curso${c.courses.size!==1?"s":""}</p>
+         <div style="height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden">
+           <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:2px"></div>
+         </div>
          ${predHtml}
        </div>
-       <strong>${fmtMoney(c.revenue)}</strong>
+       <div style="text-align:right;flex-shrink:0">
+         <strong style="display:block;font-size:15px">${fmtMoney(c.revenue)}</strong>
+         <span style="font-size:11px;color:var(--muted)">#${i+1}</span>
+       </div>
      </div>`;
   }).join("") || empty("Sin clientes en el periodo.");
 
+  // Leyenda de totales
+  const totalRev = list.reduce((s, c) => s + c.revenue, 0);
+  const legend = document.createElement("p");
+  legend.style.cssText = "font-size:12px;color:var(--muted);text-align:right;margin:8px 4px 0";
+  legend.textContent = `Mostrando ${list.length} de ${total} clientes · Total: ${fmtMoney(totalRev)}`;
+  const el = $("#customerList");
+  el.appendChild(legend);
+
   // Click → abrir modal timeline
-  $("#customerList").querySelectorAll('.customer').forEach(el => {
-    el.addEventListener('click', () => openCustomerModal(el.dataset.email));
+  el.querySelectorAll(".customer").forEach(el => {
+    el.addEventListener("click", () => openCustomerModal(el.dataset.email));
   });
+}
+
+function renderCourseRanking() {
+  const el = document.getElementById("courseRankingList");
+  const badge = document.getElementById("courseRankBadge");
+  if (!el) return;
+
+  // Contar unidades vendidas e ingresos por curso
+  const courseStats = {};
+  validRevenueOrders(state.filtered).forEach(o => {
+    (o.products || []).forEach(p => {
+      const name = (p.name || "Curso sin nombre").trim();
+      if (!courseStats[name]) courseStats[name] = { units: 0, revenue: 0 };
+      const qty = Number(p.quantity || 1);
+      const rev = Number(p.subtotal || p.total || 0);
+      courseStats[name].units   += qty;
+      courseStats[name].revenue += rev;
+    });
+  });
+
+  const sorted = Object.entries(courseStats).sort((a, b) => b[1].units - a[1].units);
+  if (badge) badge.textContent = sorted.length + " cursos";
+
+  if (!sorted.length) { el.innerHTML = empty("Sin datos en el periodo."); return; }
+
+  const maxUnits = sorted[0][1].units || 1;
+  el.innerHTML = sorted.map(([name, s], i) => {
+    const pct = Math.round((s.units / maxUnits) * 100);
+    const medal = i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i+1}.`;
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;gap:8px">
+        <span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">
+          <span style="margin-right:4px">${medal}</span>${esc(name)}
+        </span>
+        <span style="font-size:12px;white-space:nowrap;color:var(--muted)">${s.units} vendido${s.units!==1?"s":""} &middot; ${fmtMoney(s.revenue)}</span>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2,var(--accent)));border-radius:3px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  }).join("");
 }
 
 function renderCourseMatrix() {
@@ -2361,8 +2473,10 @@ function bind() {
     } catch(e) { toast('No se pudo guardar la nota', 'error'); }
   });
 
-  // ── Búsqueda en CRM ──
-  $("#crmSearch")?.addEventListener("input", debounce(() => renderCustomers(), 200));
+  // ── Búsqueda + ordenación en CRM ──
+  $("#crmSearch")?.addEventListener("input",  debounce(() => renderCustomers(), 200));
+  $("#crmSort")?.addEventListener("change",   () => renderCustomers());
+  $("#crmLimit")?.addEventListener("change",  () => renderCustomers());
 
   // ── Exportar clientes CSV ──
   $("#exportCustomersBtn")?.addEventListener("click", exportCustomersCSV);
