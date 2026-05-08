@@ -3749,10 +3749,14 @@ async function ppFetchTransactions(from, to, page) {
 }
 
 const PP_COUNTRIES = {
-  ES:"EspaÃ±a", MX:"MÃ©xico", CL:"Chile", CO:"Colombia", US:"EEUU", PE:"PerÃº",
+  ES:"España", MX:"México", CL:"Chile", CO:"Colombia", US:"EEUU", PE:"Perú",
   AR:"Argentina", EC:"Ecuador", BO:"Bolivia", PY:"Paraguay", UY:"Uruguay",
-  VE:"Venezuela", CR:"Costa Rica", GT:"Guatemala", PA:"PanamÃ¡", DO:"Rep. Dom.",
-  GB:"Reino Unido", FR:"Francia", DE:"Alemania", BR:"Brasil"
+  VE:"Venezuela", CR:"Costa Rica", GT:"Guatemala", PA:"Panamá", DO:"Rep. Dom.",
+  GB:"Reino Unido", FR:"Francia", DE:"Alemania", BR:"Brasil", IT:"Italia",
+  NL:"Países Bajos", PT:"Portugal", BE:"Bélgica", CH:"Suiza", SE:"Suecia",
+  IN:"India", CN:"China", JP:"Japón", AU:"Australia", CA:"Canadá",
+  ZA:"Sudfrica", NG:"Nigeria", EG:"Egipto", MA:"Marruecos",
+  SG:"Singapur", PH:"Filipinas", ID:"Indonesia", TH:"Tailandia", VN:"Vietnam"
 };
 
 function ppCountryFlag(code) {
@@ -3982,6 +3986,22 @@ function ppRenderAll(txnDetails) {
     }).join("");
   }
 }
+// Divide un rango de fechas en ventanas de maxDays días
+function ppSplitDateRange(from, to, maxDays = 31) {
+  const chunks = [];
+  let cur = new Date(from + "T00:00:00Z");
+  const end = new Date(to + "T00:00:00Z");
+  while (cur <= end) {
+    const chunkEnd = new Date(Math.min(cur.getTime() + (maxDays - 1) * 86400000, end.getTime()));
+    chunks.push([
+      cur.toISOString().slice(0, 10),
+      chunkEnd.toISOString().slice(0, 10)
+    ]);
+    cur = new Date(chunkEnd.getTime() + 86400000);
+  }
+  return chunks;
+}
+
 async function loadPaypalData() {
   const statusEl = document.getElementById("paypalStatus");
   const btn      = document.getElementById("paypalLoadBtn");
@@ -3996,10 +4016,25 @@ async function loadPaypalData() {
   if (btn) btn.disabled = true;
 
   try {
-    const data  = await ppFetchTransactions(from, to, 1);
-    const txns  = data.transaction_details || [];
-    ppRenderAll(txns);
-    if (statusEl) statusEl.textContent = `${txns.length} transacciones Â· ${new Date().toLocaleTimeString("es-PE")}`;
+    const chunks = ppSplitDateRange(from, to, 31);
+    const allTxns = [];
+
+    for (let i = 0; i < chunks.length; i++) {
+      const [cFrom, cTo] = chunks[i];
+      if (statusEl) statusEl.textContent = `Cargando... bloque ${i + 1}/${chunks.length} (${cFrom} → ${cTo})`;
+      const data = await ppFetchTransactions(cFrom, cTo, 1);
+      const txns = data.transaction_details || [];
+      allTxns.push(...txns);
+      // Si hay más páginas en este bloque
+      const totalPages = data.total_pages || 1;
+      for (let p = 2; p <= totalPages; p++) {
+        const pageData = await ppFetchTransactions(cFrom, cTo, p);
+        allTxns.push(...(pageData.transaction_details || []));
+      }
+    }
+
+    ppRenderAll(allTxns);
+    if (statusEl) statusEl.textContent = `${allTxns.length} transacciones · ${new Date().toLocaleTimeString("es-PE")}`;
   } catch(err) {
     const msg = String(err.message || err);
     if (statusEl) { statusEl.innerHTML = "<span style='color:var(--bad)'>" + msg + "</span>"; }
