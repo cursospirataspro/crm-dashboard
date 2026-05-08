@@ -1,5 +1,5 @@
 // =============================================================
-// CONFIG — Cambiar mode:"api" y completar datos para producción
+// CONFIG â€” Cambiar mode:"api" y completar datos para producciÃ³n
 // =============================================================
 const CONFIG = {
   mode:       "demo",   // "demo" | "api"
@@ -8,7 +8,7 @@ const CONFIG = {
   currency:   "USD"
 };
 
-// Tasas de cambio base vs USD (actualización manual o via API gratuita)
+// Tasas de cambio base vs USD (actualizaciÃ³n manual o via API gratuita)
 const FX_RATES = { USD:1, EUR:0.92, PEN:3.77, COP:4020, MXN:17.2, ARS:870 };
 let DISPLAY_CURRENCY = (function() {
   try { return localStorage.getItem('crm_currency') || 'USD'; } catch(e) { return 'USD'; }
@@ -22,21 +22,21 @@ const _origFmtMoney = v => {
 };
 
 // =============================================================
-// PAÍSES (lat/lon para el globo 3D)
+// PAÃSES (lat/lon para el globo 3D)
 // =============================================================
 const COUNTRIES = [
-  { code:"PE", name:"Perú",                lat: -9.19, lon: -75.02, cities:["Lima","Iquitos","Arequipa","Trujillo","Cusco"] },
-  { code:"CO", name:"Colombia",            lat:  4.57, lon: -74.29, cities:["Bogotá","Medellín","Cali","Barranquilla"] },
-  { code:"MX", name:"México",              lat: 23.63, lon:-102.55, cities:["Ciudad de México","Guadalajara","Monterrey","Puebla"] },
+  { code:"PE", name:"PerÃº",                lat: -9.19, lon: -75.02, cities:["Lima","Iquitos","Arequipa","Trujillo","Cusco"] },
+  { code:"CO", name:"Colombia",            lat:  4.57, lon: -74.29, cities:["BogotÃ¡","MedellÃ­n","Cali","Barranquilla"] },
+  { code:"MX", name:"MÃ©xico",              lat: 23.63, lon:-102.55, cities:["Ciudad de MÃ©xico","Guadalajara","Monterrey","Puebla"] },
   { code:"EC", name:"Ecuador",             lat: -1.83, lon: -78.18, cities:["Quito","Guayaquil","Cuenca"] },
-  { code:"CL", name:"Chile",               lat:-35.67, lon: -71.54, cities:["Santiago","Valparaíso","Concepción"] },
-  { code:"AR", name:"Argentina",           lat:-38.42, lon: -63.62, cities:["Buenos Aires","Córdoba","Rosario"] },
-  { code:"ES", name:"España",              lat: 40.46, lon:  -3.75, cities:["Madrid","Barcelona","Valencia","Sevilla"] },
-  { code:"US", name:"Estados Unidos",      lat: 37.09, lon: -95.71, cities:["Miami","New York","Los Ángeles","Houston"] },
+  { code:"CL", name:"Chile",               lat:-35.67, lon: -71.54, cities:["Santiago","ValparaÃ­so","ConcepciÃ³n"] },
+  { code:"AR", name:"Argentina",           lat:-38.42, lon: -63.62, cities:["Buenos Aires","CÃ³rdoba","Rosario"] },
+  { code:"ES", name:"EspaÃ±a",              lat: 40.46, lon:  -3.75, cities:["Madrid","Barcelona","Valencia","Sevilla"] },
+  { code:"US", name:"Estados Unidos",      lat: 37.09, lon: -95.71, cities:["Miami","New York","Los Ãngeles","Houston"] },
   { code:"BO", name:"Bolivia",             lat:-16.29, lon: -63.59, cities:["La Paz","Santa Cruz","Cochabamba"] },
-  { code:"DO", name:"República Dominicana",lat: 18.74, lon: -70.16, cities:["Santo Domingo","Santiago"] },
+  { code:"DO", name:"RepÃºblica Dominicana",lat: 18.74, lon: -70.16, cities:["Santo Domingo","Santiago"] },
   { code:"VE", name:"Venezuela",           lat:  6.42, lon: -66.59, cities:["Caracas","Valencia","Maracaibo"] },
-  { code:"CR", name:"Costa Rica",          lat:  9.75, lon: -83.75, cities:["San José","Alajuela"] }
+  { code:"CR", name:"Costa Rica",          lat:  9.75, lon: -83.75, cities:["San JosÃ©","Alajuela"] }
 ];
 
 // =============================================================
@@ -99,12 +99,12 @@ function setLoading(loading) {
   state.loading = loading;
   const btn = $("#refreshBtn");
   btn.disabled    = loading;
-  btn.textContent = loading ? "Cargando…" : "Actualizar";
+  btn.textContent = loading ? "Cargandoâ€¦" : "Actualizar";
   $("#kpiGrid").classList.toggle("loading-pulse", loading);
 }
 
 // =============================================================
-// DATOS DEMO — Clientes y cursos reales extraídos del historial
+// DATOS DEMO â€” Clientes y cursos reales extraÃ­dos del historial
 // =============================================================
 function weightedCountry() {
   const pool = ["PE","PE","PE","PE","CO","CO","MX","MX","EC","CL","AR","ES","US","BO","DO","VE","CR"];
@@ -119,12 +119,12 @@ function demoOrders() {
     "Bootcamp AlexG",
     "Taller Intensivo de Mayo",
     "Taller de Septiembre",
-    "Jesús Mora (Octubre 2024)",
-    "Jesús (Noviembre 2024)",
-    "Jesús (Diciembre 2024)",
+    "JesÃºs Mora (Octubre 2024)",
+    "JesÃºs (Noviembre 2024)",
+    "JesÃºs (Diciembre 2024)",
     "Pro Trader 2.0",
     "Daniel Curto Footprint",
-    "Felipe López",
+    "Felipe LÃ³pez",
     "Price Action",
     "Pako Thawani",
     "Victor Coll",
@@ -134,31 +134,31 @@ function demoOrders() {
     "Luigi V"
   ];
 
-  // Clientes reales extraídos del historial de descargas
+  // Clientes reales extraÃ­dos del historial de descargas
   const realCustomers = [
     { name: "Onel Caruci",                  email: "onelcaruci@gmail.com" },
     { name: "Alex Vera",                     email: "alexvera042@gmail.com" },
     { name: "skyx fraan",                    email: "skee8927@gmail.com" },
     { name: "ppabloool",                     email: "bickmongy22@gmail.com" },
-    { name: "Anyelo Hernández",              email: "anyelohernandeztrader@gmail.com" },
+    { name: "Anyelo HernÃ¡ndez",              email: "anyelohernandeztrader@gmail.com" },
     { name: "Alma Alvarez",                  email: "amaalvarez24.aa@gmail.com" },
     { name: "Iker C.",                       email: "ikerc.c05@gmail.com" },
-    { name: "Josué Colomina",               email: "iosuecolominacortes@gmail.com" },
+    { name: "JosuÃ© Colomina",               email: "iosuecolominacortes@gmail.com" },
     { name: "Pool Pastor",                   email: "pool.pastor@gmail.com" },
     { name: "Federico Gladich",              email: "federicogladich@gmail.com" },
     { name: "Mauricio Zalamea",              email: "mzalamea@gmail.com" },
     { name: "Luis Gabriel VP",               email: "lzvalenciaperez@gmail.com" },
-    { name: "Andrés Hernández",              email: "andreshernandez970425@gmail.com" },
-    { name: "Ramiro Rodríguez",              email: "ramirorodriguez1703@gmail.com" },
+    { name: "AndrÃ©s HernÃ¡ndez",              email: "andreshernandez970425@gmail.com" },
+    { name: "Ramiro RodrÃ­guez",              email: "ramirorodriguez1703@gmail.com" },
     { name: "Edinson",                       email: "edinson50k@gmail.com" },
     { name: "Gabriel Oddone",                email: "gabrieloddonelopez@gmail.com" },
     { name: "City Condado",                  email: "citycondado7@gmail.com" },
     { name: "llani818",                      email: "llani818@gmail.com" },
     { name: "jean_carlos_mandon",            email: "jean.carlos.mandon@gmail.com" },
-    { name: "Martín Rodríguez",              email: "martin.rodriguez.trader@gmail.com" },
+    { name: "MartÃ­n RodrÃ­guez",              email: "martin.rodriguez.trader@gmail.com" },
     { name: "miguelangelpaam",               email: "miguelangelpaam@gmail.com" },
     { name: "sebast_rade",                   email: "sebast.rade@gmail.com" },
-    { name: "Edgar Jiménez",                 email: "edgarjimenez09@gmail.com" }
+    { name: "Edgar JimÃ©nez",                 email: "edgarjimenez09@gmail.com" }
   ];
 
   const statuses = ["completed","processing","pending","refunded","cancelled"];
@@ -249,7 +249,7 @@ async function load() {
       state.orders = await fetchApi(r);
       $("#modeLabel").textContent = "WooCommerce API";
       toast("Datos reales cargados desde WooCommerce", "success");
-      // Sincronizar pedidos completados → GA4 (solo los que no se han enviado antes)
+      // Sincronizar pedidos completados â†’ GA4 (solo los que no se han enviado antes)
       syncOrdersToGA4(state.orders).catch(() => {});
     } else {
       state.orders = demoOrders();
@@ -260,7 +260,7 @@ async function load() {
     console.error("Error al cargar datos:", e);
     state.orders = demoOrders();
     $("#modeLabel").textContent = "Modo demo (respaldo)";
-    toast("Sin conexión a la API — se cargaron datos demo.", "error");
+    toast("Sin conexiÃ³n a la API â€” se cargaron datos demo.", "error");
   } finally {
     setLoading(false);
   }
@@ -389,7 +389,7 @@ function renderAll() {
 function renderKPIs() {
   const m = metrics(state.filtered);
 
-  // ── Período anterior para comparativa ──
+  // â”€â”€ PerÃ­odo anterior para comparativa â”€â”€
   const r   = range();
   const dur = r.to.getTime() - r.from.getTime();
   const prevFrom = new Date(r.from.getTime() - dur);
@@ -401,14 +401,14 @@ function renderKPIs() {
     if (!prev) return '';
     const pct = (cur - prev) / prev * 100;
     const cls = pct >= 0 ? 'kpi-up' : 'kpi-down';
-    return ` <span class="${cls}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</span>`;
+    return ` <span class="${cls}">${pct >= 0 ? 'â–²' : 'â–¼'} ${Math.abs(pct).toFixed(1)}%</span>`;
   };
 
   const cards = [
-    ["Ingresos",        fmtMoney(m.revenue),                 "Ventas válidas",           chg(m.revenue, mp.revenue)],
+    ["Ingresos",        fmtMoney(m.revenue),                 "Ventas vÃ¡lidas",           chg(m.revenue, mp.revenue)],
     ["Pedidos",         m.orders.toLocaleString("es-PE"),    "Total en el periodo",      chg(m.orders, mp.orders)],
-    ["Ticket promedio", fmtMoney(m.avg),                     "Por pedido válido",        chg(m.avg, mp.avg)],
-    ["Clientes únicos", m.customers.toLocaleString("es-PE"), `${m.repeat} recurrentes`, chg(m.customers, mp.customers)],
+    ["Ticket promedio", fmtMoney(m.avg),                     "Por pedido vÃ¡lido",        chg(m.avg, mp.avg)],
+    ["Clientes Ãºnicos", m.customers.toLocaleString("es-PE"), `${m.repeat} recurrentes`, chg(m.customers, mp.customers)],
     ["Tasa reembolso",  m.refundRate.toFixed(1) + "%",       "Control de riesgo",        '']
   ];
   $("#kpiGrid").innerHTML = cards.map(([label, value, sub, change]) =>
@@ -433,7 +433,7 @@ function renderRevenueChart() {
   const second = sum(series.slice(half),    x => x.value);
   const trend  = first ? (second - first) / first * 100 : 0;
   const badge  = $("#trendBadge");
-  badge.textContent = `${trend >= 0 ? "▲" : "▼"} ${Math.abs(trend).toFixed(1)}%`;
+  badge.textContent = `${trend >= 0 ? "â–²" : "â–¼"} ${Math.abs(trend).toFixed(1)}%`;
   badge.className   = `badge ${trend >= 0 ? "badge-up" : "badge-down"}`;
 
   const container = $("#revenueBars");
@@ -459,7 +459,7 @@ function renderRecentFeed() {
 
   $("#recentCount").textContent = `${state.filtered.length} pedidos`;
 
-  const statusIcon = s => ({ completed:'✅', processing:'⏳', pending:'🔔', cancelled:'❌', refunded:'↩', 'on-hold':'⏸' }[s] || '📦');
+  const statusIcon = s => ({ completed:'âœ…', processing:'â³', pending:'ðŸ””', cancelled:'âŒ', refunded:'â†©', 'on-hold':'â¸' }[s] || 'ðŸ“¦');
   const timeAgo = d => {
     const mins = Math.floor((Date.now() - new Date(d)) / 60000);
     if (mins < 60)  return `hace ${mins}m`;
@@ -475,7 +475,7 @@ function renderRecentFeed() {
       <div class="rf-avatar">${esc(initials)}</div>
       <div class="rf-info">
         <div class="rf-name">${esc(o.customer || 'Cliente')}</div>
-        <div class="rf-course">${esc(course.length > 42 ? course.slice(0,42)+'…' : course)}</div>
+        <div class="rf-course">${esc(course.length > 42 ? course.slice(0,42)+'â€¦' : course)}</div>
       </div>
       <div class="rf-right">
         <span class="rf-time">${timeAgo(o.date)}</span>
@@ -489,16 +489,16 @@ function renderRecentFeed() {
 function renderFunnel() {
   const orders = state.filtered, total = Math.max(orders.length, 1);
   const rows = [
-    ["Visitantes estimados",  Math.round(total * 7.8), "Tráfico aproximado según pedidos"],
-    ["Carritos / intención",  Math.round(total * 2.4), "Prospectos con intención de compra"],
-    ["Pedidos creados",       total,                   "Órdenes registradas"],
-    ["Pagos válidos",         validRevenueOrders(orders).length, "Completados / procesando"],
-    ["Clientes recurrentes",  metrics(orders).repeat,  "Compradores con más de 1 pedido"]
+    ["Visitantes estimados",  Math.round(total * 7.8), "TrÃ¡fico aproximado segÃºn pedidos"],
+    ["Carritos / intenciÃ³n",  Math.round(total * 2.4), "Prospectos con intenciÃ³n de compra"],
+    ["Pedidos creados",       total,                   "Ã“rdenes registradas"],
+    ["Pagos vÃ¡lidos",         validRevenueOrders(orders).length, "Completados / procesando"],
+    ["Clientes recurrentes",  metrics(orders).repeat,  "Compradores con mÃ¡s de 1 pedido"]
   ];
   const max = rows[0][1] || 1;
   $("#funnelChart").innerHTML = rows.map(([label, count, sub]) =>
     `<div class="funnel-row" style="--w:${Math.max(8, count / max * 100)}%">
-       <strong>${label} · ${count.toLocaleString("es-PE")}</strong>
+       <strong>${label} Â· ${count.toLocaleString("es-PE")}</strong>
        <span>${sub}</span>
      </div>`
   ).join("");
@@ -514,26 +514,26 @@ function renderAlerts() {
   const alerts    = [];
 
   if (pending > ALERT_CONFIG.maxPending)
-    alerts.push(["⚠ Pedidos pendientes",
-      `${pending} pedido${pending > 1 ? "s" : ""} requieren revisión. Umbral configurado: ${ALERT_CONFIG.maxPending}.`]);
+    alerts.push(["âš  Pedidos pendientes",
+      `${pending} pedido${pending > 1 ? "s" : ""} requieren revisiÃ³n. Umbral configurado: ${ALERT_CONFIG.maxPending}.`]);
   else if (pending)
-    alerts.push(["ℹ Pagos pendientes",
+    alerts.push(["â„¹ Pagos pendientes",
       `${pending} pedido${pending > 1 ? "s" : ""} pendientes de pago.`]);
   if (m.refundRate > ALERT_CONFIG.maxRefund)
-    alerts.push(["⚠ Reembolsos elevados",
+    alerts.push(["âš  Reembolsos elevados",
       `Tasa de reembolso en ${m.refundRate.toFixed(1)}%. Umbral: ${ALERT_CONFIG.maxRefund}%.`]);
   if (cancelled)
-    alerts.push(["⚠ Pedidos cancelados",
+    alerts.push(["âš  Pedidos cancelados",
       `${cancelled} venta${cancelled > 1 ? "s" : ""} no llegaron a concretarse.`]);
   if (m.repeat < Math.max(1, m.customers * ALERT_CONFIG.minRepeatPct / 100))
-    alerts.push(["ℹ Baja recompra",
+    alerts.push(["â„¹ Baja recompra",
       `Pocos clientes recurrentes. Meta: ${ALERT_CONFIG.minRepeatPct}% del total.`]);
   if (inactiveCt > 0)
-    alerts.push(["😴 Clientes inactivos",
-      `${inactiveCt} cliente${inactiveCt !== 1 ? "s" : ""} sin comprar en más de ${ALERT_CONFIG.daysInactive} días.`]);
+    alerts.push(["ðŸ˜´ Clientes inactivos",
+      `${inactiveCt} cliente${inactiveCt !== 1 ? "s" : ""} sin comprar en mÃ¡s de ${ALERT_CONFIG.daysInactive} dÃ­as.`]);
   if (!alerts.length)
-    alerts.push(["✓ Operación saludable",
-      "No hay alertas críticas en el periodo seleccionado."]);
+    alerts.push(["âœ“ OperaciÃ³n saludable",
+      "No hay alertas crÃ­ticas en el periodo seleccionado."]);
 
   $("#alertsList").innerHTML = alerts.map(([title, body]) =>
     `<div class="alert"><strong>${title}</strong><p>${body}</p></div>`
@@ -558,7 +558,7 @@ function renderCountryDetail() {
   const code    = state.selectedCountry;
   const orders  = state.filtered;
   const cName   = code === "all"
-    ? "Todos los países"
+    ? "Todos los paÃ­ses"
     : orders.find(o => o.country_code === code)?.country
       || COUNTRIES.find(c => c.code === code)?.name
       || code;
@@ -588,13 +588,13 @@ function renderCountryDetail() {
     </div>
     <div class="detail-card">
       <h3>Top ciudades</h3>
-      ${cities.map(x => `<div class="detail-row"><span>${esc(x.name)} · ${x.orders} pedidos</span><strong>${fmtMoney(x.revenue)}</strong></div>`).join("")
+      ${cities.map(x => `<div class="detail-row"><span>${esc(x.name)} Â· ${x.orders} pedidos</span><strong>${fmtMoney(x.revenue)}</strong></div>`).join("")
         || `<p style="color:var(--muted)">Sin ciudades.</p>`}
     </div>`;
 }
 
 function renderWeekdayChart() {
-  const days   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const days   = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
   const totals = [0,0,0,0,0,0,0];
   const counts = [0,0,0,0,0,0,0];
   validRevenueOrders(state.filtered).forEach(o => {
@@ -619,10 +619,10 @@ function renderWeekdayChart() {
   const canc   = orders.filter(o => o.status === 'cancelled').length;
   const avgVal = orders.length ? sum(validRevenueOrders(orders), o => o.total) / validRevenueOrders(orders).length : 0;
   $("#orderSummary").innerHTML = [
-    ['✅ Completados', paid],
-    ['⏳ Pendientes',  pend],
-    ['❌ Cancelados',  canc],
-    ['📊 Ticket medio', fmtMoney(avgVal)]
+    ['âœ… Completados', paid],
+    ['â³ Pendientes',  pend],
+    ['âŒ Cancelados',  canc],
+    ['ðŸ“Š Ticket medio', fmtMoney(avgVal)]
   ].map(([label, val]) =>
     `<div class="os-card"><strong>${val}</strong><span>${label}</span></div>`
   ).join('');
@@ -702,7 +702,7 @@ function drawBarChart(canvas, series) {
 }
 
 // =============================================================
-// OPORTUNIDADES DE VENTA — Asistente de ventas CRM
+// OPORTUNIDADES DE VENTA â€” Asistente de ventas CRM
 // =============================================================
 const OPO_STATE = { tab: 'pending' };
 
@@ -720,7 +720,7 @@ function opoLeads() {
   const now        = Date.now();
   const avgTicket  = metrics(state.filtered).avg || 40;
 
-  // ── Pendientes: pedidos iniciados pero sin pago confirmado ──
+  // â”€â”€ Pendientes: pedidos iniciados pero sin pago confirmado â”€â”€
   const pendingOrders = allOrders.filter(o => statusNorm(o.status) === 'pending');
   const pendingLeads  = pendingOrders.map(o => {
     const daysSince = Math.floor((now - new Date(o.date)) / 864e5);
@@ -737,12 +737,12 @@ function opoLeads() {
       daysSince,
       orderId: o.number || o.id,
       score:   Math.min(score, 98),
-      action:  `Tiene el pedido ${o.number || o.id} sin pagar desde hace ${daysSince} día${daysSince!==1?'s':''}. Enviar recordatorio de pago con link directo.`,
-      tag:     '🔥 Pago pendiente'
+      action:  `Tiene el pedido ${o.number || o.id} sin pagar desde hace ${daysSince} dÃ­a${daysSince!==1?'s':''}. Enviar recordatorio de pago con link directo.`,
+      tag:     'ðŸ”¥ Pago pendiente'
     };
   }).sort((a, b) => b.score - a.score);
 
-  // ── Cancelados: quisieron comprar pero algo falló ──
+  // â”€â”€ Cancelados: quisieron comprar pero algo fallÃ³ â”€â”€
   const cancelledOrders = allOrders.filter(o => statusNorm(o.status) === 'cancelled');
   const cancelledLeads  = cancelledOrders.map(o => {
     const daysSince = Math.floor((now - new Date(o.date)) / 864e5);
@@ -759,12 +759,12 @@ function opoLeads() {
       daysSince,
       orderId: o.number || o.id,
       score:   Math.min(score, 85),
-      action:  `Canceló el pedido ${o.number || o.id} (${courses || 'curso'}) hace ${daysSince} día${daysSince!==1?'s':''}. Ofrecer cupón de descuento o resolver objeción por email.`,
-      tag:     '🛒 Carrito perdido'
+      action:  `CancelÃ³ el pedido ${o.number || o.id} (${courses || 'curso'}) hace ${daysSince} dÃ­a${daysSince!==1?'s':''}. Ofrecer cupÃ³n de descuento o resolver objeciÃ³n por email.`,
+      tag:     'ðŸ›’ Carrito perdido'
     };
   }).sort((a, b) => b.score - a.score);
 
-  // ── Inactivos: compraron pero no vuelven ──
+  // â”€â”€ Inactivos: compraron pero no vuelven â”€â”€
   const inactiveLeads = Object.values(cm)
     .filter(c => {
       const days = (now - new Date(c.last)) / 864e5;
@@ -785,13 +785,13 @@ function opoLeads() {
         daysSince,
         orderId:   '',
         score:     Math.min(score, 90),
-        action:    `Sin actividad hace ${daysSince} días. Compró: ${coursesArr.slice(0,2).join(', ')}. Ideal para campaña de reactivación con nuevo curso relacionado.`,
-        tag:       '😴 Inactivo'
+        action:    `Sin actividad hace ${daysSince} dÃ­as. ComprÃ³: ${coursesArr.slice(0,2).join(', ')}. Ideal para campaÃ±a de reactivaciÃ³n con nuevo curso relacionado.`,
+        tag:       'ðŸ˜´ Inactivo'
       };
     })
     .sort((a, b) => b.score - a.score);
 
-  // ── Upsell: compraron 1 curso, pueden comprar más ──
+  // â”€â”€ Upsell: compraron 1 curso, pueden comprar mÃ¡s â”€â”€
   const upsellLeads = Object.values(cm)
     .filter(c => {
       const days = (now - new Date(c.last)) / 864e5;
@@ -822,8 +822,8 @@ function opoLeads() {
         daysSince,
         orderId: '',
         score:   Math.min(score, 97),
-        action:  `Ya compró ${owned.length} curso${owned.length!==1?'s':''}. Recomendar: ${recommendations.join(' / ') || 'próximo lanzamiento'}.`,
-        tag:     '🚀 Potencial upsell',
+        action:  `Ya comprÃ³ ${owned.length} curso${owned.length!==1?'s':''}. Recomendar: ${recommendations.join(' / ') || 'prÃ³ximo lanzamiento'}.`,
+        tag:     'ðŸš€ Potencial upsell',
         recommendations
       };
     })
@@ -842,11 +842,11 @@ function renderOportunidades() {
     + (inactiveLeads.length + upsellLeads.length) * avgTicket;
 
   $('#opoKpis').innerHTML = [
-    ['🔥', pendingLeads.length, 'Pagos pendientes', fmtMoney(pendingLeads.reduce((s,l)=>s+l.value,0))],
-    ['🛒', cancelledLeads.length, 'Carritos perdidos', fmtMoney(cancelledLeads.reduce((s,l)=>s+l.value,0))],
-    ['😴', inactiveLeads.length, 'Inactivos a reactivar', fmtMoney(inactiveLeads.length * avgTicket)],
-    ['🚀', upsellLeads.length, 'Potencial upsell', fmtMoney(upsellLeads.length * avgTicket)],
-    ['💰', pendingLeads.length + cancelledLeads.length + inactiveLeads.length, 'Total leads', fmtMoney(totalPotential)]
+    ['ðŸ”¥', pendingLeads.length, 'Pagos pendientes', fmtMoney(pendingLeads.reduce((s,l)=>s+l.value,0))],
+    ['ðŸ›’', cancelledLeads.length, 'Carritos perdidos', fmtMoney(cancelledLeads.reduce((s,l)=>s+l.value,0))],
+    ['ðŸ˜´', inactiveLeads.length, 'Inactivos a reactivar', fmtMoney(inactiveLeads.length * avgTicket)],
+    ['ðŸš€', upsellLeads.length, 'Potencial upsell', fmtMoney(upsellLeads.length * avgTicket)],
+    ['ðŸ’°', pendingLeads.length + cancelledLeads.length + inactiveLeads.length, 'Total leads', fmtMoney(totalPotential)]
   ].map(([icon, n, label, val]) =>
     `<div class="opo-kpi">
        <div class="opo-kpi-icon">${icon}</div>
@@ -881,7 +881,7 @@ function opoRenderList() {
   const leads = map[OPO_STATE.tab] || [];
 
   if (!leads.length) {
-    $('#opoList').innerHTML = `<div class="opo-empty">✅ No hay leads en esta categoría para el periodo seleccionado.</div>`;
+    $('#opoList').innerHTML = `<div class="opo-empty">âœ… No hay leads en esta categorÃ­a para el periodo seleccionado.</div>`;
     return;
   }
 
@@ -898,11 +898,11 @@ function opoRenderList() {
           <div class="opo-meta">
             ${hasEmail
               ? `<a class="opo-email" href="mailto:${esc(l.email)}">${esc(l.email)}</a>`
-              : `<span class="opo-no-email">⚠ Sin email registrado</span>`}
-            ${l.country ? `· ${esc(l.country)}` : ''}
+              : `<span class="opo-no-email">âš  Sin email registrado</span>`}
+            ${l.country ? `Â· ${esc(l.country)}` : ''}
             ${l.city ? `, ${esc(l.city)}` : ''}
           </div>
-          ${l.courses ? `<div class="opo-courses">📚 ${esc(l.courses.length > 80 ? l.courses.slice(0,80)+'…' : l.courses)}</div>` : ''}
+          ${l.courses ? `<div class="opo-courses">ðŸ“š ${esc(l.courses.length > 80 ? l.courses.slice(0,80)+'â€¦' : l.courses)}</div>` : ''}
         </div>
         <div class="opo-score-wrap" style="background:${scoreBg}">
           <div class="opo-score" style="color:${scoreColor}">${Math.round(l.score)}</div>
@@ -911,7 +911,7 @@ function opoRenderList() {
         </div>
       </div>
       <div class="opo-action">
-        <span class="opo-action-icon">🤖</span>
+        <span class="opo-action-icon">ðŸ¤–</span>
         <span>${esc(l.action)}</span>
       </div>
     </div>`;
@@ -941,16 +941,16 @@ function renderSegments() {
   const now  = Date.now();
   const data = [
     ["Clientes VIP",  cm.filter(c => c.revenue >= 300).length,                        "Compraron alto valor"],
-    ["Recurrentes",   cm.filter(c => c.orders > 1).length,                            "Más de un pedido"],
-    ["Nuevos",        cm.filter(c => new Date(c.last) > new Date(now - 30 * 864e5)).length, "Últimos 30 días"],
-    ["Inactivos",     cm.filter(c => new Date(c.last) < new Date(now - 90 * 864e5)).length, "Más de 90 días sin compra"]
+    ["Recurrentes",   cm.filter(c => c.orders > 1).length,                            "MÃ¡s de un pedido"],
+    ["Nuevos",        cm.filter(c => new Date(c.last) > new Date(now - 30 * 864e5)).length, "Ãšltimos 30 dÃ­as"],
+    ["Inactivos",     cm.filter(c => new Date(c.last) < new Date(now - 90 * 864e5)).length, "MÃ¡s de 90 dÃ­as sin compra"]
   ];
   $("#segmentsGrid").innerHTML = data.map(([label, val, sub]) =>
-    `<div class="segment"><strong>${val}</strong><span>${label} · ${sub}</span></div>`
+    `<div class="segment"><strong>${val}</strong><span>${label} Â· ${sub}</span></div>`
   ).join("");
 }
 
-// ── RFM scoring ──
+// â”€â”€ RFM scoring â”€â”€
 function rfmScore(c, allCustomers) {
   const daysSince = (Date.now() - new Date(c.last)) / 864e5;
   const rScore = daysSince <= 7 ? 33 : daysSince <= 30 ? 25 : daysSince <= 90 ? 15 : 5;
@@ -958,14 +958,14 @@ function rfmScore(c, allCustomers) {
   const maxRev = Math.max(...allCustomers.map(x => x.revenue), 1);
   const mScore = Math.round((c.revenue / maxRev) * 34);
   const total  = rScore + fScore + mScore;
-  if (total >= 80) return { score: total, label: '⭐ VIP',        cls: 'rfm-vip' };
-  if (total >= 60) return { score: total, label: '🔥 Activo',     cls: 'rfm-active' };
-  if (total >= 40) return { score: total, label: '⚡ Potencial',  cls: 'rfm-potential' };
-  if (total >= 20) return { score: total, label: '😴 En riesgo',  cls: 'rfm-risk' };
-  return              { score: total, label: '❌ Inactivo',    cls: 'rfm-inactive' };
+  if (total >= 80) return { score: total, label: 'â­ VIP',        cls: 'rfm-vip' };
+  if (total >= 60) return { score: total, label: 'ðŸ”¥ Activo',     cls: 'rfm-active' };
+  if (total >= 40) return { score: total, label: 'âš¡ Potencial',  cls: 'rfm-potential' };
+  if (total >= 20) return { score: total, label: 'ðŸ˜´ En riesgo',  cls: 'rfm-risk' };
+  return              { score: total, label: 'âŒ Inactivo',    cls: 'rfm-inactive' };
 }
 
-// ── Predicción próxima compra ──
+// â”€â”€ PredicciÃ³n prÃ³xima compra â”€â”€
 function nextPurchasePrediction(emailOrName) {
   const customerOrders = state.orders
     .filter(o => o.customer_email === emailOrName || o.customer === emailOrName || o.customer_email === emailOrName)
@@ -994,21 +994,21 @@ function renderCustomers() {
     const pred = nextPurchasePrediction(c.email || c.name);
     const predHtml = pred
       ? `<p style="${pred.daysLeft <= 0 ? 'color:var(--accent)' : 'color:var(--muted)'}">
-           ${pred.daysLeft > 0 ? `🗓 Próx. compra ~${pred.daysLeft}d` : `⚡ Compra esperada hace ${Math.abs(pred.daysLeft)}d`}
+           ${pred.daysLeft > 0 ? `ðŸ—“ PrÃ³x. compra ~${pred.daysLeft}d` : `âš¡ Compra esperada hace ${Math.abs(pred.daysLeft)}d`}
          </p>`
       : '';
     return `<div class="customer" data-email="${esc(c.email || c.name)}">
        <div class="avatar">${esc(c.name.slice(0,2).toUpperCase())}</div>
        <div style="flex:1;min-width:0">
          <h3>${esc(c.name)} <span class="rfm-badge ${rfm.cls}">${rfm.label}</span></h3>
-         <p>${esc(c.email)} · ${c.orders} pedido${c.orders!==1?"s":""} · ${c.courses.size} curso${c.courses.size!==1?"s":""}</p>
+         <p>${esc(c.email)} Â· ${c.orders} pedido${c.orders!==1?"s":""} Â· ${c.courses.size} curso${c.courses.size!==1?"s":""}</p>
          ${predHtml}
        </div>
        <strong>${fmtMoney(c.revenue)}</strong>
      </div>`;
   }).join("") || empty("Sin clientes en el periodo.");
 
-  // Click → abrir modal timeline
+  // Click â†’ abrir modal timeline
   $("#customerList").querySelectorAll('.customer').forEach(el => {
     el.addEventListener('click', () => openCustomerModal(el.dataset.email));
   });
@@ -1032,11 +1032,11 @@ function renderCourseMatrix() {
   const tbl = $("#courseMatrix");
   if (!customers.length || !allCourses.length) {
     tbl.innerHTML = `<tbody><tr><td>${empty("Sin datos en el periodo.")}</td></tr></tbody>`;
-    $("#matrixBadge").textContent = "—";
+    $("#matrixBadge").textContent = "â€”";
     return;
   }
 
-  $("#matrixBadge").textContent = `${customers.length} clientes · ${allCourses.length} cursos`;
+  $("#matrixBadge").textContent = `${customers.length} clientes Â· ${allCourses.length} cursos`;
 
   // Cabecera: nombre + email + cursos (texto vertical) + ingresos
   const thead = `<thead><tr>
@@ -1053,7 +1053,7 @@ function renderCourseMatrix() {
   const tbody = `<tbody>${customers.map(c => {
     const cells = allCourses.map(course =>
       c.courses.has(course)
-        ? `<td class="cm-cell cm-yes" title="${esc(c.name)} compró ${esc(course)}">✓</td>`
+        ? `<td class="cm-cell cm-yes" title="${esc(c.name)} comprÃ³ ${esc(course)}">âœ“</td>`
         : `<td class="cm-cell"></td>`
     ).join("");
     return `<tr>
@@ -1096,7 +1096,7 @@ function renderCourses() {
        <h3>${esc(c.name)}</h3>
        <div class="metric"><span>Ingresos</span>        <strong>${fmtMoney(c.revenue)}</strong></div>
        <div class="metric"><span>Ventas</span>           <strong>${c.sales}</strong></div>
-       <div class="metric"><span>Clientes únicos</span> <strong>${c.customers.size}</strong></div>
+       <div class="metric"><span>Clientes Ãºnicos</span> <strong>${c.customers.size}</strong></div>
        <div class="progress"><span style="width:${Math.max(6, c.revenue / max * 100)}%"></span></div>
      </article>`
   ).join("") || empty("Sin cursos en el periodo.");
@@ -1121,16 +1121,16 @@ function renderGeoRankings() {
     .map(([name, arr]) => ({ name, orders: arr.length, revenue: sum(validRevenueOrders(arr), o => o.total) }))
     .sort((a, b) => b.revenue - a.revenue).slice(0, 20);
 
-  $("#countryRanking").innerHTML = countries.map(mkRank).join("") || empty("Sin países.");
+  $("#countryRanking").innerHTML = countries.map(mkRank).join("") || empty("Sin paÃ­ses.");
   $("#cityRanking").innerHTML    = cities.map(mkRank).join("")    || empty("Sin ciudades.");
 }
 
 // =============================================================
 // =============================================================
-// GLOBO 3D — Mapa real con polígonos Natural Earth 110m
+// GLOBO 3D â€” Mapa real con polÃ­gonos Natural Earth 110m
 // =============================================================
 
-// Polígonos reales Natural Earth 110m (cargados desde world-polys-inline.js)
+// PolÃ­gonos reales Natural Earth 110m (cargados desde world-polys-inline.js)
 let WORLD_POLYS = window.WORLD_POLYS_DATA || null;
 
 function updateGlobePoints() {
@@ -1189,7 +1189,7 @@ function initGlobe() {
   }, { passive: false });
   canvas.addEventListener('click', e => {
     const p = getPos(e), hit = hitPoint(p.x, p.y);
-    if (hit) { $('#countryFilter').value = hit.code; applyFilters(); toast('País seleccionado: ' + hit.name); }
+    if (hit) { $('#countryFilter').value = hit.code; applyFilters(); toast('PaÃ­s seleccionado: ' + hit.name); }
   });
 
   requestAnimationFrame(drawGlobeLoop);
@@ -1279,7 +1279,7 @@ function drawGlobe() {
 
   ctx.clearRect(0, 0, w, h);
 
-  // ── 1. FONDO: océano con gradiente esférico ──
+  // â”€â”€ 1. FONDO: ocÃ©ano con gradiente esfÃ©rico â”€â”€
   const oceanGrad = ctx.createRadialGradient(cx - R * 0.28, cy - R * 0.28, R * 0.04, cx, cy, R);
   oceanGrad.addColorStop(0,    'rgba(80,170,255,.68)');
   oceanGrad.addColorStop(0.45, 'rgba(14,90,155,.88)');
@@ -1287,11 +1287,11 @@ function drawGlobe() {
   ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.fillStyle = oceanGrad; ctx.fill();
 
-  // ── 2. CLIP ──
+  // â”€â”€ 2. CLIP â”€â”€
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
 
-  // ── 3. GRATICULE ──
+  // â”€â”€ 3. GRATICULE â”€â”€
   ctx.strokeStyle = 'rgba(255,255,255,.09)'; ctx.lineWidth = 0.7;
   for (let lat = -80; lat <= 80; lat += 20) {
     ctx.beginPath(); let s = false;
@@ -1310,9 +1310,9 @@ function drawGlobe() {
     ctx.stroke();
   }
 
-  // ── 4. TIERRAS ──
+  // â”€â”€ 4. TIERRAS â”€â”€
   if (WORLD_POLYS && WORLD_POLYS.length) {
-    // Precalcular revenue por código de país para coropleta
+    // Precalcular revenue por cÃ³digo de paÃ­s para coropleta
     const revenueByCode = {};
     if (doChoropleth) {
       state.globe.points.forEach(p => { revenueByCode[p.code] = p.revenue || 0; });
@@ -1325,9 +1325,9 @@ function drawGlobe() {
       poly.forEach(ring => traceRing(ctx, ring, cx, cy, R));
 
       if (doChoropleth && revenueByCode[code]) {
-        // Escala logarítmica → color HSL verde→amarillo→rojo
+        // Escala logarÃ­tmica â†’ color HSL verdeâ†’amarilloâ†’rojo
         const t2 = Math.log1p(revenueByCode[code]) / Math.log1p(maxRev);
-        const hue = 140 - t2 * 140;   // 140 verde → 0 rojo
+        const hue = 140 - t2 * 140;   // 140 verde â†’ 0 rojo
         const sat = 55 + t2 * 35;
         const lit = 28 + t2 * 28;
         ctx.fillStyle   = `hsla(${hue},${sat}%,${lit}%,.92)`;
@@ -1342,7 +1342,7 @@ function drawGlobe() {
     });
   }
 
-  // ── 5. ARCOS ANIMADOS (líneas entre el top país y los demás) ──
+  // â”€â”€ 5. ARCOS ANIMADOS (lÃ­neas entre el top paÃ­s y los demÃ¡s) â”€â”€
   if (doArcs && state.globe.points.length >= 2) {
     const sorted  = [...state.globe.points].sort((a, b) => b.revenue - a.revenue);
     const origin  = sorted[0];
@@ -1354,12 +1354,12 @@ function drawGlobe() {
         const pT = project(tgt.lat, tgt.lon, cx, cy, R);
         if (!pT.visible) return;
 
-        // Progreso animado por onda (0→1→0) con desfase por índice
+        // Progreso animado por onda (0â†’1â†’0) con desfase por Ã­ndice
         const phase   = (t * 0.5 + i * 0.18) % 1;
         const progress = Math.sin(phase * Math.PI);    // pico en el medio del ciclo
         const alpha   = 0.15 + progress * 0.6;
 
-        // Punto de control para la curva Bézier (elevado hacia el espectador)
+        // Punto de control para la curva BÃ©zier (elevado hacia el espectador)
         const mcx  = (pO.x + pT.x) / 2;
         const mcy  = (pO.y + pT.y) / 2 - Math.hypot(pT.x - pO.x, pT.y - pO.y) * 0.35;
 
@@ -1385,7 +1385,7 @@ function drawGlobe() {
     }
   }
 
-  // ── 6. PUNTOS DE VENTAS ──
+  // â”€â”€ 6. PUNTOS DE VENTAS â”€â”€
   state.globe.projectedPoints = [];
   const maxRevenue = Math.max(...state.globe.points.map(p => p.revenue), 1);
 
@@ -1396,7 +1396,7 @@ function drawGlobe() {
     state.globe.projectedPoints.push({ ...p, x: pr.x, y: pr.y, r });
 
     if (doPulse) {
-      // Anillos de onda concéntricos (efecto radar)
+      // Anillos de onda concÃ©ntricos (efecto radar)
       const numRings = 3;
       for (let k = 0; k < numRings; k++) {
         const wavePhase  = ((t * 1.2 + k / numRings + idx * 0.11) % 1);
@@ -1409,12 +1409,12 @@ function drawGlobe() {
         ctx.stroke();
       }
     } else {
-      // Halo suave estático
+      // Halo suave estÃ¡tico
       ctx.beginPath(); ctx.arc(pr.x, pr.y, r + 10, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,60,80,.12)'; ctx.fill();
     }
 
-    // Círculo con degradado radial
+    // CÃ­rculo con degradado radial
     ctx.beginPath(); ctx.arc(pr.x, pr.y, r, 0, Math.PI * 2);
     const rg = ctx.createRadialGradient(pr.x - r * 0.3, pr.y - r * 0.3, 1, pr.x, pr.y, r);
     rg.addColorStop(0, 'rgba(255,130,150,1)');
@@ -1427,7 +1427,7 @@ function drawGlobe() {
     ctx.beginPath(); ctx.arc(pr.x, pr.y, r, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255,210,215,.85)'; ctx.lineWidth = 1.2; ctx.stroke();
 
-    // Código ISO
+    // CÃ³digo ISO
     const fontSize = Math.max(9, Math.min(13, r * 0.7));
     ctx.fillStyle    = '#fff';
     ctx.font         = `900 ${fontSize}px Inter, sans-serif`;
@@ -1440,11 +1440,11 @@ function drawGlobe() {
 
   ctx.restore(); // fin clip
 
-  // ── 7. BORDE EXTERIOR ──
+  // â”€â”€ 7. BORDE EXTERIOR â”€â”€
   ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; ctx.stroke();
 
-  // ── 8. ATMÓSFERA / HALO (siempre, pero más intenso en modo all/default) ──
+  // â”€â”€ 8. ATMÃ“SFERA / HALO (siempre, pero mÃ¡s intenso en modo all/default) â”€â”€
   const atmoIntensity = (mode === 'all') ? 0.38 : 0.25;
   const atmoColor     = doChoropleth ? '99,80,220' : '56,189,248';
   const glow = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.22);
@@ -1463,7 +1463,7 @@ function drawGlobe() {
     ctx.fillStyle = aurora; ctx.fill();
   }
 
-  // ── 9. REFLEJO ESPECULAR ──
+  // â”€â”€ 9. REFLEJO ESPECULAR â”€â”€
   const shine = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.34, 0, cx - R * 0.3, cy - R * 0.34, R * 0.58);
   shine.addColorStop(0,   'rgba(255,255,255,.14)');
   shine.addColorStop(0.5, 'rgba(255,255,255,.03)');
@@ -1472,16 +1472,16 @@ function drawGlobe() {
   ctx.fillStyle = shine; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
   ctx.restore();
 
-  // ── 10. LEYENDA MODO ──
-  const modeLabels = { default:'Estándar', choropleth:'Coropleta de ingresos', pulse:'Radar pulsante', arcs:'Arcos de rutas', all:'Modo completo ✨' };
+  // â”€â”€ 10. LEYENDA MODO â”€â”€
+  const modeLabels = { default:'EstÃ¡ndar', choropleth:'Coropleta de ingresos', pulse:'Radar pulsante', arcs:'Arcos de rutas', all:'Modo completo âœ¨' };
   ctx.fillStyle = 'rgba(255,255,255,.52)';
   ctx.font      = '12px Inter, sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('● Países con ventas activas', 16, h - 28);
+  ctx.fillText('â— PaÃ­ses con ventas activas', 16, h - 28);
   ctx.fillStyle = 'rgba(255,255,255,.30)';
   ctx.fillText(`Modo: ${modeLabels[mode] || mode}`, 16, h - 10);
 
-  // ── 11. MINI LEYENDA COROPLETA ──
+  // â”€â”€ 11. MINI LEYENDA COROPLETA â”€â”€
   if (doChoropleth) {
     const lx = w - 110, ly = h - 60, lw = 80, lh = 10;
     const lgrd = ctx.createLinearGradient(lx, 0, lx + lw, 0);
@@ -1497,7 +1497,7 @@ function drawGlobe() {
   }
 }
 
-// GRÁFICO DE LÍNEA — ingresos por día
+// GRÃFICO DE LÃNEA â€” ingresos por dÃ­a
 // =============================================================
 function drawLine(canvas, series) {
   const ctx    = canvas.getContext("2d");
@@ -1524,7 +1524,7 @@ function drawLine(canvas, series) {
   const w = finalW, h = CHART_H, p = 38;
   ctx.clearRect(0, 0, w, h);
 
-  // Cuadrícula horizontal
+  // CuadrÃ­cula horizontal
   ctx.strokeStyle = "rgba(255,255,255,.07)"; ctx.lineWidth = 1;
   for (let i = 0; i < 4; i++) {
     const y = p + i * ((h - p * 2) / 3);
@@ -1542,7 +1542,7 @@ function drawLine(canvas, series) {
     y: h - p - (s.value / max) * (h - p * 2)
   }));
 
-  // Área rellena
+  // Ãrea rellena
   const grd = ctx.createLinearGradient(0, p, 0, h - p);
   grd.addColorStop(0, "rgba(239,35,60,.30)"); grd.addColorStop(1, "rgba(239,35,60,0)");
   ctx.beginPath();
@@ -1550,7 +1550,7 @@ function drawLine(canvas, series) {
   ctx.lineTo(pts.at(-1).x, h - p); ctx.lineTo(pts[0].x, h - p);
   ctx.closePath(); ctx.fillStyle = grd; ctx.fill();
 
-  // Línea
+  // LÃ­nea
   ctx.beginPath();
   pts.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y));
   ctx.strokeStyle = "#ef233c"; ctx.lineWidth = 2.5; ctx.lineJoin = "round"; ctx.stroke();
@@ -1579,11 +1579,11 @@ function exportCSV() {
   const a    = document.createElement("a");
   a.href = url; a.download = `crm-global-${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  toast(`CSV exportado · ${state.filtered.length} pedidos`, "success");
+  toast(`CSV exportado Â· ${state.filtered.length} pedidos`, "success");
 }
 
 // =============================================================
-// FORECASTING DE INGRESOS (regresión lineal simple)
+// FORECASTING DE INGRESOS (regresiÃ³n lineal simple)
 // =============================================================
 function renderForecast() {
   const el = $("#forecastBars");
@@ -1601,12 +1601,12 @@ function renderForecast() {
   }));
 
   if (series.length < 5) {
-    el.innerHTML = `<p style="color:var(--muted)">Se necesitan al menos 5 días de datos históricos.</p>`;
-    if ($("#forecastBadge")) $("#forecastBadge").textContent = '—';
+    el.innerHTML = `<p style="color:var(--muted)">Se necesitan al menos 5 dÃ­as de datos histÃ³ricos.</p>`;
+    if ($("#forecastBadge")) $("#forecastBadge").textContent = 'â€”';
     return;
   }
 
-  // Regresión lineal: y = a + bx
+  // RegresiÃ³n lineal: y = a + bx
   const n  = series.length;
   const xs = series.map((_, i) => i);
   const ys = series.map(s => s.value);
@@ -1623,7 +1623,7 @@ function renderForecast() {
   });
 
   const projTotal = forecast.reduce((s, f) => s + f.value, 0);
-  if ($("#forecastBadge")) $("#forecastBadge").textContent = `Proyección: ${fmtMoney(projTotal)}`;
+  if ($("#forecastBadge")) $("#forecastBadge").textContent = `ProyecciÃ³n: ${fmtMoney(projTotal)}`;
 
   const max = Math.max(...forecast.map(f => f.value), ...ys.slice(-10), 1);
   const show = forecast.filter((_, i) => i % 3 === 0 || i === 29);
@@ -1656,7 +1656,7 @@ function renderRfmScatter() {
 
   const W = 540, H = 280, padL = 40, padB = 30, padT = 10, padR = 10;
 
-  const colors = { '⭐ VIP':'#fbbf24', '🔥 Activo':'#ef233c', '⚡ Potencial':'#38bdf8', '😴 En riesgo':'#f59e0b', '❌ Inactivo':'#9ca3af' };
+  const colors = { 'â­ VIP':'#fbbf24', 'ðŸ”¥ Activo':'#ef233c', 'âš¡ Potencial':'#38bdf8', 'ðŸ˜´ En riesgo':'#f59e0b', 'âŒ Inactivo':'#9ca3af' };
 
   const dots = list.slice(0, 120).map(c => {
     const rfm   = rfmScore(c, allC);
@@ -1667,13 +1667,13 @@ function renderRfmScatter() {
     const color = colors[rfm.label] || '#9ca3af';
     return `<circle class="scatter-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}"
       fill="${color}" fill-opacity=".72" stroke="${color}" stroke-width="1"
-      title="${esc(c.name)} · ${rfm.label} · ${fmtMoney(c.revenue)}">
-      <title>${esc(c.name)} — ${rfm.label} — ${fmtMoney(c.revenue)}</title>
+      title="${esc(c.name)} Â· ${rfm.label} Â· ${fmtMoney(c.revenue)}">
+      <title>${esc(c.name)} â€” ${rfm.label} â€” ${fmtMoney(c.revenue)}</title>
     </circle>`;
   }).join('');
 
   // Axis labels
-  const axisX = `<text x="${padL}" y="${H}" font-size="9" fill="#9ca3af">Más freq.</text>
+  const axisX = `<text x="${padL}" y="${H}" font-size="9" fill="#9ca3af">MÃ¡s freq.</text>
     <text x="${W-padR-50}" y="${H}" font-size="9" fill="#9ca3af">Menos freq.</text>`;
   const axisY = `<text x="2" y="${padT+8}" font-size="9" fill="#9ca3af">Recientes</text>
     <text x="2" y="${H-padB}" font-size="9" fill="#9ca3af">Inactivos</text>`;
@@ -1692,7 +1692,7 @@ function renderRfmScatter() {
 }
 
 // =============================================================
-// ANÁLISIS DE ABANDONO
+// ANÃLISIS DE ABANDONO
 // =============================================================
 function renderAbandonAnalysis() {
   const el = $("#abandonList");
@@ -1725,7 +1725,7 @@ function renderAbandonAnalysis() {
     const pct = Math.max(3, (l.abandonRate / maxRate) * 100);
     const color = l.abandonRate > 30 ? '#ef233c' : l.abandonRate > 15 ? '#f59e0b' : '#22c55e';
     return `<div class="pb-row">
-      <span class="pb-label" title="${esc(l.name)}">${esc(l.name.length > 22 ? l.name.slice(0,22)+'…' : l.name)}</span>
+      <span class="pb-label" title="${esc(l.name)}">${esc(l.name.length > 22 ? l.name.slice(0,22)+'â€¦' : l.name)}</span>
       <div class="pb-track"><div class="pb-fill" style="width:${pct.toFixed(1)}%;background:${color}"></div></div>
       <span class="pb-val" style="color:${color}">${l.abandonRate.toFixed(0)}%</span>
     </div>`;
@@ -1767,27 +1767,27 @@ function renderCoursesFunnel() {
     </div>` + list.map(l => {
     const cancelled = l.total - l.completed;
     return `<div class="cf-row">
-      <span class="cf-name" title="${esc(l.name)}">${esc(l.name.length > 26 ? l.name.slice(0,26)+'…' : l.name)}</span>
+      <span class="cf-name" title="${esc(l.name)}">${esc(l.name.length > 26 ? l.name.slice(0,26)+'â€¦' : l.name)}</span>
       <div class="cf-track"><div class="cf-fill" style="width:${Math.max(3,l.rate).toFixed(1)}%"></div></div>
       <span class="cf-rate">${l.rate.toFixed(0)}%</span>
-      <span class="cf-cancel">${cancelled > 0 ? `-${cancelled}` : '—'}</span>
+      <span class="cf-cancel">${cancelled > 0 ? `-${cancelled}` : 'â€”'}</span>
     </div>`;
   }).join('') || `<p style="color:var(--muted)">Sin datos.</p>`;
 }
 
 // =============================================================
-// ANÁLISIS DE PRECIOS
+// ANÃLISIS DE PRECIOS
 // =============================================================
 function renderPriceDistribution() {
   const el = $("#priceDistribution");
   if (!el) return;
 
   const buckets = [
-    ['$0–$25',    0,  25],
-    ['$26–$50',  26,  50],
-    ['$51–$100', 51, 100],
-    ['$101–$200',101, 200],
-    ['$201–$500',201, 500],
+    ['$0â€“$25',    0,  25],
+    ['$26â€“$50',  26,  50],
+    ['$51â€“$100', 51, 100],
+    ['$101â€“$200',101, 200],
+    ['$201â€“$500',201, 500],
     ['$500+',    501, Infinity]
   ];
 
@@ -1801,7 +1801,7 @@ function renderPriceDistribution() {
   const total = counts.reduce((s, c) => s + c.count, 0) || 1;
   const max   = Math.max(...counts.map(c => c.count), 1);
 
-  if ($("#priceAnalysisBadge")) $("#priceAnalysisBadge").textContent = `${total} pedidos válidos`;
+  if ($("#priceAnalysisBadge")) $("#priceAnalysisBadge").textContent = `${total} pedidos vÃ¡lidos`;
 
   el.innerHTML = counts.map(c => {
     const pct = Math.max(3, (c.count / max) * 100);
@@ -1852,7 +1852,7 @@ function renderKanban() {
       const initials = (lead.name || '??').split(' ').map(w => w[0] || '').join('').slice(0,2).toUpperCase();
       const otherCols = ['new','contacted','won','lost'].filter(c => c !== col);
       const mvBtns = otherCols.map(c => {
-        const labels = { new:'Nuevo', contacted:'Contactado', won:'✅ Ganado', lost:'❌ Perdido' };
+        const labels = { new:'Nuevo', contacted:'Contactado', won:'âœ… Ganado', lost:'âŒ Perdido' };
         return `<button class="kanban-move-btn" onclick="kanbanMove('${esc(id)}','${c}')">${labels[c]}</button>`;
       }).join('');
 
@@ -1897,7 +1897,7 @@ function kanbanMove(id, newStatus) {
     KANBAN_STATE[id].status = newStatus;
     saveKanban();
     renderKanban();
-    const labels = { new:'Nuevo', contacted:'Contactado', won:'Ganado ✅', lost:'Perdido ❌' };
+    const labels = { new:'Nuevo', contacted:'Contactado', won:'Ganado âœ…', lost:'Perdido âŒ' };
     toast(`Lead movido a: ${labels[newStatus]}`, 'success');
   }
 }
@@ -1921,7 +1921,7 @@ function kanbanExportCSV() {
 // =============================================================
 function populateCourseSelects() {
   const courses = topProducts(state.filtered).slice(0, 30);
-  const opts    = courses.map(c => `<option value="${esc(c.name)}">${esc(c.name.length > 50 ? c.name.slice(0,50)+'…' : c.name)}</option>`).join('');
+  const opts    = courses.map(c => `<option value="${esc(c.name)}">${esc(c.name.length > 50 ? c.name.slice(0,50)+'â€¦' : c.name)}</option>`).join('');
   const a = $("#compareA"), b = $("#compareB");
   if (a) a.innerHTML = '<option value="">-- Selecciona --</option>' + opts;
   if (b) b.innerHTML = '<option value="">-- Selecciona --</option>' + opts;
@@ -1958,13 +1958,13 @@ function runCourseCompare() {
 
   const card = (c, color) => `
     <div class="compare-card">
-      <h3>${esc(c.name.length > 40 ? c.name.slice(0,40)+'…' : c.name)}</h3>
+      <h3>${esc(c.name.length > 40 ? c.name.slice(0,40)+'â€¦' : c.name)}</h3>
       <div class="compare-row"><span>Ingresos</span><strong>${fmtMoney(c.revenue)}</strong></div>
       <div class="compare-row"><span>Pedidos</span><strong>${c.sales}</strong></div>
       <div class="compare-row"><span>Completados</span><strong>${c.completed}</strong></div>
       <div class="compare-row"><span>Cancelados</span><strong style="color:var(--accent)">${c.cancelled}</strong></div>
-      <div class="compare-row"><span>Clientes únicos</span><strong>${c.customers}</strong></div>
-      <div class="compare-row"><span>Tasa conversión</span><strong>${c.convRate.toFixed(1)}%</strong></div>
+      <div class="compare-row"><span>Clientes Ãºnicos</span><strong>${c.customers}</strong></div>
+      <div class="compare-row"><span>Tasa conversiÃ³n</span><strong>${c.convRate.toFixed(1)}%</strong></div>
       <div class="compare-row"><span>Ticket medio</span><strong>${fmtMoney(c.avgTicket)}</strong></div>
       <div class="compare-bar-wrap">
         <div class="compare-bar-label">Revenue relativo</div>
@@ -1992,7 +1992,7 @@ function renderModalTags(noteKey) {
   const list = $("#modalTagsList");
   if (!list) return;
   list.innerHTML = tags.map(t =>
-    `<span class="modal-tag">${esc(t)} <span class="modal-tag-rm" data-tag="${esc(t)}">×</span></span>`
+    `<span class="modal-tag">${esc(t)} <span class="modal-tag-rm" data-tag="${esc(t)}">Ã—</span></span>`
   ).join('');
   list.querySelectorAll('.modal-tag-rm').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -2028,7 +2028,7 @@ function updateFollowupBadges() {
 }
 
 // =============================================================
-// MODAL — extender openCustomerModal con etiquetas y seguimientos
+// MODAL â€” extender openCustomerModal con etiquetas y seguimientos
 // =============================================================
 function openCustomerModal(emailOrName) {
   const cm = customerMap(state.orders);
@@ -2040,21 +2040,21 @@ function openCustomerModal(emailOrName) {
   const pred = nextPurchasePrediction(c.email || c.name);
 
   $("#modalTitle").textContent = c.name;
-  $("#modalMeta").textContent  = `${c.email || ''} · ${c.orders} pedidos · ${fmtMoney(c.revenue)} total`;
+  $("#modalMeta").textContent  = `${c.email || ''} Â· ${c.orders} pedidos Â· ${fmtMoney(c.revenue)} total`;
 
   $("#modalRfm").innerHTML = `
-    <span class="rfm-badge ${rfm.cls}" style="font-size:13px;padding:5px 14px">${rfm.label} · Score: ${rfm.score}/100</span>
+    <span class="rfm-badge ${rfm.cls}" style="font-size:13px;padding:5px 14px">${rfm.label} Â· Score: ${rfm.score}/100</span>
     ${pred ? `<span class="rfm-badge rfm-pred" style="font-size:12px;padding:4px 12px">${
       pred.daysLeft > 0
-        ? `🗓 Próx. compra estimada en ~${pred.daysLeft} días`
-        : `⚡ Compra esperada hace ${Math.abs(pred.daysLeft)} días`
+        ? `ðŸ—“ PrÃ³x. compra estimada en ~${pred.daysLeft} dÃ­as`
+        : `âš¡ Compra esperada hace ${Math.abs(pred.daysLeft)} dÃ­as`
     }</span>` : ''}`;
 
   const customerOrders = state.orders
     .filter(o => o.customer_email === (c.email || c.name) || o.customer === c.name)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const stIcon = s => ({ completed:'✅', processing:'⏳', pending:'🔔', cancelled:'❌', refunded:'↩' }[s] || '📦');
+  const stIcon = s => ({ completed:'âœ…', processing:'â³', pending:'ðŸ””', cancelled:'âŒ', refunded:'â†©' }[s] || 'ðŸ“¦');
 
   $("#modalTimeline").innerHTML = customerOrders.map(o => {
     const st      = statusNorm(o.status);
@@ -2068,7 +2068,7 @@ function openCustomerModal(emailOrName) {
           <strong class="tl-amount">${fmtMoney(o.total)}</strong>
           <span class="tl-date">${fmtDate(o.date)}</span>
         </div>
-        <div class="tl-courses">${esc(courses.length > 100 ? courses.slice(0,100)+'…' : courses)}</div>
+        <div class="tl-courses">${esc(courses.length > 100 ? courses.slice(0,100)+'â€¦' : courses)}</div>
       </div>
     </div>`;
   }).join('') || `<p style="color:var(--muted)">Sin pedidos registrados.</p>`;
@@ -2113,13 +2113,13 @@ function closeCustomerModal() {
 }
 
 // =============================================================
-// MAPA DE CALOR: VENTAS POR HORA Y DÍA
+// MAPA DE CALOR: VENTAS POR HORA Y DÃA
 // =============================================================
 function renderHeatmap() {
   const el = $("#salesHeatmap");
   if (!el) return;
 
-  const days  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const days  = ['Dom','Lun','Mar','MiÃ©','Jue','Vie','SÃ¡b'];
   const grid  = Array.from({ length: 7 }, () => new Array(24).fill(0));
   validRevenueOrders(state.filtered).forEach(o => {
     const d = new Date(o.date);
@@ -2135,15 +2135,15 @@ function renderHeatmap() {
       const v   = grid[di][h];
       const a   = v ? (0.08 + (v / max) * 0.92).toFixed(2) : '0.04';
       const bg  = v ? `rgba(239,35,60,${a})` : 'rgba(255,255,255,.03)';
-      html += `<div class="hm-cell" style="background:${bg}" title="${day} ${h}:00 — ${v} pedido${v!==1?'s':''}"></div>`;
+      html += `<div class="hm-cell" style="background:${bg}" title="${day} ${h}:00 â€” ${v} pedido${v!==1?'s':''}"></div>`;
     }
   });
-  html += '</div><div class="hm-legend"><span>Menos</span><div class="hm-scale"></div><span>Más ventas</span></div>';
+  html += '</div><div class="hm-legend"><span>Menos</span><div class="hm-scale"></div><span>MÃ¡s ventas</span></div>';
   el.innerHTML = html;
 }
 
 // =============================================================
-// ANÁLISIS DE COHORTES
+// ANÃLISIS DE COHORTES
 // =============================================================
 function renderCohorts() {
   const tbl = $("#cohortTable");
@@ -2171,7 +2171,7 @@ function renderCohorts() {
   const keys = Object.keys(cohorts).sort().slice(-8);
   if (!keys.length) {
     tbl.innerHTML = `<tbody><tr><td>${empty("Sin datos suficientes para cohortes.")}</td></tr></tbody>`;
-    if ($("#cohortBadge")) $("#cohortBadge").textContent = '—';
+    if ($("#cohortBadge")) $("#cohortBadge").textContent = 'â€”';
     return;
   }
 
@@ -2189,7 +2189,7 @@ function renderCohorts() {
       const pct = c.total ? (ret / c.total * 100) : 0;
       const bg  = pct > 0 ? `rgba(34,197,94,${Math.min(0.85, pct / 100 * 4).toFixed(2)})` : 'transparent';
       const col = pct > 25 ? '#fff' : 'var(--muted)';
-      row += `<td class="cm-cell" style="background:${bg};color:${col}">${pct > 0 ? pct.toFixed(0)+'%' : '—'}</td>`;
+      row += `<td class="cm-cell" style="background:${bg};color:${col}">${pct > 0 ? pct.toFixed(0)+'%' : 'â€”'}</td>`;
     }
     return row + '</tr>';
   }).join('')}</tbody>`;
@@ -2198,7 +2198,7 @@ function renderCohorts() {
 }
 
 // =============================================================
-// POLLING — actualización automática en tiempo real
+// POLLING â€” actualizaciÃ³n automÃ¡tica en tiempo real
 // =============================================================
 let _pollingTimer    = null;
 let _pollingCountdown = null;
@@ -2214,8 +2214,8 @@ function initPolling(minutes) {
   const cfgInp = $("#cfgPollingInterval");
 
   if (!minutes || minutes <= 0 || CONFIG.mode !== 'api') {
-    if (btn)    btn.textContent    = '🔴 Live OFF';
-    if (status) status.textContent = CONFIG.mode !== 'api' ? 'Conecta a WooCommerce primero.' : 'Auto-actualización desactivada.';
+    if (btn)    btn.textContent    = 'ðŸ”´ Live OFF';
+    if (status) status.textContent = CONFIG.mode !== 'api' ? 'Conecta a WooCommerce primero.' : 'Auto-actualizaciÃ³n desactivada.';
     localStorage.removeItem('crm_polling_min');
     return;
   }
@@ -2231,8 +2231,8 @@ function initPolling(minutes) {
     if (_pollingSeconds < 0) _pollingSeconds = minutes * 60;
     const m = Math.floor(_pollingSeconds / 60);
     const s = String(_pollingSeconds % 60).padStart(2, '0');
-    if (btn)    btn.textContent    = `🟢 Live — ${m}:${s}`;
-    if (status) status.textContent = `Próxima actualización en ${m}:${s}`;
+    if (btn)    btn.textContent    = `ðŸŸ¢ Live â€” ${m}:${s}`;
+    if (status) status.textContent = `PrÃ³xima actualizaciÃ³n en ${m}:${s}`;
   }
 
   updateCountdown();
@@ -2241,7 +2241,7 @@ function initPolling(minutes) {
   _pollingTimer = setInterval(() => {
     load().then(() => {
       _pollingSeconds = minutes * 60;
-      toast('✅ Datos actualizados desde WooCommerce', 'success');
+      toast('âœ… Datos actualizados desde WooCommerce', 'success');
     });
   }, minutes * 60000);
 }
@@ -2261,7 +2261,7 @@ function toggleTheme() {
   const app   = document.querySelector('.app');
   const btn   = $("#themeToggle");
   const light = app.classList.toggle('light-mode');
-  btn.textContent = light ? '🌙 Modo oscuro' : '☀ Modo claro';
+  btn.textContent = light ? 'ðŸŒ™ Modo oscuro' : 'â˜€ Modo claro';
   try { localStorage.setItem('crm_theme', light ? 'light' : 'dark'); } catch(e) {}
 }
 
@@ -2325,7 +2325,7 @@ function bind() {
 
   window.addEventListener("resize", debounce(() => renderRevenueChart(), 150));
 
-  // ── Modos visuales del globo ──
+  // â”€â”€ Modos visuales del globo â”€â”€
   $$('.globe-mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       GLOBE_MODE = btn.dataset.mode;
@@ -2337,10 +2337,10 @@ function bind() {
   // Marcar activo al cargar
   $$('.globe-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === GLOBE_MODE));
 
-  // ── Modo claro/oscuro ──
+  // â”€â”€ Modo claro/oscuro â”€â”€
   $("#themeToggle")?.addEventListener("click", toggleTheme);
 
-  // ── Modal de cliente ──
+  // â”€â”€ Modal de cliente â”€â”€
   $("#modalClose")?.addEventListener("click", closeCustomerModal);
   $("#customerModal")?.addEventListener("click", e => {
     if (e.target === e.currentTarget) closeCustomerModal();
@@ -2358,13 +2358,13 @@ function bind() {
     } catch(e) { toast('No se pudo guardar la nota', 'error'); }
   });
 
-  // ── Búsqueda en CRM ──
+  // â”€â”€ BÃºsqueda en CRM â”€â”€
   $("#crmSearch")?.addEventListener("input", debounce(() => renderCustomers(), 200));
 
-  // ── Exportar clientes CSV ──
+  // â”€â”€ Exportar clientes CSV â”€â”€
   $("#exportCustomersBtn")?.addEventListener("click", exportCustomersCSV);
 
-  // ── Alertas configurables ──
+  // â”€â”€ Alertas configurables â”€â”€
   $("#cfgAlertSave")?.addEventListener("click", () => {
     ALERT_CONFIG.maxPending   = parseInt($("#cfgAlertPending")?.value  || '5');
     ALERT_CONFIG.maxRefund    = parseInt($("#cfgAlertRefund")?.value   || '5');
@@ -2377,14 +2377,14 @@ function bind() {
     toast('Umbrales de alertas guardados', 'success');
   });
 
-  // ── Polling config ──
+  // â”€â”€ Polling config â”€â”€
   $("#cfgPollingSave")?.addEventListener("click", () => {
     const min = parseInt($("#cfgPollingInterval")?.value || '0');
     initPolling(min);
-    toast(min > 0 ? `🟢 Live activado: actualización cada ${min} min` : '🔴 Auto-actualización desactivada', min > 0 ? 'success' : 'info');
+    toast(min > 0 ? `ðŸŸ¢ Live activado: actualizaciÃ³n cada ${min} min` : 'ðŸ”´ Auto-actualizaciÃ³n desactivada', min > 0 ? 'success' : 'info');
   });
 
-  // ── Polling toggle barra lateral ──
+  // â”€â”€ Polling toggle barra lateral â”€â”€
   $("#pollingToggle")?.addEventListener("click", () => {
     if (_pollingTimer) {
       initPolling(0);
@@ -2394,19 +2394,19 @@ function bind() {
     }
   });
 
-  // ── Configuración / conexión ──
+  // â”€â”€ ConfiguraciÃ³n / conexiÃ³n â”€â”€
   $("#cfgShowToken")?.addEventListener("click", () => {
     const inp = $("#cfgToken");
     inp.type = inp.type === "password" ? "text" : "password";
-    $("#cfgShowToken").textContent = inp.type === "password" ? "👁 Ver" : "🙈 Ocultar";
+    $("#cfgShowToken").textContent = inp.type === "password" ? "ðŸ‘ Ver" : "ðŸ™ˆ Ocultar";
   });
 
   $("#cfgTestBtn")?.addEventListener("click", async () => {
     const url   = $("#cfgUrl").value.trim().replace(/\/$/, "");
     const token = $("#cfgToken").value.trim();
     const st    = $("#cfgStatus");
-    if (!url || !token) { st.className = "cfg-status error"; st.textContent = "⚠ Completa la URL y el token."; return; }
-    st.className = "cfg-status"; st.textContent = "Probando conexión…";
+    if (!url || !token) { st.className = "cfg-status error"; st.textContent = "âš  Completa la URL y el token."; return; }
+    st.className = "cfg-status"; st.textContent = "Probando conexiÃ³nâ€¦";
     try {
       const res = await fetch(url + "/overview?limit=1", {
         headers: { "X-CPP-CRM-Dashboard-Token": token }
@@ -2414,17 +2414,17 @@ function bind() {
       const data = await res.json();
       if (res.ok && (data.orders !== undefined || data.total !== undefined)) {
         st.className = "cfg-status ok";
-        st.textContent = "✅ Conexión exitosa — " + (data.total || (data.orders||[]).length) + " pedidos encontrados.";
+        st.textContent = "âœ… ConexiÃ³n exitosa â€” " + (data.total || (data.orders||[]).length) + " pedidos encontrados.";
       } else if (res.status === 403) {
-        st.className = "cfg-status error"; st.textContent = "🔑 Token incorrecto (403 Forbidden).";
+        st.className = "cfg-status error"; st.textContent = "ðŸ”‘ Token incorrecto (403 Forbidden).";
       } else if (res.status === 404) {
-        st.className = "cfg-status error"; st.textContent = "🔍 Plugin no encontrado (404). Verifica que el plugin esté activo.";
+        st.className = "cfg-status error"; st.textContent = "ðŸ” Plugin no encontrado (404). Verifica que el plugin estÃ© activo.";
       } else {
-        st.className = "cfg-status error"; st.textContent = "⚠ Respuesta inesperada: " + res.status;
+        st.className = "cfg-status error"; st.textContent = "âš  Respuesta inesperada: " + res.status;
       }
     } catch (e) {
       st.className = "cfg-status error";
-      st.textContent = "❌ No se pudo conectar. Verifica la URL o CORS del servidor.";
+      st.textContent = "âŒ No se pudo conectar. Verifica la URL o CORS del servidor.";
     }
   });
 
@@ -2433,7 +2433,7 @@ function bind() {
     const token    = $("#cfgToken").value.trim();
     const currency = $("#cfgCurrency").value;
     const st       = $("#cfgStatus");
-    if (!url || !token) { st.className = "cfg-status error"; st.textContent = "⚠ Completa la URL y el token."; return; }
+    if (!url || !token) { st.className = "cfg-status error"; st.textContent = "âš  Completa la URL y el token."; return; }
     CONFIG.mode       = "api";
     CONFIG.apiBaseUrl = url;
     CONFIG.apiToken   = token;
@@ -2442,8 +2442,8 @@ function bind() {
       localStorage.setItem("cpp_crm_config", JSON.stringify({ url, token, currency }));
     } catch(e){}
     st.className  = "cfg-status ok";
-    st.textContent = "✅ Configuración guardada. Actualizando datos reales…";
-    toast("Conectado a WooCommerce — cargando datos reales", "success");
+    st.textContent = "âœ… ConfiguraciÃ³n guardada. Actualizando datos realesâ€¦";
+    toast("Conectado a WooCommerce â€” cargando datos reales", "success");
     load();
   });
 
@@ -2466,7 +2466,7 @@ function bind() {
     CONFIG.currency   = saved.currency || "USD";
   } catch(e){}
 
-  // ── Multi-moneda ──
+  // â”€â”€ Multi-moneda â”€â”€
   const currencyEl = $("#globalCurrency");
   if (currencyEl) {
     currencyEl.value = DISPLAY_CURRENCY;
@@ -2477,13 +2477,13 @@ function bind() {
     });
   }
 
-  // ── Kanban export ──
+  // â”€â”€ Kanban export â”€â”€
   $("#kanbanExportBtn")?.addEventListener("click", kanbanExportCSV);
 
-  // ── Course compare ──
+  // â”€â”€ Course compare â”€â”€
   $("#compareBtn")?.addEventListener("click", runCourseCompare);
 
-  // ── Modal: agregar etiqueta ──
+  // â”€â”€ Modal: agregar etiqueta â”€â”€
   $("#modalTagAdd")?.addEventListener("click", () => {
     const inp = $("#modalTagInput");
     if (!inp) return;
@@ -2496,7 +2496,7 @@ function bind() {
     toast('Etiqueta agregada', 'success');
   });
 
-  // ── Modal: guardar seguimiento ──
+  // â”€â”€ Modal: guardar seguimiento â”€â”€
   $("#modalSaveFollowup")?.addEventListener("click", () => {
     const inp = $("#modalFollowupDate");
     if (!inp) return;
@@ -2508,7 +2508,7 @@ function bind() {
     toast('Seguimiento guardado', 'success');
   });
 
-  // ── Modal: agregar tarea ──
+  // â”€â”€ Modal: agregar tarea â”€â”€
   $("#modalTaskAdd")?.addEventListener("click", () => {
     const inp = $("#modalTaskInput");
     const due = $("#modalTaskDue");
@@ -2517,7 +2517,7 @@ function bind() {
     addCustomerTask(key, inp.value, due?.value || "");
     inp.value = "";
     if (due) due.value = "";
-    toast("Tarea añadida", "success");
+    toast("Tarea aÃ±adida", "success");
   });
   $("#modalTaskInput")?.addEventListener("keydown", e => {
     if (e.key === "Enter") {
@@ -2526,28 +2526,28 @@ function bind() {
     }
   });
 
-  // ── PDF Export ──
+  // â”€â”€ PDF Export â”€â”€
   $("#pdfExportBtn")?.addEventListener("click", exportPDF);
 
-  // ── Presentación ──
+  // â”€â”€ PresentaciÃ³n â”€â”€
   initPresentationMode();
 
-  // ── Búsqueda global ──
+  // â”€â”€ BÃºsqueda global â”€â”€
   initGlobalSearch();
 
-  // ── Push notifications ──
+  // â”€â”€ Push notifications â”€â”€
   $("#pushNotifBtn")?.addEventListener("click", requestPushNotifications);
 
-  // ── Period compare ──
+  // â”€â”€ Period compare â”€â”€
   $("#periodCompareBtn")?.addEventListener("click", renderPeriodComparison);
 
-  // ── Widget customizer save ──
+  // â”€â”€ Widget customizer save â”€â”€
   $("#widgetSaveBtn")?.addEventListener("click", saveWidgetConfig);
 
-  // ── GA4 save ──
+  // â”€â”€ GA4 save â”€â”€
   $("#ga4SaveBtn")?.addEventListener("click", saveGA4Config);
 
-  // ── Email marketing ──
+  // â”€â”€ Email marketing â”€â”€
   $("#emailSegment")?.addEventListener("change", renderEmailMarketing);
   $("#emailPreviewBtn")?.addEventListener("click", previewEmail);
   $("#emailExportBtn")?.addEventListener("click", exportEmailList);
@@ -2564,24 +2564,24 @@ function initSidebarToggle() {
   const app      = document.querySelector(".app");
   if (!app) return;
 
-  // ── Escritorio: toggle clásico ──
+  // â”€â”€ Escritorio: toggle clÃ¡sico â”€â”€
   function update() {
     const hidden = app.classList.contains("sidebar-hidden");
-    if (btn) { btn.textContent = hidden ? "▶" : "◀"; btn.title = hidden ? "Mostrar barra lateral" : "Ocultar barra lateral"; }
+    if (btn) { btn.textContent = hidden ? "â–¶" : "â—€"; btn.title = hidden ? "Mostrar barra lateral" : "Ocultar barra lateral"; }
   }
   btn?.addEventListener("click", () => { app.classList.toggle("sidebar-hidden"); update(); });
   update();
 
-  // ── Móvil: hamburguesa overlay ──
-  function openMobileSidebar()  { app.classList.add("sidebar-mobile-open");    if (mobileBtn) mobileBtn.textContent = "✕"; }
-  function closeMobileSidebar() { app.classList.remove("sidebar-mobile-open"); if (mobileBtn) mobileBtn.textContent = "☰"; }
+  // â”€â”€ MÃ³vil: hamburguesa overlay â”€â”€
+  function openMobileSidebar()  { app.classList.add("sidebar-mobile-open");    if (mobileBtn) mobileBtn.textContent = "âœ•"; }
+  function closeMobileSidebar() { app.classList.remove("sidebar-mobile-open"); if (mobileBtn) mobileBtn.textContent = "â˜°"; }
 
   mobileBtn?.addEventListener("click", () => {
     app.classList.contains("sidebar-mobile-open") ? closeMobileSidebar() : openMobileSidebar();
   });
   backdrop?.addEventListener("click", closeMobileSidebar);
 
-  // Cerrar sidebar al clicar un item del nav en móvil
+  // Cerrar sidebar al clicar un item del nav en mÃ³vil
   $$(".nav-btn")?.forEach(b => b.addEventListener("click", () => {
     if (window.innerWidth <= 768) closeMobileSidebar();
   }));
@@ -2607,7 +2607,7 @@ function initSidebarToggle() {
     if (localStorage.getItem('crm_theme') === 'light') {
       document.querySelector('.app').classList.add('light-mode');
       const btn = $("#themeToggle");
-      if (btn) btn.textContent = '🌙 Modo oscuro';
+      if (btn) btn.textContent = 'ðŸŒ™ Modo oscuro';
     }
   } catch(e) {}
 
@@ -2635,13 +2635,13 @@ function initSidebarToggle() {
   });
 })();
 // =============================================================
-// BÚSQUEDA GLOBAL (Ctrl+K)
+// BÃšSQUEDA GLOBAL (Ctrl+K)
 // =============================================================
 let _gsActive = false;
 let _gsIdx    = -1;
 
 function initGlobalSearch() {
-  // Abrir con Ctrl+K o botón
+  // Abrir con Ctrl+K o botÃ³n
   document.addEventListener("keydown", e => {
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
       e.preventDefault();
@@ -2685,7 +2685,7 @@ function renderGlobalSearch(q) {
   if (!box) return;
   const query = q.trim().toLowerCase();
   if (!query) {
-    box.innerHTML = `<div class="gs-empty">Escribe para buscar clientes, pedidos o cursos…</div>`;
+    box.innerHTML = `<div class="gs-empty">Escribe para buscar clientes, pedidos o cursosâ€¦</div>`;
     return;
   }
 
@@ -2719,36 +2719,36 @@ function renderGlobalSearch(q) {
 
   let html = "";
   if (customers.length) {
-    html += `<div class="gs-section">👥 Clientes</div>`;
+    html += `<div class="gs-section">ðŸ‘¥ Clientes</div>`;
     customers.forEach(o => {
       html += `<div class="gs-item" data-type="customer" data-key="${esc(o.customer_email||o.customer_name)}">
-        <span class="gs-item-icon">👤</span>
+        <span class="gs-item-icon">ðŸ‘¤</span>
         <div class="gs-item-main">
           <div class="gs-item-title">${esc(o.customer_name||"Sin nombre")}</div>
-          <div class="gs-item-sub">${esc(o.customer_email||"")} · ${esc(o.customer_country||"")}</div>
+          <div class="gs-item-sub">${esc(o.customer_email||"")} Â· ${esc(o.customer_country||"")}</div>
         </div>
         <span class="gs-item-badge">${fmtMoney(o.total)}</span>
       </div>`;
     });
   }
   if (orders.length) {
-    html += `<div class="gs-section">📦 Pedidos</div>`;
+    html += `<div class="gs-section">ðŸ“¦ Pedidos</div>`;
     orders.forEach(o => {
       html += `<div class="gs-item" data-type="order" data-id="${esc(String(o.id))}">
-        <span class="gs-item-icon">📦</span>
+        <span class="gs-item-icon">ðŸ“¦</span>
         <div class="gs-item-main">
-          <div class="gs-item-title">#${esc(String(o.id))} — ${esc(o.course_name||"Curso")}</div>
-          <div class="gs-item-sub">${esc(o.customer_name||"")} · ${fmtDate(o.date)}</div>
+          <div class="gs-item-title">#${esc(String(o.id))} â€” ${esc(o.course_name||"Curso")}</div>
+          <div class="gs-item-sub">${esc(o.customer_name||"")} Â· ${fmtDate(o.date)}</div>
         </div>
         <span class="gs-item-badge">${fmtMoney(o.total)}</span>
       </div>`;
     });
   }
   if (courses.length) {
-    html += `<div class="gs-section">🎓 Cursos</div>`;
+    html += `<div class="gs-section">ðŸŽ“ Cursos</div>`;
     courses.forEach(o => {
       html += `<div class="gs-item" data-type="course" data-name="${esc(o.course_name)}">
-        <span class="gs-item-icon">🎓</span>
+        <span class="gs-item-icon">ðŸŽ“</span>
         <div class="gs-item-main">
           <div class="gs-item-title">${esc(o.course_name)}</div>
           <div class="gs-item-sub">${fmtMoney(o.total)} por pedido</div>
@@ -2807,13 +2807,13 @@ async function requestPushNotifications() {
     toast("Tu navegador no soporta notificaciones push", "error"); return;
   }
   if (Notification.permission === "denied") {
-    toast("Las notificaciones están bloqueadas en este navegador", "error"); return;
+    toast("Las notificaciones estÃ¡n bloqueadas en este navegador", "error"); return;
   }
   const perm = await Notification.requestPermission();
   _pushEnabled = perm === "granted";
   updatePushBtn();
   if (_pushEnabled) {
-    toast("✓ Alertas push activadas", "success");
+    toast("âœ“ Alertas push activadas", "success");
     // Inicializar con pedidos actuales para no notificar todos al arranque
     _pushLastOrderIds = new Set(state.filtered.map(o => o.id));
   } else {
@@ -2825,14 +2825,14 @@ function updatePushBtn() {
   const btn = $("#pushNotifBtn");
   if (!btn) return;
   if (Notification.permission === "granted") {
-    btn.textContent = "🔔 Alertas ON";
+    btn.textContent = "ðŸ”” Alertas ON";
     btn.className   = "chip enabled";
     _pushEnabled    = true;
   } else if (Notification.permission === "denied") {
-    btn.textContent = "🔕 Alertas bloqueadas";
+    btn.textContent = "ðŸ”• Alertas bloqueadas";
     btn.className   = "chip denied";
   } else {
-    btn.textContent = "🔔 Alertas push";
+    btn.textContent = "ðŸ”” Alertas push";
     btn.className   = "chip";
   }
 }
@@ -2841,9 +2841,9 @@ function checkPushNotifications(orders) {
   if (!_pushEnabled || Notification.permission !== "granted") return;
   const newOrders = orders.filter(o => !_pushLastOrderIds.has(o.id));
   newOrders.forEach(o => {
-    const n = new Notification("🛒 Nuevo pedido — CRM Dashboard", {
-      body: `#${o.id} · ${o.customer_name||"Cliente"} · ${fmtMoney(o.total)}`,
-      icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>🛒</text></svg>",
+    const n = new Notification("ðŸ›’ Nuevo pedido â€” CRM Dashboard", {
+      body: `#${o.id} Â· ${o.customer_name||"Cliente"} Â· ${fmtMoney(o.total)}`,
+      icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='28'>ðŸ›’</text></svg>",
       tag:  `order-${o.id}`
     });
     n.onclick = () => { window.focus(); switchView("sales"); n.close(); };
@@ -2854,7 +2854,7 @@ function checkPushNotifications(orders) {
     !_pushLastOrderIds.has(o.id) && ["cancelled","refunded"].includes(statusNorm(o.status))
   );
   if (cancelled.length) {
-    new Notification("⚠ Pedidos cancelados — CRM", {
+    new Notification("âš  Pedidos cancelados â€” CRM", {
       body: `${cancelled.length} pedido(s) cancelados o reembolsados`,
       tag:  "cancelled-alert"
     });
@@ -2887,7 +2887,7 @@ function renderCustomerTasks(key) {
       <input type="checkbox" class="task-check" ${t.done?"checked":""} onchange="toggleTask('${esc(key)}',${i})">
       <span class="task-text">${esc(t.text)}</span>
       ${t.due ? `<span class="task-due${overdue?" overdue":""}">${t.due}</span>` : ""}
-      <button class="task-del" onclick="deleteTask('${esc(key)}',${i})" title="Eliminar">×</button>
+      <button class="task-del" onclick="deleteTask('${esc(key)}',${i})" title="Eliminar">Ã—</button>
     </div>`;
   }).join("");
 }
@@ -2915,14 +2915,14 @@ function deleteTask(key, idx) {
 }
 
 // =============================================================
-// LTV — Lifetime Value proyectado a 12 meses
+// LTV â€” Lifetime Value proyectado a 12 meses
 // =============================================================
 function renderLTV() {
   const bars = $("#ltvBars");
   const badge = $("#ltvBadge");
   if (!bars) return;
 
-  // Agrupar por cliente: total gastado y número de meses activo
+  // Agrupar por cliente: total gastado y nÃºmero de meses activo
   const map = {};
   state.filtered.forEach(o => {
     const k = o.customer_email || o.customer_name || "desconocido";
@@ -3024,14 +3024,14 @@ function renderPeriodComparison() {
     { label:"Ingresos",     va: fmtMoney(a.revenue), vb: fmtMoney(b.revenue), da: a.revenue, db: b.revenue, mono:false },
     { label:"Pedidos",      va: a.count,              vb: b.count,             da: a.count,   db: b.count,   mono:false },
     { label:"Completados",  va: a.complete,           vb: b.complete,          da: a.complete,db: b.complete,mono:false },
-    { label:"Clientes únicos",va: a.unique,           vb: b.unique,            da: a.unique,  db: b.unique,  mono:false },
+    { label:"Clientes Ãºnicos",va: a.unique,           vb: b.unique,            da: a.unique,  db: b.unique,  mono:false },
     { label:"Ticket medio", va: fmtMoney(a.aov),      vb: fmtMoney(b.aov),    da: a.aov,     db: b.aov,     mono:false },
   ];
 
   result.innerHTML = metrics.map(m => {
     const diff = m.db ? ((m.da - m.db) / m.db * 100) : 0;
     const cls  = diff >= 0 ? "up" : "down";
-    const sign = diff >= 0 ? "▲" : "▼";
+    const sign = diff >= 0 ? "â–²" : "â–¼";
     return `<div class="pc-card">
       <div class="pc-card-label">${esc(m.label)}</div>
       <div class="pc-card-vals">
@@ -3044,7 +3044,7 @@ function renderPeriodComparison() {
 }
 
 // =============================================================
-// HORA ÓPTIMA DE ENVÍO
+// HORA Ã“PTIMA DE ENVÃO
 // =============================================================
 function renderOptimalSendTime() {
   const chart  = $("#optimalTimeChart");
@@ -3052,7 +3052,7 @@ function renderOptimalSendTime() {
   const recomm = $("#optimalTimeRecommend");
   if (!chart) return;
 
-  // Contar ventas por hora del día
+  // Contar ventas por hora del dÃ­a
   const hourCounts = new Array(24).fill(0);
   state.filtered.forEach(o => {
     try {
@@ -3077,12 +3077,12 @@ function renderOptimalSendTime() {
     </div>`;
   }).join("");
 
-  // Bloque de 3 horas con más compras
+  // Bloque de 3 horas con mÃ¡s compras
   let best3 = [...hourCounts.entries()].sort((a,b) => b[1]-a[1]).slice(0,3).map(([h]) => labels[h]);
   if (badge)  badge.textContent  = `Mejor hora: ${labels[bestHour]}`;
   if (recomm) recomm.innerHTML = `<div class="ot-recommend">
-    📊 <strong>Recomendación:</strong> tus clientes compran más a las <strong>${best3.join(", ")}</strong>.
-    Envía campañas de email <strong>30–60 minutos antes</strong> de esos horarios para maximizar la apertura.
+    ðŸ“Š <strong>RecomendaciÃ³n:</strong> tus clientes compran mÃ¡s a las <strong>${best3.join(", ")}</strong>.
+    EnvÃ­a campaÃ±as de email <strong>30â€“60 minutos antes</strong> de esos horarios para maximizar la apertura.
   </div>`;
 }
 function detectDuplicates() {
@@ -3104,7 +3104,7 @@ function detectDuplicates() {
     byEmail[email][byEmail[email].length - 1].total += Number(o.total||0);
   });
 
-  // Buscar también por nombre similar (Levenshtein básico no es práctico en vanilla,
+  // Buscar tambiÃ©n por nombre similar (Levenshtein bÃ¡sico no es prÃ¡ctico en vanilla,
   // usamos coincidencia de prefijo del nombre)
   const byPrefix = {};
   state.filtered.forEach(o => {
@@ -3131,12 +3131,12 @@ function detectDuplicates() {
 
   if (badge) badge.textContent = `${groups.length} grupos`;
   if (!groups.length) {
-    list.innerHTML = `<div class="dup-no">✅ No se detectaron clientes duplicados.</div>`;
+    list.innerHTML = `<div class="dup-no">âœ… No se detectaron clientes duplicados.</div>`;
     return;
   }
 
   list.innerHTML = groups.slice(0,20).map(g => {
-    const typeLabel = g.type === "email" ? `📧 Mismo email: ${esc(g.key)}` : `👤 Mismo nombre: ${esc(g.key)}`;
+    const typeLabel = g.type === "email" ? `ðŸ“§ Mismo email: ${esc(g.key)}` : `ðŸ‘¤ Mismo nombre: ${esc(g.key)}`;
     return `<div class="dup-group">
       <div class="dup-group-title">${typeLabel}</div>
       ${g.items.map(it => `<div class="dup-item">
@@ -3152,10 +3152,10 @@ function detectDuplicates() {
 // =============================================================
 async function exportPDF() {
   const btn = $("#pdfExportBtn");
-  if (btn) { btn.textContent = "⏳ Generando PDF..."; btn.disabled = true; }
+  if (btn) { btn.textContent = "â³ Generando PDF..."; btn.disabled = true; }
 
   try {
-    // Capturar la sección activa
+    // Capturar la secciÃ³n activa
     const activeView = $(".view.active") || $(".main");
     const canvas = await html2canvas(activeView, {
       backgroundColor: getComputedStyle(document.body).backgroundColor || "#080a0f",
@@ -3174,25 +3174,25 @@ async function exportPDF() {
     pdf.save(`crm-dashboard-${new Date().toISOString().slice(0,10)}.pdf`);
     toast("PDF exportado correctamente", "success");
   } catch(err) {
-    toast("Error al generar PDF. Asegúrate de que html2canvas cargó.", "error");
+    toast("Error al generar PDF. AsegÃºrate de que html2canvas cargÃ³.", "error");
     console.error(err);
   } finally {
-    if (btn) { btn.textContent = "📄 PDF"; btn.disabled = false; }
+    if (btn) { btn.textContent = "ðŸ“„ PDF"; btn.disabled = false; }
   }
 }
 
 // =============================================================
-// MODO PRESENTACIÓN
+// MODO PRESENTACIÃ“N
 // =============================================================
 const PRES_VIEWS = [
-  { id: "command",      label: "🌐 Centro de mando" },
-  { id: "crm",          label: "👥 CRM clientes" },
-  { id: "oportunidades",label: "🎯 Oportunidades" },
-  { id: "kanban",       label: "📌 Kanban leads" },
-  { id: "analytics",    label: "📈 Análisis avanzado" },
-  { id: "sales",        label: "💳 Ventas" },
-  { id: "courses",      label: "🎓 Cursos" },
-  { id: "geo",          label: "📍 Geografía" },
+  { id: "command",      label: "ðŸŒ Centro de mando" },
+  { id: "crm",          label: "ðŸ‘¥ CRM clientes" },
+  { id: "oportunidades",label: "ðŸŽ¯ Oportunidades" },
+  { id: "kanban",       label: "ðŸ“Œ Kanban leads" },
+  { id: "analytics",    label: "ðŸ“ˆ AnÃ¡lisis avanzado" },
+  { id: "sales",        label: "ðŸ’³ Ventas" },
+  { id: "courses",      label: "ðŸŽ“ Cursos" },
+  { id: "geo",          label: "ðŸ“ GeografÃ­a" },
 ];
 let _presIdx     = 0;
 let _presTimer   = null;
@@ -3270,21 +3270,21 @@ function presStartTimer() {
 
 function updatePresTimer() {
   const el = $("#presTimer");
-  if (el) el.textContent = `🔄 Siguiente en ${_presSeconds}s`;
+  if (el) el.textContent = `ðŸ”„ Siguiente en ${_presSeconds}s`;
 }
 
 // =============================================================
 // WIDGETS FAVORITOS
 // =============================================================
 const WIDGET_DEFS = [
-  { id: "kpiGrid",       label: "📊 KPIs principales",     sub: "Ingresos, pedidos, clientes" },
-  { id: "view-command",  label: "🌐 Centro de mando",      sub: "Globo + ventas + feed" },
-  { id: "view-crm",      label: "👥 CRM clientes",         sub: "Segmentos, tabla, heatmap" },
-  { id: "view-analytics",label: "📈 Análisis avanzado",    sub: "Forecast, RFM, abandono" },
-  { id: "view-kanban",   label: "📌 Kanban de leads",      sub: "Pipeline drag & drop" },
-  { id: "view-oportunidades",label: "🎯 Oportunidades",    sub: "Leads, upsell, email" },
-  { id: "view-courses",  label: "🎓 Cursos",               sub: "Rendimiento y comparativa" },
-  { id: "view-geo",      label: "📍 Geografía",            sub: "Rankings de países y ciudades" },
+  { id: "kpiGrid",       label: "ðŸ“Š KPIs principales",     sub: "Ingresos, pedidos, clientes" },
+  { id: "view-command",  label: "ðŸŒ Centro de mando",      sub: "Globo + ventas + feed" },
+  { id: "view-crm",      label: "ðŸ‘¥ CRM clientes",         sub: "Segmentos, tabla, heatmap" },
+  { id: "view-analytics",label: "ðŸ“ˆ AnÃ¡lisis avanzado",    sub: "Forecast, RFM, abandono" },
+  { id: "view-kanban",   label: "ðŸ“Œ Kanban de leads",      sub: "Pipeline drag & drop" },
+  { id: "view-oportunidades",label: "ðŸŽ¯ Oportunidades",    sub: "Leads, upsell, email" },
+  { id: "view-courses",  label: "ðŸŽ“ Cursos",               sub: "Rendimiento y comparativa" },
+  { id: "view-geo",      label: "ðŸ“ GeografÃ­a",            sub: "Rankings de paÃ­ses y ciudades" },
 ];
 
 function loadWidgetConfig() {
@@ -3412,7 +3412,7 @@ function sendEmailMailto() {
 }
 
 // =============================================================
-// GA4 — Guardar configuración
+// GA4 â€” Guardar configuraciÃ³n
 // =============================================================
 function saveGA4Config() {
   const mid = $("#ga4MeasurementId")?.value.trim();
@@ -3421,7 +3421,7 @@ function saveGA4Config() {
   try { localStorage.setItem("crm_ga4", JSON.stringify({ measurementId: mid, apiSecret: sec })); } catch(e) {}
   const msg = $("#ga4SavedMsg");
   if (msg) { msg.style.display="inline"; setTimeout(()=>msg.style.display="none",2000); }
-  toast("Configuración GA4 guardada", "success");
+  toast("ConfiguraciÃ³n GA4 guardada", "success");
 }
 
 function loadGA4Config() {
@@ -3438,7 +3438,7 @@ function loadGA4Config() {
 }
 
 // =============================================================
-// GA4 — Sincronización de pedidos WooCommerce → GA4 Measurement Protocol
+// GA4 â€” SincronizaciÃ³n de pedidos WooCommerce â†’ GA4 Measurement Protocol
 // Evita duplicados guardando IDs ya enviados en localStorage
 // =============================================================
 function getGA4Cfg() {
@@ -3458,7 +3458,7 @@ function markGA4Sent(ids) {
   try {
     const existing = getGA4SentIds();
     ids.forEach(id => existing.add(String(id)));
-    // Limitar a los últimos 2000 IDs para no saturar localStorage
+    // Limitar a los Ãºltimos 2000 IDs para no saturar localStorage
     const arr = [...existing].slice(-2000);
     localStorage.setItem("crm_ga4_sent", JSON.stringify(arr));
   } catch(e) {}
@@ -3469,7 +3469,7 @@ async function syncOrdersToGA4(orders) {
   if (!cfg.measurementId || !cfg.apiSecret) return;
 
   const sentIds = getGA4SentIds();
-  // Solo pedidos completados no enviados aún
+  // Solo pedidos completados no enviados aÃºn
   const pending = (orders || state.orders || []).filter(o =>
     statusNorm(o.status) === "completed" && !sentIds.has(String(o.id))
   );
@@ -3508,7 +3508,7 @@ async function syncOrdersToGA4(orders) {
         body: JSON.stringify(body)
       });
       newSent.push(order.id);
-    } catch(e) { /* red no disponible, se reintentará en la próxima carga */ }
+    } catch(e) { /* red no disponible, se reintentarÃ¡ en la prÃ³xima carga */ }
   }
 
   if (newSent.length) {
@@ -3518,177 +3518,247 @@ async function syncOrdersToGA4(orders) {
 }
 
 // =============================================================
-// PAYPAL — Fetch y render
+// PAYPAL — API directa desde el browser (sin proxy WordPress)
+// Credenciales en localStorage (crm_paypal). Se usan como default
+// las credenciales Sandbox que el usuario configuró.
 // =============================================================
 
-const PAYPAL_BASE = "/wp-json/cpp-crm-dashboard/v1";
+const PP_DEFAULT = {
+  clientId: "AZ5wBHR9FYjombGnYkaPLLZLodDCxVFLS8nyFON4S8r-yiUUjZ8CVBU9G4uJPB1IcO8Dh3gHB9fvMaeg",
+  secret:   "EDOqqAcDB6bI9HHsG-GwnJXWhiq5alK8HPf_QKqLuChD5M1bPxiOynaM2_L6aGP85c-AhUPtb6BdYeoV",
+  mode:     "sandbox"
+};
 
-function getPaypalApiBase() {
-  const cfg = loadConfig();
-  if (!cfg || !cfg.url) return null;
-  // Remove trailing path to get the WP base + inject paypal routes
-  return cfg.url.replace(/\/wp-json.*$/, '') + '/wp-json/cpp-crm-dashboard/v1';
+function loadPaypalConfig() {
+  try {
+    const s = JSON.parse(localStorage.getItem("crm_paypal") || "null");
+    return (s && s.clientId) ? s : PP_DEFAULT;
+  } catch(e) { return PP_DEFAULT; }
 }
 
-async function fetchPaypalSummary(from, to) {
-  const base = getPaypalApiBase();
-  if (!base) throw new Error("Configura primero la URL de WordPress en Conexión.");
-  const cfg = loadConfig();
-  const token = cfg.token || "";
-  const url = `${base}/paypal/summary?from=${from}&to=${to}&token=${encodeURIComponent(token)}`;
-  const res = await fetch(url, {
-    headers: { "X-CPP-CRM-Dashboard-Token": token }
+function savePaypalConfig() {
+  const cid = (document.getElementById("ppClientId")?.value || "").trim();
+  const sec = (document.getElementById("ppSecret")?.value   || "").trim();
+  const mode = document.getElementById("ppMode")?.value || "sandbox";
+  if (!cid || !sec) { toast("Ingresa Client ID y Secret de PayPal", "error"); return; }
+  try { localStorage.setItem("crm_paypal", JSON.stringify({ clientId: cid, secret: sec, mode })); } catch(e) {}
+  _ppToken = null;
+  _ppTokenExpiry = 0;
+  const msg = document.getElementById("ppSavedMsg");
+  if (msg) { msg.style.display = "inline"; setTimeout(() => msg.style.display = "none", 2000); }
+  toast("Credenciales PayPal guardadas", "success");
+}
+
+// Cache del access token en memoria (se pierde al recargar la página, no en disco)
+let _ppToken = null;
+let _ppTokenExpiry = 0;
+
+async function ppGetToken() {
+  const now = Date.now();
+  if (_ppToken && now < _ppTokenExpiry) return _ppToken;
+
+  const cfg  = loadPaypalConfig();
+  const base = cfg.mode === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com";
+  const creds = btoa(cfg.clientId + ":" + cfg.secret);
+
+  const res = await fetch(`${base}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${creds}`,
+      "Content-Type":  "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
   });
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `HTTP ${res.status}`);
+    let msg = `HTTP ${res.status}`;
+    try { const e = await res.json(); msg = e.error_description || e.message || msg; } catch(_) {}
+    throw new Error(msg + " — verifica tu Client ID y Secret de PayPal");
   }
+
+  const data     = await res.json();
+  _ppToken       = data.access_token;
+  _ppTokenExpiry = now + Math.max(60, (data.expires_in || 3600) - 60) * 1000;
+  return _ppToken;
+}
+
+async function ppFetchTransactions(from, to, page) {
+  const token = await ppGetToken();
+  const cfg   = loadPaypalConfig();
+  const base  = cfg.mode === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com";
+
+  const params = new URLSearchParams({
+    start_date:         from + "T00:00:00-0000",
+    end_date:           to   + "T23:59:59-0000",
+    transaction_status: "S",
+    page_size:          "500",
+    page:               String(page || 1),
+    fields:             "all"
+  });
+
+  const res = await fetch(`${base}/v1/reporting/transactions?${params}`, {
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+  });
+
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try { const e = await res.json(); msg = e.message || e.error_description || msg; } catch(_) {}
+    throw new Error(msg);
+  }
+
   return res.json();
 }
 
-async function fetchPaypalTransactions(from, to, page = 1) {
-  const base = getPaypalApiBase();
-  if (!base) throw new Error("Configura primero la URL de WordPress en Conexión.");
-  const cfg = loadConfig();
-  const token = cfg.token || "";
-  const url = `${base}/paypal/transactions?from=${from}&to=${to}&page=${page}&token=${encodeURIComponent(token)}`;
-  const res = await fetch(url, {
-    headers: { "X-CPP-CRM-Dashboard-Token": token }
+const PP_COUNTRIES = {
+  ES:"España", MX:"México", CL:"Chile", CO:"Colombia", US:"EEUU", PE:"Perú",
+  AR:"Argentina", EC:"Ecuador", BO:"Bolivia", PY:"Paraguay", UY:"Uruguay",
+  VE:"Venezuela", CR:"Costa Rica", GT:"Guatemala", PA:"Panamá", DO:"Rep. Dom.",
+  GB:"Reino Unido", FR:"Francia", DE:"Alemania", BR:"Brasil"
+};
+
+function ppCountryFlag(code) {
+  if (!code || code.length !== 2) return "🌍";
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)));
+}
+
+function ppRenderAll(txnDetails) {
+  const fmtUSD = n => new Intl.NumberFormat("es-PE", { style:"currency", currency:"USD", maximumFractionDigits:2 }).format(n);
+  const setEl  = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  let gross = 0, fees = 0, count = 0;
+  const byCountry  = {};
+  const byCustomer = {};
+  const byDay      = {};
+
+  txnDetails.forEach(t => {
+    const info  = t.transaction_info || {};
+    const payer = t.payer_info       || {};
+    const amt   = parseFloat(info.transaction_amount?.value  || 0);
+    const fee   = Math.abs(parseFloat(info.fee_amount?.value || 0));
+    const date  = (info.transaction_initiation_date || "").slice(0, 10);
+    const code  = payer.address?.country_code || "XX";
+    const email = payer.email_address || "desconocido";
+    const name  = payer.payer_name?.alternate_full_name || email;
+
+    gross += amt;
+    fees  += fee;
+    count++;
+    byCountry[code]  = +((byCountry[code]  || 0) + amt).toFixed(2);
+    byDay[date]      = +((byDay[date]       || 0) + amt).toFixed(2);
+    if (!byCustomer[email]) byCustomer[email] = { name, email, total: 0, orders: 0 };
+    byCustomer[email].total  = +(byCustomer[email].total  + amt).toFixed(2);
+    byCustomer[email].orders += 1;
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
 
-function fmt(n, currency = "USD") {
-  return new Intl.NumberFormat("es-PE", { style: "currency", currency, maximumFractionDigits: 2 }).format(n);
-}
-
-function renderPaypalSummary(data) {
-  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  const cur = data.by_day ? "USD" : "USD"; // siempre USD para PayPal
-  set("ppGross", fmt(data.total_gross));
-  set("ppFees",  "-" + fmt(data.total_fees));
-  set("ppNet",   fmt(data.total_net));
-  set("ppCount", data.count.toLocaleString("es-PE"));
-  set("ppAvg",   fmt(data.avg_order));
+  // KPIs
+  setEl("ppGross", fmtUSD(gross));
+  setEl("ppFees",  "-" + fmtUSD(fees));
+  setEl("ppNet",   fmtUSD(gross - fees));
+  setEl("ppCount", count.toLocaleString("es-PE"));
+  setEl("ppAvg",   fmtUSD(count ? gross / count : 0));
 
   // Barras diarias
-  const dayBars = document.getElementById("paypalDayBars");
-  if (dayBars && data.by_day) {
-    const entries = Object.entries(data.by_day);
-    const maxVal = Math.max(...entries.map(([,v]) => v), 1);
-    dayBars.innerHTML = entries.map(([date, val]) => {
-      const pct = (val / maxVal * 100).toFixed(1);
-      return `<div class="pay-row">
-        <span class="pay-label" style="min-width:90px;font-size:11px">${date}</span>
-        <div class="pay-track"><div class="pay-fill" style="width:${pct}%"></div></div>
-        <span class="pay-val">${fmt(val)}</span>
-      </div>`;
-    }).join("");
+  const dayEl = document.getElementById("paypalDayBars");
+  if (dayEl) {
+    const entries = Object.entries(byDay).sort(([a],[b]) => a.localeCompare(b));
+    const maxV = Math.max(...entries.map(([,v]) => v), 1);
+    dayEl.innerHTML = entries.length
+      ? entries.map(([d,v]) => `<div class="pay-row">
+          <span class="pay-label" style="min-width:90px;font-size:11px">${d}</span>
+          <div class="pay-track"><div class="pay-fill" style="width:${(v/maxV*100).toFixed(1)}%"></div></div>
+          <span class="pay-val">${fmtUSD(v)}</span>
+        </div>`).join("")
+      : `<div style="color:var(--muted);padding:12px">Sin transacciones en el periodo.</div>`;
   }
 
   // Por país
-  const countryBars = document.getElementById("paypalCountryBars");
-  if (countryBars && data.by_country) {
-    const entries = Object.entries(data.by_country).slice(0, 15);
-    const maxVal = Math.max(...entries.map(([,v]) => v), 1);
-    countryBars.innerHTML = entries.map(([country, val]) => {
-      const pct = (val / maxVal * 100).toFixed(1);
-      const flag = country.length === 2
-        ? String.fromCodePoint(...[...country.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))
-        : "🌍";
-      return `<div class="pay-row">
-        <span class="pay-label">${flag} ${country}</span>
-        <div class="pay-track"><div class="pay-fill" style="width:${pct}%"></div></div>
-        <span class="pay-val">${fmt(val)}</span>
-      </div>`;
-    }).join("");
+  const ctEl = document.getElementById("paypalCountryBars");
+  if (ctEl) {
+    const entries = Object.entries(byCountry).sort(([,a],[,b]) => b - a).slice(0, 15);
+    const maxV = Math.max(...entries.map(([,v]) => v), 1);
+    ctEl.innerHTML = entries.length
+      ? entries.map(([code,v]) => `<div class="pay-row">
+          <span class="pay-label">${ppCountryFlag(code)} ${PP_COUNTRIES[code] || code}</span>
+          <div class="pay-track"><div class="pay-fill" style="width:${(v/maxV*100).toFixed(1)}%"></div></div>
+          <span class="pay-val">${fmtUSD(v)}</span>
+        </div>`).join("")
+      : `<div style="color:var(--muted);padding:12px">Sin datos de país.</div>`;
   }
 
   // Top clientes
-  const topCustomers = document.getElementById("paypalTopCustomers");
-  if (topCustomers && data.top_customers) {
-    const maxVal = Math.max(...data.top_customers.map(c => c.total), 1);
-    topCustomers.innerHTML = data.top_customers.slice(0, 10).map(c => {
-      const pct = (c.total / maxVal * 100).toFixed(1);
-      return `<div class="pay-row">
-        <span class="pay-label" title="${esc(c.email)}">${esc(c.name)}</span>
-        <div class="pay-track"><div class="pay-fill" style="width:${pct}%"></div></div>
-        <span class="pay-val">${fmt(c.total)} (${c.orders})</span>
-      </div>`;
-    }).join("");
+  const custEl = document.getElementById("paypalTopCustomers");
+  if (custEl) {
+    const sorted = Object.values(byCustomer).sort((a,b) => b.total - a.total).slice(0, 10);
+    const maxV   = Math.max(...sorted.map(c => c.total), 1);
+    custEl.innerHTML = sorted.length
+      ? sorted.map(c => `<div class="pay-row">
+          <span class="pay-label" title="${esc(c.email)}">${esc(c.name)}</span>
+          <div class="pay-track"><div class="pay-fill" style="width:${(c.total/maxV*100).toFixed(1)}%"></div></div>
+          <span class="pay-val">${fmtUSD(c.total)} (${c.orders})</span>
+        </div>`).join("")
+      : `<div style="color:var(--muted);padding:12px">Sin datos de clientes.</div>`;
   }
-}
 
-function renderPaypalTransactions(data) {
+  // Tabla de transacciones
   const tbody = document.getElementById("paypalTxnBody");
   const badge = document.getElementById("paypalTxnCount");
-  if (!tbody) return;
-  if (badge) badge.textContent = `${data.total_items || data.transactions.length} transacciones`;
-
-  if (!data.transactions || !data.transactions.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Sin transacciones en el periodo.</td></tr>`;
-    return;
+  if (badge) badge.textContent = `${txnDetails.length} transacciones`;
+  if (tbody) {
+    if (!txnDetails.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Sin transacciones en el periodo.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = txnDetails.map(t => {
+      const info  = t.transaction_info || {};
+      const payer = t.payer_info       || {};
+      const amt   = parseFloat(info.transaction_amount?.value || 0);
+      const fee   = Math.abs(parseFloat(info.fee_amount?.value || 0));
+      const code  = payer.address?.country_code || "";
+      const name  = payer.payer_name?.alternate_full_name || payer.email_address || "—";
+      const email = payer.email_address || "";
+      const txid  = info.transaction_id || "";
+      const date  = (info.transaction_initiation_date || "").slice(0, 10);
+      const subj  = info.transaction_subject || info.transaction_note || "—";
+      return `<tr>
+        <td>${date}</td>
+        <td style="font-size:11px;color:var(--muted)" title="${esc(txid)}">${esc(txid.slice(-8))}</td>
+        <td>${esc(name)}<br><span style="font-size:11px;color:var(--muted)">${esc(email)}</span></td>
+        <td>${ppCountryFlag(code)} ${PP_COUNTRIES[code] || code || "—"}</td>
+        <td style="font-size:12px">${esc(subj)}</td>
+        <td class="text-right">${fmtUSD(amt)}</td>
+        <td class="text-right" style="color:var(--bad)">-${fmtUSD(fee)}</td>
+        <td class="text-right" style="color:var(--good)">${fmtUSD(amt - fee)}</td>
+      </tr>`;
+    }).join("");
   }
-
-  const COUNTRY_NAMES = {
-    ES:"España", MX:"México", CL:"Chile", CO:"Colombia", US:"EEUU", PE:"Perú",
-    AR:"Argentina", EC:"Ecuador", BO:"Bolivia", PY:"Paraguay", UY:"Uruguay",
-    VE:"Venezuela", CR:"Costa Rica", GT:"Guatemala", PA:"Panamá", DO:"Rep. Dominicana"
-  };
-
-  tbody.innerHTML = data.transactions.map(t => {
-    const d = t.date ? t.date.substring(0,10) : "—";
-    const country = COUNTRY_NAMES[t.country] || t.country || "—";
-    const status = t.status === "S" ? `<span style="color:var(--good)">✓</span>` : esc(t.status);
-    return `<tr>
-      <td>${d}</td>
-      <td style="font-size:11px;color:var(--muted)">${esc(t.id)}</td>
-      <td>${esc(t.payer_name)}<br><span style="font-size:11px;color:var(--muted)">${esc(t.payer_email)}</span></td>
-      <td>${country}</td>
-      <td style="font-size:12px">${esc(t.subject||"—")}</td>
-      <td class="text-right">${fmt(t.amount)}</td>
-      <td class="text-right" style="color:var(--bad)">-${fmt(t.fee)}</td>
-      <td class="text-right" style="color:var(--good)">${fmt(t.net)}</td>
-    </tr>`;
-  }).join("");
 }
 
 async function loadPaypalData() {
   const statusEl = document.getElementById("paypalStatus");
-  const btn = document.getElementById("paypalLoadBtn");
-  const noteEl = document.getElementById("paypalConfigNote");
-
-  const fromEl = document.getElementById("paypalFrom");
-  const toEl   = document.getElementById("paypalTo");
-
+  const btn      = document.getElementById("paypalLoadBtn");
+  const fromEl   = document.getElementById("paypalFrom");
+  const toEl     = document.getElementById("paypalTo");
   if (!fromEl || !toEl) return;
 
-  const from = fromEl.value || new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
-  const to   = toEl.value   || new Date().toISOString().slice(0,10);
+  const from = fromEl.value || new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
+  const to   = toEl.value   || new Date().toISOString().slice(0, 10);
 
-  if (statusEl) statusEl.textContent = "Cargando...";
+  if (statusEl) statusEl.textContent = "Conectando con PayPal...";
   if (btn) btn.disabled = true;
 
   try {
-    const [summary, txns] = await Promise.all([
-      fetchPaypalSummary(from, to),
-      fetchPaypalTransactions(from, to, 1)
-    ]);
-    renderPaypalSummary(summary);
-    renderPaypalTransactions(txns);
-    if (statusEl) statusEl.textContent = `Actualizado ${new Date().toLocaleTimeString("es-PE")}`;
-    if (noteEl) noteEl.style.display = "none";
+    const data  = await ppFetchTransactions(from, to, 1);
+    const txns  = data.transaction_details || [];
+    ppRenderAll(txns);
+    if (statusEl) statusEl.textContent = `${txns.length} transacciones · ${new Date().toLocaleTimeString("es-PE")}`;
   } catch(err) {
     const msg = String(err.message || err);
     if (statusEl) statusEl.textContent = "Error: " + msg;
-    // Mostrar guía de configuración si falta config
-    if (noteEl && (msg.includes("CPP_PAYPAL") || msg.includes("403") || msg.includes("404"))) {
-      noteEl.style.display = "";
-    }
+    toast("PayPal Error: " + msg, "error");
     console.warn("[PayPal]", err);
   } finally {
     if (btn) btn.disabled = false;
@@ -3696,19 +3766,24 @@ async function loadPaypalData() {
 }
 
 function initPaypalView() {
-  const fromEl = document.getElementById("paypalFrom");
-  const toEl   = document.getElementById("paypalTo");
-  const btn    = document.getElementById("paypalLoadBtn");
+  const fromEl  = document.getElementById("paypalFrom");
+  const toEl    = document.getElementById("paypalTo");
+  const btn     = document.getElementById("paypalLoadBtn");
+  const saveBtn = document.getElementById("ppSaveBtn");
 
-  // Poner fechas por defecto (últimos 30 días)
-  if (fromEl && !fromEl.value) {
-    fromEl.value = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
-  }
-  if (toEl && !toEl.value) {
-    toEl.value = new Date().toISOString().slice(0,10);
-  }
+  // Poblar formulario con credenciales guardadas
+  const cfg = loadPaypalConfig();
+  const ppClientId = document.getElementById("ppClientId");
+  const ppSecret   = document.getElementById("ppSecret");
+  const ppMode     = document.getElementById("ppMode");
+  if (ppClientId) ppClientId.value = cfg.clientId;
+  if (ppSecret)   ppSecret.value   = cfg.secret;
+  if (ppMode)     ppMode.value     = cfg.mode;
 
-  if (btn) {
-    btn.addEventListener("click", loadPaypalData);
-  }
+  // Fechas por defecto
+  if (fromEl && !fromEl.value) fromEl.value = new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
+  if (toEl   && !toEl.value)   toEl.value   = new Date().toISOString().slice(0, 10);
+
+  if (btn)     btn.addEventListener("click", loadPaypalData);
+  if (saveBtn) saveBtn.addEventListener("click", savePaypalConfig);
 }

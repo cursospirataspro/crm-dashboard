@@ -576,6 +576,30 @@
     <!-- VISTA: PAYPAL -->
     <section id="view-paypal" class="view">
 
+      <!-- Credenciales PayPal -->
+      <article class="panel" style="margin-bottom:14px">
+        <div class="panel-head"><div><p class="eyebrow">Credenciales</p><h2>Conectar PayPal</h2></div></div>
+        <div class="alert-config" style="grid-template-columns:1fr 1fr auto;align-items:end">
+          <label class="sf-label">Client ID
+            <input id="ppClientId" type="text" class="sf-input" placeholder="Client ID de PayPal">
+          </label>
+          <label class="sf-label">Secret
+            <input id="ppSecret" type="password" class="sf-input" placeholder="Secret de PayPal">
+          </label>
+          <label class="sf-label">Modo
+            <select id="ppMode" class="sf-input">
+              <option value="sandbox">🧪 Sandbox</option>
+              <option value="live">🔴 Live (real)</option>
+            </select>
+          </label>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+          <button id="ppSaveBtn" class="btn">💾 Guardar credenciales</button>
+          <span id="ppSavedMsg" style="color:var(--good);font-size:12px;display:none">✓ Guardado</span>
+          <p style="margin:0;font-size:12px;color:var(--muted)">Las credenciales se guardan solo en tu navegador (localStorage). Nunca se envían a otro servidor.</p>
+        </div>
+      </article>
+
       <!-- Filtro de fechas PayPal -->
       <article class="panel" style="padding:14px 20px">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -635,30 +659,6 @@
             </tr></thead>
             <tbody id="paypalTxnBody"></tbody>
           </table>
-        </div>
-      </article>
-
-      <!-- Aviso configuración -->
-      <article id="paypalConfigNote" class="panel" style="margin-top:14px;display:none">
-        <div class="panel-head"><div><p class="eyebrow">Configuración requerida</p><h2>Credenciales PayPal Live</h2></div></div>
-        <div class="setup-steps">
-          <div class="setup-step"><div class="step-num">1</div><div>
-            <strong>Crea una app en PayPal Developer</strong>
-            <p>Ve a <a href="https://developer.paypal.com/dashboard/applications/live" target="_blank" rel="noopener">developer.paypal.com → Applications → Live</a> y crea una nueva app.</p>
-          </div></div>
-          <div class="setup-step"><div class="step-num">2</div><div>
-            <strong>Copia Client ID y Secret (Live)</strong>
-            <p>Usa las credenciales <strong>Live</strong>, no las de Sandbox.</p>
-          </div></div>
-          <div class="setup-step"><div class="step-num">3</div><div>
-            <strong>Añade en wp-config.php de tu servidor</strong>
-            <pre><code>define('CPP_PAYPAL_CLIENT_ID',     'TU_CLIENT_ID_LIVE');
-define('CPP_PAYPAL_CLIENT_SECRET', 'TU_SECRET_LIVE');</code></pre>
-          </div></div>
-          <div class="setup-step"><div class="step-num">4</div><div>
-            <strong>Sube el plugin actualizado al servidor</strong>
-            <p>Reemplaza <code>cpp-dashboard-crm-api.php</code> en <code>wp-content/plugins/cpp-dashboard-crm-api/</code></p>
-          </div></div>
         </div>
       </article>
 
