@@ -2793,9 +2793,15 @@ function switchView(id) {
   $$(".view").forEach(v => v.classList.remove("active"));
   $(`#view-${id}`)?.classList.add("active");
   $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === id));
-  if (id === "paypal" && !_paypalInited) {
-    _paypalInited = true;
-    initPaypalView();
+  if (id === "paypal") {
+    if (!_paypalInited) {
+      _paypalInited = true;
+      initPaypalView();
+    } else {
+      // Ya fue init: solo recargar datos si no hay datos cargados
+      const gross = document.getElementById("ppGross");
+      if (!gross || gross.textContent === "—") loadPaypalData();
+    }
   }
 }
 
@@ -3797,36 +3803,77 @@ function ppSetMode(mode) {
   const liveBtn = el("ppModeLive");
   const sandBtn = el("ppModeSandbox");
   const label   = el("ppModeLabel");
-  if (liveBtn) liveBtn.style.opacity = mode === "live" ? "1" : "0.5";
-  if (sandBtn) sandBtn.style.opacity = mode !== "live" ? "1" : "0.5";
+  if (liveBtn) { liveBtn.style.opacity = mode === "live" ? "1" : "0.4"; liveBtn.style.background = mode === "live" ? "var(--good)" : ""; liveBtn.style.color = mode === "live" ? "#fff" : ""; }
+  if (sandBtn) { sandBtn.style.opacity = mode !== "live" ? "1" : "0.4"; sandBtn.style.background = mode !== "live" ? "var(--warn,#f59e0b)" : ""; sandBtn.style.color = mode !== "live" ? "#fff" : ""; }
   if (label)   label.textContent = "Modo: " + (mode === "live" ? "Live (real)" : "Sandbox (prueba)");
 }
 
-function ppApplyPreset(preset) {
-  ppSetMode(preset.mode);
+// Aplica un preset de fecha (días atrás) a los inputs
+function ppApplyDatePreset(days) {
+  const toEl   = document.getElementById("paypalTo");
+  const fromEl = document.getElementById("paypalFrom");
+  if (!fromEl || !toEl) return;
+  const today = new Date();
+  toEl.value = today.toISOString().slice(0, 10);
+  if (days === "all") {
+    fromEl.value = "2019-01-01"; // desde el inicio de la cuenta
+  } else {
+    fromEl.value = new Date(today - days * 86400000).toISOString().slice(0, 10);
+  }
+}
+
+// Filtra la tabla de transacciones en tiempo real
+function ppFilterTable(query) {
+  const q = query.toLowerCase().trim();
+  const rows = document.querySelectorAll("#paypalTxnBody tr");
+  let visible = 0;
+  rows.forEach(row => {
+    const match = !q || row.textContent.toLowerCase().includes(q);
+    row.style.display = match ? "" : "none";
+    if (match) visible++;
+  });
+  const countEl = document.getElementById("paypalTxnCount");
+  if (countEl) countEl.textContent = visible + " filas";
 }
 
 function initPaypalView() {
-  const fromEl = document.getElementById("paypalFrom");
-  const toEl   = document.getElementById("paypalTo");
-  const btn    = document.getElementById("paypalLoadBtn");
+  const fromEl   = document.getElementById("paypalFrom");
+  const toEl     = document.getElementById("paypalTo");
+  const btn      = document.getElementById("paypalLoadBtn");
+  const preset   = document.getElementById("ppDatePreset");
+  const searchEl = document.getElementById("ppSearch");
+  const liveBtn  = document.getElementById("ppModeLive");
+  const sandBtn  = document.getElementById("ppModeSandbox");
 
   // Establecer modo guardado (o Live por defecto)
   const savedMode = (() => { try { const s = JSON.parse(localStorage.getItem("crm_paypal")||"null"); return s?.mode||"live"; } catch(e){return "live";} })();
   ppSetMode(savedMode);
 
-  // Bind botones de modo
-  const liveBtn = document.getElementById("ppModeLive");
-  const sandBtn = document.getElementById("ppModeSandbox");
-  if (liveBtn && !liveBtn._ppBound) { liveBtn._ppBound = true; liveBtn.addEventListener("click", () => { ppSetMode("live"); loadPaypalData(); }); }
-  if (sandBtn && !sandBtn._ppBound) { sandBtn._ppBound = true; sandBtn.addEventListener("click", () => { ppSetMode("sandbox"); loadPaypalData(); }); }
+  // Fechas por defecto: últimos 30 días
+  ppApplyDatePreset(30);
 
-  // Fechas por defecto
-  if (fromEl && !fromEl.value) fromEl.value = new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
-  if (toEl   && !toEl.value)   toEl.value   = new Date().toISOString().slice(0, 10);
+  // Preset de fecha cambia fechas automáticamente
+  if (preset) {
+    preset.value = "30";
+    preset.addEventListener("change", () => {
+      if (preset.value) ppApplyDatePreset(preset.value === "all" ? "all" : Number(preset.value));
+    });
+  }
 
-  if (btn && !btn._ppBound) { btn._ppBound = true; btn.addEventListener("click", loadPaypalData); }
+  // Fechas manuales limpian el preset
+  if (fromEl) fromEl.addEventListener("change", () => { if (preset) preset.value = ""; });
+  if (toEl)   toEl.addEventListener("change",   () => { if (preset) preset.value = ""; });
 
-  // Cargar datos automáticamente al abrir la vista
+  // Botones Live / Sandbox
+  if (liveBtn) liveBtn.addEventListener("click", () => { ppSetMode("live"); loadPaypalData(); });
+  if (sandBtn) sandBtn.addEventListener("click", () => { ppSetMode("sandbox"); loadPaypalData(); });
+
+  // Botón cargar
+  if (btn) btn.addEventListener("click", loadPaypalData);
+
+  // Búsqueda en tiempo real
+  if (searchEl) searchEl.addEventListener("input", () => ppFilterTable(searchEl.value));
+
+  // Cargar datos automáticamente
   loadPaypalData();
 }
