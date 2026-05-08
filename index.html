@@ -1,0 +1,816 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080a0f" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f1f5f9" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Dashboard ejecutivo CRM global para WooCommerce. Visualiza ventas, clientes, geografía y métricas de cursos digitales.">
+  <title>CRM Global Dashboard | WooCommerce Cursos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+</head>
+<body>
+<div class="app">
+
+  <!-- BOTÓN TOGGLE SIDEBAR -->
+  <button id="sidebarToggle" class="sidebar-toggle" title="Ocultar / mostrar barra lateral">◀</button>
+
+  <!-- BARRA LATERAL -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">CP</div>
+      <div>
+        <strong>CRM Global</strong>
+        <span>Cursos Digitales + WooCommerce</span>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-view="command">🌐 Centro de mando</button>
+      <button class="nav-btn" data-view="crm">👥 CRM clientes</button>
+      <button class="nav-btn" data-view="oportunidades">🎯 Oportunidades</button>
+      <button class="nav-btn" data-view="kanban">📌 Kanban leads</button>
+      <button class="nav-btn" data-view="analytics">📈 Análisis</button>
+      <button class="nav-btn" data-view="sales">💳 Ventas</button>
+      <button class="nav-btn" data-view="courses">🎓 Cursos</button>
+      <button class="nav-btn" data-view="geo">📍 Geografía</button>
+      <button class="nav-btn" data-view="settings">⚙️ Conexión</button>
+    </nav>
+    <div class="sidebar-tools">
+      <button id="themeToggle" class="chip">☀ Modo claro</button>
+      <button id="pollingToggle" class="chip">🔔 Live OFF</button>
+      <button id="pushNotifBtn" class="chip">🔔 Alertas push</button>
+      <button id="globalSearchBtn" class="chip">🔍 Buscar (Ctrl+K)</button>
+      <label class="currency-row">
+        <span>💱 Moneda</span>
+        <select id="globalCurrency" class="currency-select">
+          <option value="USD">USD $</option>
+          <option value="EUR">EUR €</option>
+          <option value="PEN">PEN S/.</option>
+          <option value="COP">COP $</option>
+          <option value="MXN">MXN $</option>
+          <option value="ARS">ARS $</option>
+        </select>
+      </label>
+    </div>
+    <section class="mini-status">
+      <small>Estado del dashboard</small>
+      <strong id="modeLabel">Modo demo</strong>
+      <p id="lastSync">Esperando actualización...</p>
+    </section>
+  </aside>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="main">
+
+    <!-- HERO -->
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Dashboard ejecutivo interactivo</p>
+        <h1>Mapa global, CRM y ventas de cursos digitales</h1>
+        <p class="hero-copy">Visualiza clientes, ingresos, países, ciudades, embudo comercial, cursos más vendidos, recurrencia y alertas operativas desde una sola pantalla.</p>
+      </div>
+      <div class="hero-actions">
+        <button id="refreshBtn" class="btn ghost">Actualizar</button>
+        <button id="exportBtn" class="btn primary">Exportar CSV</button>
+        <button id="pdfExportBtn" class="btn ghost">📄 PDF</button>
+        <button id="presentationBtn" class="btn ghost">📺 Presentación</button>
+      </div>
+    </header>
+
+    <!-- FILTROS -->
+    <section class="filters">
+      <label>
+        <span>Periodo</span>
+        <select id="rangePreset">
+          <option value="7">Últimos 7 días</option>
+          <option value="30" selected>Últimos 30 días</option>
+          <option value="90">Últimos 90 días</option>
+          <option value="365">Último año</option>
+          <option value="custom">Personalizado</option>
+        </select>
+      </label>
+      <label class="custom-date hidden">
+        <span>Desde</span>
+        <input type="date" id="fromDate">
+      </label>
+      <label class="custom-date hidden">
+        <span>Hasta</span>
+        <input type="date" id="toDate">
+      </label>
+      <label>
+        <span>Estado</span>
+        <select id="statusFilter">
+          <option value="all">Todos</option>
+          <option value="completed">Completados</option>
+          <option value="processing">Procesando</option>
+          <option value="pending">Pendientes</option>
+          <option value="refunded">Reembolsados</option>
+          <option value="cancelled">Cancelados</option>
+        </select>
+      </label>
+      <label>
+        <span>País</span>
+        <select id="countryFilter"><option value="all">Todos</option></select>
+      </label>
+      <label class="search">
+        <span>Buscar</span>
+        <input id="searchInput" type="search" placeholder="Cliente, curso, pedido, país, ciudad...">
+      </label>
+    </section>
+
+    <!-- VISTA: CENTRO DE MANDO -->
+    <section id="view-command" class="view active">
+      <section id="kpiGrid" class="kpi-grid"></section>
+      <section class="command-grid">
+
+        <article class="panel globe-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Mapa comercial</p>
+              <h2>Globo interactivo de clientes y ventas</h2>
+            </div>
+            <div class="globe-controls">
+              <button id="autoRotateBtn" class="chip active">Auto giro</button>
+              <button id="resetGlobeBtn" class="chip">Centrar</button>
+              <div class="globe-mode-pills" id="globeModePills">
+                <button class="globe-mode-btn active" data-mode="default" title="Vista estándar">🌍 Estándar</button>
+                <button class="globe-mode-btn" data-mode="choropleth" title="Color por ingresos">💰 Ingresos</button>
+                <button class="globe-mode-btn" data-mode="pulse" title="Marcadores pulsantes">📡 Pulso</button>
+                <button class="globe-mode-btn" data-mode="arcs" title="Arcos de conexión">✈ Arcos</button>
+                <button class="globe-mode-btn" data-mode="all" title="Todo activado">✨ Todo</button>
+              </div>
+            </div>
+          </div>
+          <div class="globe-wrap">
+            <canvas id="globeCanvas"></canvas>
+            <div id="globeTooltip" class="globe-tooltip hidden"></div>
+          </div>
+          <div class="globe-hint">Arrastra para girar · Rueda para zoom · Clic en un punto para filtrar el país</div>
+        </article>
+
+        <article class="panel country-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Detalle geográfico</p>
+              <h2 id="selectedCountryTitle">Todos los países</h2>
+            </div>
+            <span id="selectedCountryBadge" class="badge">Global</span>
+          </div>
+          <div id="countryDetail" class="country-detail"></div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Ingresos</p>
+              <h2>Ventas por día</h2>
+            </div>
+            <span id="trendBadge" class="badge">Calculando</span>
+          </div>
+          <div id="revenueBars" class="revenue-bars"></div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Actividad en tiempo real</p>
+              <h2>Últimas ventas</h2>
+            </div>
+            <span id="recentCount" class="badge">0 pedidos</span>
+          </div>
+          <div id="recentFeed" class="recent-feed"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Pipeline</p>
+              <h2>Embudo comercial</h2>
+            </div>
+          </div>
+          <div id="funnelChart" class="funnel"></div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Riesgo operativo</p>
+              <h2>Alertas CRM</h2>
+            </div>
+          </div>
+          <div id="alertsList" class="alerts"></div>
+        </article>
+
+      </section>
+    </section>
+
+    <!-- VISTA: CRM -->
+    <section id="view-crm" class="view">
+      <section class="two-col">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Clientes</p>
+              <h2>Segmentación profesional</h2>
+            </div>
+          </div>
+          <div id="segmentsGrid" class="segments-grid"></div>
+          <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
+            <div>
+              <p class="eyebrow">Comportamiento</p>
+              <h2>Ventas por día de la semana</h2>
+            </div>
+          </div>
+          <div id="weekdayBars" class="payment-bars"></div>
+          <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
+            <div>
+              <p class="eyebrow">Distribución</p>
+              <h2>Ingresos por método de pago</h2>
+            </div>
+          </div>
+          <div id="paymentBars" class="payment-bars"></div>
+          <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
+            <div>
+              <p class="eyebrow">Actividad</p>
+              <h2>Resumen de pedidos</h2>
+            </div>
+          </div>
+          <div id="orderSummary" class="order-summary-grid"></div>
+          <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
+            <div>
+              <p class="eyebrow">Retención</p>
+              <h2>Clientes por frecuencia</h2>
+            </div>
+          </div>
+          <div id="frequencyBars" class="payment-bars"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Compradores</p>
+              <h2>Top clientes por valor</h2>
+            </div>
+            <button id="exportCustomersBtn" class="chip">⬇ CSV</button>
+          </div>
+          <div class="crm-search">
+            <input id="crmSearch" type="search" placeholder="Buscar por nombre o email…" class="sf-input" style="width:100%">
+          </div>
+          <div id="customerList" class="customer-list"></div>
+        </article>
+      </section>
+
+      <!-- Matriz cliente × curso -->
+      <article class="panel crm-matrix-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Historial de compras</p>
+            <h2>Matriz de cursos por cliente</h2>
+          </div>
+          <span id="matrixBadge" class="badge">—</span>
+        </div>
+        <div class="table-wrap crm-matrix-wrap">
+          <table id="courseMatrix" class="crm-matrix"></table>
+        </div>
+      </article>
+
+      <!-- Mapa de calor: ventas por hora y día -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Comportamiento</p><h2>Mapa de calor de ventas</h2></div>
+          <span class="badge">hora × día</span>
+        </div>
+        <div id="salesHeatmap" class="sales-heatmap"></div>
+      </article>
+
+      <!-- Análisis de cohortes -->
+      <article class="panel crm-matrix-panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Retención</p><h2>Análisis de cohortes por mes</h2></div>
+          <span id="cohortBadge" class="badge">—</span>
+        </div>
+        <div class="table-wrap"><table id="cohortTable" class="crm-matrix"></table></div>
+      </article>
+
+      <!-- Detección de duplicados -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Higiene de datos</p><h2>Clientes duplicados detectados</h2></div>
+          <span id="duplicatesBadge" class="badge">—</span>
+        </div>
+        <div id="duplicatesList" class="duplicates-list"></div>
+      </article>
+
+    </section>
+
+    <!-- VISTA: OPORTUNIDADES DE VENTA -->
+    <section id="view-oportunidades" class="view">
+
+      <!-- KPIs resumen -->
+      <div id="opoKpis" class="opo-kpis"></div>
+
+      <!-- Tabs de categoría -->
+      <div class="opo-tabs">
+        <button class="opo-tab active" data-opotab="pending">🔥 Pendientes sin pagar</button>
+        <button class="opo-tab" data-opotab="cancelled">🛒 Carritos perdidos</button>
+        <button class="opo-tab" data-opotab="inactive">😴 Clientes inactivos</button>
+        <button class="opo-tab" data-opotab="upsell">🚀 Potencial upsell</button>
+      </div>
+
+      <!-- Exportar lista -->
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button id="opoExportBtn" class="chip">⬇ Exportar CSV email marketing</button>
+      </div>
+
+      <!-- Lista activa -->
+      <div id="opoList" class="opo-list"></div>
+
+      <!-- Email marketing -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Acción directa</p><h2>📧 Campaña de email</h2></div>
+          <span id="emailCountBadge" class="badge">0 destinatarios</span>
+        </div>
+        <div class="email-compose">
+          <label class="sf-label">Segmento destinatario
+            <select id="emailSegment" class="sf-input">
+              <option value="all">Todos los clientes</option>
+              <option value="inactive">Inactivos (sin compra +90 días)</option>
+              <option value="vip">Clientes VIP (top 10%)</option>
+              <option value="risk">En riesgo (compra única)</option>
+              <option value="upsell">Potencial upsell (1 curso)</option>
+            </select>
+          </label>
+          <label class="sf-label">Asunto del email
+            <input id="emailSubject" type="text" class="sf-input" placeholder="Ej: Te tenemos una oferta especial...">
+          </label>
+          <label class="sf-label">Cuerpo del mensaje
+            <textarea id="emailBody" class="sf-input" rows="5" placeholder="Hola {nombre}, queremos contarte que..."></textarea>
+          </label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+            <button id="emailPreviewBtn" class="btn ghost">👁 Vista previa</button>
+            <button id="emailExportBtn" class="btn ghost">⬇ Exportar lista</button>
+            <button id="emailSendBtn" class="btn">📧 Preparar envío (mailto)</button>
+          </div>
+          <div id="emailPreviewBox" class="email-preview hidden"></div>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- VISTA: KANBAN DE LEADS -->
+    <section id="view-kanban" class="view">
+      <div class="kanban-toolbar">
+        <h2>📌 Kanban de leads</h2>
+        <button id="kanbanExportBtn" class="chip">⬇ Exportar CSV</button>
+      </div>
+      <div class="kanban-board">
+        <div class="kanban-col" data-status="new">
+          <div class="kanban-col-head">Nuevo <span id="kn-new-count" class="badge">0</span></div>
+          <div class="kanban-list" id="kn-new"></div>
+        </div>
+        <div class="kanban-col" data-status="contacted">
+          <div class="kanban-col-head">📧 Contactado <span id="kn-contacted-count" class="badge">0</span></div>
+          <div class="kanban-list" id="kn-contacted"></div>
+        </div>
+        <div class="kanban-col" data-status="won">
+          <div class="kanban-col-head">✅ Ganado <span id="kn-won-count" class="badge">0</span></div>
+          <div class="kanban-list" id="kn-won"></div>
+        </div>
+        <div class="kanban-col" data-status="lost">
+          <div class="kanban-col-head">❌ Perdido <span id="kn-lost-count" class="badge">0</span></div>
+          <div class="kanban-list" id="kn-lost"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VISTA: ANÁLISIS AVANZADO -->
+    <section id="view-analytics" class="view">
+
+      <!-- Forecasting -->
+      <article class="panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Proyección</p><h2>Forecast de ingresos — próximos 30 días</h2></div>
+          <span id="forecastBadge" class="badge">—</span>
+        </div>
+        <div id="forecastBars" class="payment-bars"></div>
+      </article>
+
+      <!-- Scatter RFM visual -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Segmentación RFM</p><h2>Scatter: Recencia vs Frecuencia</h2></div>
+          <span class="badge">burbuja = revenue</span>
+        </div>
+        <div id="rfmScatter" class="rfm-scatter-wrap"></div>
+      </article>
+
+      <!-- Análisis de abandono -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Riesgo</p><h2>Análisis de abandono por curso</h2></div>
+          <span id="abandonBadge" class="badge">—</span>
+        </div>
+        <div id="abandonList" class="payment-bars"></div>
+      </article>
+
+      <!-- Embudo por curso -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Conversión</p><h2>Embudo por curso</h2></div>
+        </div>
+        <div id="coursesFunnel"></div>
+      </article>
+
+      <!-- LTV — Lifetime Value -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Valor del cliente</p><h2>LTV — Proyección a 12 meses</h2></div>
+          <span id="ltvBadge" class="badge">—</span>
+        </div>
+        <div id="ltvBars" class="payment-bars"></div>
+      </article>
+
+      <!-- Comparador de periodos -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Análisis temporal</p><h2>Comparador de periodos</h2></div>
+        </div>
+        <div class="period-compare-controls">
+          <label class="sf-label">Periodo A
+            <select id="periodA" class="sf-input">
+              <option value="current_month">Mes actual</option>
+              <option value="last_month">Mes anterior</option>
+              <option value="last_30">Últimos 30 días</option>
+              <option value="last_90">Últimos 90 días</option>
+              <option value="last_year">Último año</option>
+            </select>
+          </label>
+          <label class="sf-label">Periodo B
+            <select id="periodB" class="sf-input">
+              <option value="last_month" selected>Mes anterior</option>
+              <option value="current_month">Mes actual</option>
+              <option value="last_30">Últimos 30 días</option>
+              <option value="last_90">Últimos 90 días</option>
+              <option value="same_month_prev_year">Mismo mes año anterior</option>
+            </select>
+          </label>
+          <button id="periodCompareBtn" class="btn">📊 Comparar</button>
+        </div>
+        <div id="periodCompareResult" class="period-compare-result"></div>
+      </article>
+
+      <!-- Hora óptima de envío -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Email marketing</p><h2>Hora óptima de envío</h2></div>
+          <span id="optimalTimeBadge" class="badge">—</span>
+        </div>
+        <div id="optimalTimeChart" class="payment-bars"></div>
+        <p id="optimalTimeRecommend" style="margin-top:12px;font-size:13px;color:var(--muted)"></p>
+      </article>
+
+    </section>
+
+    <!-- VISTA: VENTAS -->
+    <section id="view-sales" class="view">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Pedidos</p>
+            <h2>Ventas recientes</h2>
+          </div>
+          <span id="ordersCountBadge" class="badge">0 pedidos</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pedido</th><th>Fecha</th><th>Cliente</th>
+                <th>Curso</th><th>País / Ciudad</th><th>Estado</th><th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTable"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <!-- VISTA: CURSOS -->
+    <section id="view-courses" class="view">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">Producto digital</p>
+            <h2>Rendimiento por curso</h2>
+          </div>
+        </div>
+        <div id="coursesGrid" class="courses-grid"></div>
+      </article>
+
+      <!-- Comparativa de dos cursos -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Comparativa</p><h2>Comparar dos cursos</h2></div>
+        </div>
+        <div class="course-compare-selects">
+          <label class="sf-label">Curso A
+            <select id="compareA" class="sf-input"><option value="">-- Selecciona --</option></select>
+          </label>
+          <label class="sf-label">Curso B
+            <select id="compareB" class="sf-input"><option value="">-- Selecciona --</option></select>
+          </label>
+          <button id="compareBtn" class="btn">📊 Comparar</button>
+        </div>
+        <div id="compareResult" class="compare-result"></div>
+      </article>
+
+      <!-- Análisis de precios -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Distribución</p><h2>Análisis de precios</h2></div>
+          <span id="priceAnalysisBadge" class="badge">—</span>
+        </div>
+        <div id="priceDistribution" class="price-dist"></div>
+      </article>
+    </section>
+
+    <!-- VISTA: GEOGRAFÍA -->
+    <section id="view-geo" class="view">
+      <section class="two-col">
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Países</p>
+              <h2>Ranking global</h2>
+            </div>
+          </div>
+          <div id="countryRanking" class="ranking"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Ciudades</p>
+              <h2>Top ciudades</h2>
+            </div>
+          </div>
+          <div id="cityRanking" class="ranking"></div>
+        </article>
+      </section>
+    </section>
+
+    <!-- VISTA: CONFIGURACIÓN -->
+    <section id="view-settings" class="view">
+
+      <!-- Pasos de instalación -->
+      <section class="two-col">
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Paso 1</p><h2>Instalar el plugin</h2></div></div>
+          <div class="setup-steps">
+            <div class="setup-step">
+              <div class="step-num">1</div>
+              <div>
+                <strong>Sube la carpeta del plugin a WordPress</strong>
+                <p>Copia la carpeta <code>wordpress-plugin/cpp-dashboard-crm-api</code> dentro de <code>wp-content/plugins/</code> de tu servidor (por FTP, cPanel File Manager o SSH).</p>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-num">2</div>
+              <div>
+                <strong>Activa el plugin</strong>
+                <p>Ve a <strong>WordPress → Plugins</strong> y activa <em>CPP CRM Dashboard API for WooCommerce</em>.</p>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-num">3</div>
+              <div>
+                <strong>Define el token en wp-config.php</strong>
+                <p>Abre <code>wp-config.php</code> (raíz del servidor) y añade antes de <code>/* That's all */</code>:</p>
+                <pre><code>define('CPP_CRM_DASHBOARD_TOKEN', 'CAMBIA_ESTO_POR_ALGO_LARGO');</code></pre>
+                <p style="color:var(--muted);font-size:12px">Usa mínimo 32 caracteres aleatorios. Este token es la contraseña del API.</p>
+              </div>
+            </div>
+            <div class="setup-step">
+              <div class="step-num">4</div>
+              <div>
+                <strong>Verifica que el endpoint responde</strong>
+                <p>Abre en tu navegador:</p>
+                <pre><code>https://cursospirataspro.com/wp-json/cpp-crm-dashboard/v1/overview</code></pre>
+                <p style="color:var(--muted);font-size:12px">Debe devolver <code>{"code":"forbidden"...}</code> — eso confirma que el plugin está activo y el endpoint existe.</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Paso 2</p><h2>Conectar el dashboard</h2></div></div>
+          <div class="setup-form">
+            <label class="sf-label">URL de tu WordPress
+              <input id="cfgUrl" type="url" class="sf-input"
+                placeholder="https://cursospirataspro.com/wp-json/cpp-crm-dashboard/v1"
+                value="https://cursospirataspro.com/wp-json/cpp-crm-dashboard/v1">
+            </label>
+            <label class="sf-label">Token de acceso (el que pusiste en wp-config.php)
+              <input id="cfgToken" type="password" class="sf-input"
+                placeholder="Tu token secreto">
+              <button type="button" id="cfgShowToken" class="sf-toggle-pass">👁 Ver</button>
+            </label>
+            <label class="sf-label">Moneda
+              <select id="cfgCurrency" class="sf-input">
+                <option value="USD">USD — Dólar</option>
+                <option value="EUR">EUR — Euro</option>
+                <option value="PEN">PEN — Sol peruano</option>
+                <option value="COP">COP — Peso colombiano</option>
+                <option value="MXN">MXN — Peso mexicano</option>
+                <option value="ARS">ARS — Peso argentino</option>
+              </select>
+            </label>
+            <div class="sf-actions">
+              <button id="cfgTestBtn" class="btn btn-outline">🔌 Probar conexión</button>
+              <button id="cfgSaveBtn" class="btn">✅ Guardar y conectar</button>
+            </div>
+            <div id="cfgStatus" class="cfg-status"></div>
+          </div>
+        </article>
+      </section>
+
+      <!-- Umbrales de alertas -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head"><div><p class="eyebrow">Configuración</p><h2>Umbrales de alertas</h2></div></div>
+        <div class="alert-config">
+          <label class="sf-label">⚠ Alerta si pedidos pendientes superan
+            <input id="cfgAlertPending" type="number" class="sf-input" value="5" min="1">
+          </label>
+          <label class="sf-label">⚠ Tasa de reembolso máxima (%)
+            <input id="cfgAlertRefund" type="number" class="sf-input" value="5" min="1" max="100">
+          </label>
+          <label class="sf-label">😴 Días sin compra = cliente inactivo
+            <input id="cfgAlertInactive" type="number" class="sf-input" value="90" min="7">
+          </label>
+          <label class="sf-label">🔄 Recompra mínima esperada (%)
+            <input id="cfgAlertRepeat" type="number" class="sf-input" value="8" min="1">
+          </label>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <button id="cfgAlertSave" class="btn">💾 Guardar umbrales</button>
+          <span id="cfgAlertSaved" style="color:var(--good);font-size:12px;display:none">✓ Guardado</span>
+        </div>
+      </article>
+
+      <!-- Widget Customizer -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head"><div><p class="eyebrow">Personalización</p><h2>Widgets favoritos</h2></div></div>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:14px">Activa o desactiva secciones para mostrar solo lo que necesitas:</p>
+        <div id="widgetCustomizer" class="widget-customizer"></div>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <button id="widgetSaveBtn" class="btn">💾 Guardar preferencias</button>
+          <span id="widgetSavedMsg" style="color:var(--good);font-size:12px;display:none">✓ Guardado</span>
+        </div>
+      </article>
+
+      <!-- Google Analytics 4 -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head"><div><p class="eyebrow">Integración</p><h2>Google Analytics 4</h2></div></div>
+        <div class="setup-steps">
+          <div class="setup-step">
+            <div class="step-num">1</div>
+            <div><strong>Obtén tu Measurement ID</strong><p>GA4 → Admin → Flujos de datos → tu sitio web. El ID tiene formato <code>G-XXXXXXXXXX</code></p></div>
+          </div>
+          <div class="setup-step">
+            <div class="step-num">2</div>
+            <div><strong>Genera un API Secret</strong><p>GA4 → Admin → Flujos de datos → Measurement Protocol API secrets → Crear secreto</p></div>
+          </div>
+        </div>
+        <div class="alert-config" style="grid-template-columns:1fr 1fr;margin-top:14px">
+          <label class="sf-label">Measurement ID
+            <input id="ga4MeasurementId" type="text" class="sf-input" placeholder="G-XXXXXXXXXX">
+          </label>
+          <label class="sf-label">API Secret
+            <input id="ga4ApiSecret" type="password" class="sf-input" placeholder="Tu API secret">
+          </label>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <button id="ga4SaveBtn" class="btn">💾 Guardar configuración GA4</button>
+          <span id="ga4SavedMsg" style="color:var(--good);font-size:12px;display:none">✓ Guardado</span>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--muted)">Con GA4 configurado podrás correlacionar sesiones de usuarios con ventas reales del WooCommerce.</p>
+      </article>
+
+      <!-- Intervalo de polling -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head"><div><p class="eyebrow">Tiempo real</p><h2>Actualización automática</h2></div></div>
+        <div class="alert-config" style="grid-template-columns:1fr">
+          <label class="sf-label">Intervalo de actualización (minutos — 0 = desactivado)
+            <input id="cfgPollingInterval" type="number" class="sf-input" value="0" min="0" max="60" style="max-width:120px">
+          </label>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+            <button id="cfgPollingSave" class="btn">Guardar intervalo</button>
+            <p id="pollingStatus" style="color:var(--muted);font-size:12px;margin:0">Polling desactivado</p>
+          </div>
+        </div>
+      </article>
+
+    </section>
+
+  </main>
+
+  <!-- MODAL: Timeline de cliente -->
+  <div id="customerModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Historial del cliente</p>
+          <h2 id="modalTitle">—</h2>
+          <p id="modalMeta" class="modal-meta"></p>
+        </div>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+          <div class="modal-body">
+        <div class="modal-rfm" id="modalRfm"></div>
+        <div class="modal-tags-wrap">
+          <div class="modal-tags-label">Etiquetas:</div>
+          <div id="modalTagsList" class="modal-tags-list"></div>
+          <div class="modal-tags-add">
+            <input id="modalTagInput" type="text" class="sf-input" placeholder="Nueva etiqueta…" style="max-width:180px">
+            <button id="modalTagAdd" class="chip">+ Añadir</button>
+          </div>
+        </div>
+        <div class="modal-followup-wrap">
+          <label class="sf-label">🕐 Seguimiento programado
+            <input id="modalFollowupDate" type="date" class="sf-input" style="max-width:200px">
+          </label>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+            <button id="modalSaveFollowup" class="chip">💾 Guardar seguimiento</button>
+            <span id="modalFollowupSaved" style="color:var(--good);font-size:12px;display:none">✓ Guardado</span>
+          </div>
+        </div>
+        <div class="modal-tasks-wrap">
+          <div class="modal-tasks-label">📋 Tareas pendientes:</div>
+          <div id="modalTasksList" class="modal-tasks-list"></div>
+          <div class="modal-tasks-add">
+            <input id="modalTaskInput" type="text" class="sf-input" placeholder="Nueva tarea..." style="flex:1">
+            <input id="modalTaskDue" type="date" class="sf-input" style="max-width:150px">
+            <button id="modalTaskAdd" class="chip">+ Tarea</button>
+          </div>
+        </div>
+        <div id="modalTimeline" class="modal-timeline"></div>
+        <div class="modal-notes-wrap">
+          <label class="sf-label">📝 Notas privadas del cliente
+            <textarea id="modalNotes" class="sf-input" rows="4" placeholder="Notas internas sobre este cliente…"></textarea>
+          </label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+            <button id="modalSaveNote" class="btn">💾 Guardar nota</button>
+            <span id="modalNoteSaved" style="color:var(--good);font-size:12px;display:none">✓ Guardado</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- BÚSQUEDA GLOBAL (Ctrl+K) -->
+<div id="globalSearchModal" class="global-search-modal hidden" role="dialog" aria-label="Búsqueda global">
+  <div class="global-search-backdrop"></div>
+  <div class="global-search-box">
+    <div class="global-search-input-wrap">
+      <span class="global-search-icon">🔍</span>
+      <input id="globalSearchInput" type="search" placeholder="Buscar clientes, pedidos, cursos..." autocomplete="off" spellcheck="false">
+      <kbd class="global-search-esc">ESC</kbd>
+    </div>
+    <div id="globalSearchResults" class="global-search-results"></div>
+    <div class="global-search-footer">
+      <span>↑↓ Navegar</span><span>↵ Abrir</span><span>ESC Cerrar</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODO PRESENTACIÓN -->
+<div id="presentationMode" class="presentation-mode hidden">
+  <div class="pres-header">
+    <span id="presTitle" class="pres-title">Centro de mando</span>
+    <div class="pres-controls">
+      <button id="presPrev" class="pres-btn">◀ Anterior</button>
+      <span id="presProgress" class="pres-progress">1 / 8</span>
+      <button id="presNext" class="pres-btn">Siguiente ▶</button>
+      <button id="presExit" class="pres-btn pres-exit">✕ Salir</button>
+    </div>
+  </div>
+  <div id="presContent" class="pres-content"></div>
+  <div class="pres-footer">
+    <span id="presTimer">🔄 Siguiente en 10s</span>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px">Auto <input id="presAutoPlay" type="checkbox" checked></label>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="assets/world-polys-inline.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
