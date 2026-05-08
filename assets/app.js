@@ -2406,12 +2406,7 @@ function exportCustomersCSV() {
 // =============================================================
 function bind() {
   $$(".nav-btn").forEach(btn =>
-    btn.addEventListener("click", () => {
-      $$(".nav-btn").forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      $$(".view").forEach(v => v.classList.remove("active"));
-      $("#view-" + btn.dataset.view).classList.add("active");
-    })
+    btn.addEventListener("click", () => switchView(btn.dataset.view))
   );
 
   $("#rangePreset").addEventListener("change", () => {
