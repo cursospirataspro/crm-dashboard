@@ -91,6 +91,10 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
   grid-template-columns: 0px 1fr;
 }
 
+/* Elementos que no deben participar en el grid de escritorio */
+.sidebar-backdrop { display: none; position: fixed; }
+.mobile-menu-btn  { display: none; position: fixed; }
+
 /* ============================================================
    BARRA LATERAL
    ============================================================ */
