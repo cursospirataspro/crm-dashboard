@@ -291,7 +291,7 @@ function range() {
     from = new Date(now.getFullYear()-1, 0, 1, 0, 0, 0);
     to   = new Date(now.getFullYear()-1, 11, 31, 23, 59, 59);
   } else if (preset === "all") {
-    from = new Date("2015-01-01T00:00:00");
+    from = new Date(now.getFullYear() - 5, 0, 1, 0, 0, 0); // máximo 5 años atrás
     to   = new Date(now); to.setHours(23,59,59,999);
   } else {
     from = new Date(now - Number(preset) * 86400000); from.setHours(0,0,0,0);
