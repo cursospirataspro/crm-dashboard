@@ -966,6 +966,33 @@ pre { font-size: 13px; line-height: 1.6; }
   /* Ocultar el toggle lateral de escritorio */
   .sidebar-toggle { display: none !important; }
 
+  /* Nav DENTRO del sidebar: siempre vertical, nunca bottom-bar */
+  .sidebar .nav {
+    position: relative !important;
+    flex-direction: column !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    overflow-x: visible !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    gap: 4px !important;
+  }
+  .sidebar .nav-btn {
+    min-width: auto !important;
+    flex-direction: row !important;
+    font-size: 13px !important;
+    text-align: left !important;
+    padding: 10px 12px !important;
+    min-height: 40px !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: 8px !important;
+    white-space: nowrap !important;
+  }
+
   /* Botón hamburguesa fijo arriba izquierda */
   .mobile-menu-btn {
     display: flex !important;
