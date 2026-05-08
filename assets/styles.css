@@ -933,6 +933,7 @@ pre { font-size: 13px; line-height: 1.6; }
 
   /* Sidebar se convierte en panel overlay lateral */
   .sidebar {
+    display: flex !important;
     position: fixed;
     top: 0;
     left: 0;
@@ -946,7 +947,7 @@ pre { font-size: 13px; line-height: 1.6; }
     overflow-x: hidden;
   }
   .app.sidebar-mobile-open .sidebar {
-    transform: translateX(0);
+    transform: translateX(0) !important;
   }
 
   /* Overlay oscuro detrás del sidebar */
@@ -1906,10 +1907,10 @@ body:has(.app.light-mode) {
     --text-lg:  16px;
   }
 
-  .main { padding: 12px 10px 80px; } /* 80px para nav bottom en móvil */
+  .main { padding: 70px 10px 20px; }
 
   /* Ocultar sidebar, mostrar nav inferior */
-  .sidebar { display: none !important; }
+  /* sidebar uses overlay from max-width:768px block above */
   .app { grid-template-columns: 1fr !important; }
   .sidebar-toggle { display: none !important; }
 
@@ -2031,7 +2032,7 @@ body:has(.app.light-mode) {
    ============================================================ */
 @media (min-width: 481px) and (max-width: 768px) {
   .app { grid-template-columns: 1fr !important; }
-  .sidebar { display: none !important; }
+  /* sidebar uses overlay from max-width:768px block above */
   .sidebar-toggle { display: none !important; }
 
   /* Nav lateral colapsada en tablet */
@@ -2091,10 +2092,10 @@ h3 { font-size: clamp(15px, 1.5vw + 8px, 20px); }
     --text-lg:  16px;
   }
 
-  .main { padding: 12px 10px 80px; } /* 80px para nav bottom en móvil */
+  .main { padding: 70px 10px 20px; }
 
   /* Ocultar sidebar, mostrar nav inferior */
-  .sidebar { display: none !important; }
+  /* sidebar uses overlay from max-width:768px block above */
   .app { grid-template-columns: 1fr !important; }
   .sidebar-toggle { display: none !important; }
 
@@ -2216,7 +2217,7 @@ h3 { font-size: clamp(15px, 1.5vw + 8px, 20px); }
    ============================================================ */
 @media (min-width: 481px) and (max-width: 768px) {
   .app { grid-template-columns: 1fr !important; }
-  .sidebar { display: none !important; }
+  /* sidebar uses overlay from max-width:768px block above */
   .sidebar-toggle { display: none !important; }
 
   /* Nav lateral colapsada en tablet */
