@@ -3518,22 +3518,34 @@ async function syncOrdersToGA4(orders) {
 }
 
 // =============================================================
-// PAYPAL � API directa desde el browser (sin proxy WordPress)
-// Credenciales en localStorage (crm_paypal). Se usan como default
-// las credenciales Sandbox que el usuario configur�.
+// PAYPAL — API directa desde el browser (sin proxy WordPress)
+// PP_LIVE = credenciales producción | PP_SANDBOX = entorno de prueba
+// El usuario puede cambiar entre ambas con los botones rápidos.
 // =============================================================
 
-const PP_DEFAULT = {
+const PP_LIVE = {
+  clientId: "Af20TMRhzlS8DAeDvGzdDzlE4MLKsD4Zx-OYUZi2n3P6-AL6DnHby510QXnytAYQW4bBU8q2GEFdiDTp",
+  secret:   "EPUVbHFgcn3zrHpJtH5HLON7ddBTUpnU1NhA6hpo8rrp4Bt68b0Mz4akSr2D73GS7xocIQUXGHtDLWfT",
+  mode:     "live"
+};
+
+const PP_SANDBOX = {
   clientId: "AZ5wBHR9FYjombGnYkaPLLZLodDCxVFLS8nyFON4S8r-yiUUjZ8CVBU9G4uJPB1IcO8Dh3gHB9fvMaeg",
   secret:   "EDOqqAcDB6bI9HHsG-GwnJXWhiq5alK8HPf_QKqLuChD5M1bPxiOynaM2_L6aGP85c-AhUPtb6BdYeoV",
   mode:     "sandbox"
 };
 
+// Por defecto usa Live (tiene permisos de Reporting habilitados)
+const PP_DEFAULT = PP_LIVE;
+
 function loadPaypalConfig() {
   try {
     const s = JSON.parse(localStorage.getItem("crm_paypal") || "null");
-    return (s && s.clientId) ? s : PP_DEFAULT;
-  } catch(e) { return PP_DEFAULT; }
+    if (s && s.clientId) return s;
+    // Si no hay nada, guardar Live por defecto
+    try { localStorage.setItem("crm_paypal", JSON.stringify(PP_LIVE)); } catch(e) {}
+    return PP_LIVE;
+  } catch(e) { return PP_LIVE; }
 }
 
 function savePaypalConfig() {
@@ -3606,7 +3618,15 @@ async function ppFetchTransactions(from, to, page) {
 
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
-    try { const e = await res.json(); msg = e.message || e.error_description || msg; } catch(_) {}
+    let errJson = null;
+    try { errJson = await res.json(); msg = errJson.message || errJson.error_description || msg; } catch(_) {}
+    if (res.status === 403) {
+      throw new Error(
+        "Permiso insuficiente (403). " +
+        "Ve a developer.paypal.com → My Apps → tu App → Editar → activa 'Transaction Search' en los permisos. " +
+        "Si ves esto en Sandbox, crea una app con ese permiso o usa credenciales Live."
+      );
+    }
     throw new Error(msg);
   }
 
@@ -3614,9 +3634,9 @@ async function ppFetchTransactions(from, to, page) {
 }
 
 const PP_COUNTRIES = {
-  ES:"Espa�a", MX:"M�xico", CL:"Chile", CO:"Colombia", US:"EEUU", PE:"Per�",
+  ES:"España", MX:"México", CL:"Chile", CO:"Colombia", US:"EEUU", PE:"Perú",
   AR:"Argentina", EC:"Ecuador", BO:"Bolivia", PY:"Paraguay", UY:"Uruguay",
-  VE:"Venezuela", CR:"Costa Rica", GT:"Guatemala", PA:"Panam�", DO:"Rep. Dom.",
+  VE:"Venezuela", CR:"Costa Rica", GT:"Guatemala", PA:"Panamá", DO:"Rep. Dom.",
   GB:"Reino Unido", FR:"Francia", DE:"Alemania", BR:"Brasil"
 };
 
@@ -3754,15 +3774,33 @@ async function loadPaypalData() {
     const data  = await ppFetchTransactions(from, to, 1);
     const txns  = data.transaction_details || [];
     ppRenderAll(txns);
-    if (statusEl) statusEl.textContent = `${txns.length} transacciones � ${new Date().toLocaleTimeString("es-PE")}`;
+    if (statusEl) statusEl.textContent = `${txns.length} transacciones · ${new Date().toLocaleTimeString("es-PE")}`;
   } catch(err) {
     const msg = String(err.message || err);
-    if (statusEl) statusEl.textContent = "Error: " + msg;
-    toast("PayPal Error: " + msg, "error");
+    if (statusEl) { statusEl.innerHTML = "<span style='color:var(--bad)'>" + msg + "</span>"; }
+    toast("PayPal: " + msg.substring(0, 80), "error");
     console.warn("[PayPal]", err);
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function ppApplyPreset(preset) {
+  const ppClientId = document.getElementById("ppClientId");
+  const ppSecret   = document.getElementById("ppSecret");
+  const ppMode     = document.getElementById("ppMode");
+  if (ppClientId) ppClientId.value = preset.clientId;
+  if (ppSecret)   ppSecret.value   = preset.secret;
+  if (ppMode)     ppMode.value     = preset.mode;
+  _ppToken = null;
+  _ppTokenExpiry = 0;
+  try { localStorage.setItem("crm_paypal", JSON.stringify(preset)); } catch(e) {}
+  toast("Credenciales " + (preset.mode === "live" ? "LIVE" : "Sandbox") + " cargadas", "success");
+  // Actualizar indicador visual
+  const liveBtn = document.getElementById("ppPresetLive");
+  const sandBtn = document.getElementById("ppPresetSandbox");
+  if (liveBtn) liveBtn.style.opacity = preset.mode === "live" ? "1" : "0.45";
+  if (sandBtn) sandBtn.style.opacity = preset.mode !== "live" ? "1" : "0.45";
 }
 
 function initPaypalView() {
@@ -3771,14 +3809,39 @@ function initPaypalView() {
   const btn     = document.getElementById("paypalLoadBtn");
   const saveBtn = document.getElementById("ppSaveBtn");
 
-  // Poblar formulario con credenciales guardadas
-  const cfg = loadPaypalConfig();
+  // Inyectar botones de preset si aún no existen
   const ppClientId = document.getElementById("ppClientId");
-  const ppSecret   = document.getElementById("ppSecret");
-  const ppMode     = document.getElementById("ppMode");
+  if (ppClientId && !document.getElementById("ppPresetLive")) {
+    const wrap = ppClientId.closest(".form-group") || ppClientId.parentNode;
+    const presetBar = document.createElement("div");
+    presetBar.style.cssText = "display:flex;gap:8px;margin-bottom:10px;";
+    presetBar.innerHTML =
+      `<button id="ppPresetLive" class="btn btn-sm btn-success" style="flex:1;font-weight:700;" title="Usar credenciales de Producci\u00f3n">&#x1F7E2; Usar LIVE</button>` +
+      `<button id="ppPresetSandbox" class="btn btn-sm" style="flex:1;opacity:0.45;" title="Usar credenciales de Prueba">&#x1F7E1; Usar Sandbox</button>`;
+    wrap.parentNode.insertBefore(presetBar, wrap);
+    document.getElementById("ppPresetLive").addEventListener("click", () => ppApplyPreset(PP_LIVE));
+    document.getElementById("ppPresetSandbox").addEventListener("click", () => ppApplyPreset(PP_SANDBOX));
+  }
+
+  // Poblar formulario con credenciales guardadas (por defecto: Live)
+  const cfg = loadPaypalConfig();
+  const ppSecret = document.getElementById("ppSecret");
+  const ppMode   = document.getElementById("ppMode");
   if (ppClientId) ppClientId.value = cfg.clientId;
   if (ppSecret)   ppSecret.value   = cfg.secret;
   if (ppMode)     ppMode.value     = cfg.mode;
+
+  // Auto-guardar Live como predeterminado si no hay nada en localStorage
+  if (!localStorage.getItem("crm_paypal")) {
+    try { localStorage.setItem("crm_paypal", JSON.stringify(PP_LIVE)); } catch(e) {}
+  }
+
+  // Indicador visual del preset activo
+  const isLive = cfg.mode === "live";
+  const liveBtn2 = document.getElementById("ppPresetLive");
+  const sandBtn2 = document.getElementById("ppPresetSandbox");
+  if (liveBtn2) liveBtn2.style.opacity = isLive ? "1" : "0.45";
+  if (sandBtn2) sandBtn2.style.opacity = !isLive ? "1" : "0.45";
 
   // Fechas por defecto
   if (fromEl && !fromEl.value) fromEl.value = new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
