@@ -576,29 +576,21 @@
     <!-- VISTA: PAYPAL -->
     <section id="view-paypal" class="view">
 
-      <!-- Credenciales PayPal -->
-      <article class="panel" style="margin-bottom:14px">
-        <div class="panel-head"><div><p class="eyebrow">Credenciales</p><h2>Conectar PayPal</h2></div></div>
-        <div class="alert-config" style="grid-template-columns:1fr 1fr auto;align-items:end">
-          <label class="sf-label">Client ID
-            <input id="ppClientId" type="text" class="sf-input" placeholder="Client ID de PayPal">
-          </label>
-          <label class="sf-label">Secret
-            <input id="ppSecret" type="password" class="sf-input" placeholder="Secret de PayPal">
-          </label>
-          <label class="sf-label">Modo
-            <select id="ppMode" class="sf-input">
-              <option value="sandbox">🧪 Sandbox</option>
-              <option value="live">🔴 Live (real)</option>
-            </select>
-          </label>
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
-          <button id="ppSaveBtn" class="btn">💾 Guardar credenciales</button>
-          <span id="ppSavedMsg" style="color:var(--good);font-size:12px;display:none">✓ Guardado</span>
-          <p style="margin:0;font-size:12px;color:var(--muted)">Las credenciales se guardan solo en tu navegador (localStorage). Nunca se envían a otro servidor.</p>
+      <!-- Selector de modo PayPal -->
+      <article class="panel" style="margin-bottom:14px;padding:14px 20px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <p class="eyebrow" style="margin:0">&#x1F4B3; PayPal</p>
+          <button id="ppModeLive" class="btn btn-success" style="font-weight:700" title="Usar cuenta real de PayPal">&#x1F7E2; Live</button>
+          <button id="ppModeSandbox" class="btn" style="opacity:0.5" title="Usar cuenta de prueba">&#x1F9EA; Sandbox</button>
+          <span id="ppModeLabel" style="font-size:12px;color:var(--muted)">Modo: Live</span>
         </div>
       </article>
+      <!-- Campos ocultos (usados internamente por el JS) -->
+      <input id="ppClientId" type="hidden">
+      <input id="ppSecret"   type="hidden">
+      <input id="ppMode"     type="hidden" value="live">
+      <input id="ppSaveBtn"  type="hidden">
+      <span  id="ppSavedMsg" style="display:none"></span>
 
       <!-- Filtro de fechas PayPal -->
       <article class="panel" style="padding:14px 20px">
