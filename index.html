@@ -675,18 +675,17 @@
         <div id="paypalDayBars" class="payment-bars"></div>
       </article>
 
-      <div class="two-col" style="margin-top:14px">
-        <!-- Por país -->
-        <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Distribución</p><h2>Ventas por país</h2></div></div>
-          <div id="paypalCountryBars" class="payment-bars"></div>
-        </article>
-        <!-- Top clientes -->
-        <article class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Ranking</p><h2>Top clientes PayPal</h2></div></div>
-          <div id="paypalTopCustomers" class="payment-bars"></div>
-        </article>
-      </div>
+      <!-- Mapa por país (ancho completo) -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head"><div><p class="eyebrow">Distribución geográfica</p><h2>Ventas por país</h2></div></div>
+        <div id="paypalCountryBars"></div>
+      </article>
+
+      <!-- Top clientes (ancho completo) -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head"><div><p class="eyebrow">Ranking</p><h2>Top clientes PayPal</h2></div></div>
+        <div id="paypalTopCustomers"></div>
+      </article>
 
       <!-- Tabla de transacciones -->
       <article class="panel" style="margin-top:14px">
@@ -953,6 +952,6 @@
 
 <div id="toast" class="toast"></div>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=10"></script>
+<script src="assets/app.js?v=11"></script>
 </body>
 </html>
