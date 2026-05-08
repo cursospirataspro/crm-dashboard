@@ -203,18 +203,41 @@ function demoOrders() {
 // =============================================================
 async function fetchApi(r) {
   const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 15000);
+  const tid = setTimeout(() => controller.abort(), 30000);
   try {
-    const url = new URL(CONFIG.apiBaseUrl.replace(/\/$/, "") + "/overview");
-    url.searchParams.set("from", r.fromISO);
-    url.searchParams.set("to",   r.toISO);
-    const res = await fetch(url, {
-      headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
-      signal:  controller.signal
-    });
-    if (!res.ok) throw new Error(`Error API ${res.status}: ${res.statusText}`);
-    const data = await res.json();
-    return Array.isArray(data.orders) ? data.orders : [];
+    const base = CONFIG.apiBaseUrl.replace(/\/$/, "") + "/overview";
+    let allOrders = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const url = new URL(base);
+      url.searchParams.set("from",  r.fromISO);
+      url.searchParams.set("to",    r.toISO);
+      url.searchParams.set("page",  String(page));
+      url.searchParams.set("limit", "500");
+
+      const res = await fetch(url, {
+        headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
+        signal:  controller.signal
+      });
+      if (!res.ok) throw new Error(`Error API ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+
+      allOrders = allOrders.concat(Array.isArray(data.orders) ? data.orders : []);
+      totalPages = data.total_pages || 1;
+
+      // Mostrar progreso si hay múltiples páginas
+      if (totalPages > 1) {
+        const pct = Math.round((page / totalPages) * 100);
+        const lbl = document.getElementById("modeLabel");
+        if (lbl) lbl.textContent = `Cargando datos... ${pct}% (${allOrders.length} / ${data.total_orders || "?"} pedidos)`;
+      }
+
+      page++;
+    } while (page <= totalPages);
+
+    return allOrders;
   } finally {
     clearTimeout(tid);
   }
@@ -3719,8 +3742,8 @@ async function ppFetchTransactions(from, to, page) {
     : "https://api-m.sandbox.paypal.com";
 
   const params = new URLSearchParams({
-    start_date:         from + "T00:00:00-0000",
-    end_date:           to   + "T23:59:59-0000",
+    start_date:         from + "T00:00:00+0000",
+    end_date:           to   + "T23:59:59+0000",
     transaction_status: "S",
     page_size:          "500",
     page:               String(page || 1),
@@ -4080,7 +4103,10 @@ function ppApplyDatePreset(days) {
   const today = new Date();
   toEl.value = today.toISOString().slice(0, 10);
   if (days === "all") {
-    fromEl.value = "2019-01-01"; // desde el inicio de la cuenta
+    // PayPal Transaction Search API solo permite hasta 3 años hacia atrás
+    const threeYearsAgo = new Date(today);
+    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+    fromEl.value = threeYearsAgo.toISOString().slice(0, 10);
   } else {
     fromEl.value = new Date(today - days * 86400000).toISOString().slice(0, 10);
   }

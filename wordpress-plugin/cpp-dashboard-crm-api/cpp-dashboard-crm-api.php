@@ -50,6 +50,7 @@ add_action( 'rest_api_init', function () {
             'from'  => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
             'to'    => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
             'limit' => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+            'page'  => [ 'required' => false, 'sanitize_callback' => 'absint' ],
         ],
     ] );
 } );
@@ -102,10 +103,11 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         return new WP_Error( 'woocommerce_missing', 'WooCommerce no está activo.', [ 'status' => 500 ] );
     }
 
-    // Parámetros de fecha
-    $from  = sanitize_text_field( $request->get_param( 'from' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) ) );
-    $to    = sanitize_text_field( $request->get_param( 'to' )   ?: gmdate( 'Y-m-d' ) );
-    $limit = $request->get_param( 'limit' ) ? min( absint( $request->get_param( 'limit' ) ), 1000 ) : 500;
+    // Parámetros de fecha y paginación
+    $from     = sanitize_text_field( $request->get_param( 'from' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) ) );
+    $to       = sanitize_text_field( $request->get_param( 'to' )   ?: gmdate( 'Y-m-d' ) );
+    $limit    = $request->get_param( 'limit' ) ? min( absint( $request->get_param( 'limit' ) ), 500 ) : 500;
+    $page     = $request->get_param( 'page' )  ? max( 1, absint( $request->get_param( 'page' ) ) ) : 1;
 
     // Validar formato de fecha
     if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $from ) ) $from = gmdate( 'Y-m-d', strtotime( '-30 days' ) );
@@ -114,8 +116,20 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     // Rango de fechas inclusivo (inicio del día "from" → final del día "to")
     $date_range = $from . 'T00:00:00' . '...' . $to . 'T23:59:59';
 
+    // Contar total de pedidos en el rango (para paginación)
+    $total_count = wc_get_orders( [
+        'limit'        => -1,
+        'return'       => 'ids',
+        'status'       => [ 'completed', 'processing', 'pending', 'cancelled', 'refunded', 'on-hold' ],
+        'date_created' => $date_range,
+        'count_total'  => true,
+    ] );
+    $total_orders = is_array( $total_count ) ? count( $total_count ) : 0;
+    $total_pages  = $limit > 0 ? (int) ceil( $total_orders / $limit ) : 1;
+
     $orders = wc_get_orders( [
         'limit'        => $limit,
+        'paged'        => $page,
         'orderby'      => 'date',
         'order'        => 'DESC',
         'status'       => [ 'completed', 'processing', 'pending', 'cancelled', 'refunded', 'on-hold' ],
@@ -166,6 +180,10 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         'from'         => $from,
         'to'           => $to,
         'total'        => count( $normalized ),
+        'total_orders' => $total_orders,
+        'total_pages'  => $total_pages,
+        'current_page' => $page,
+        'per_page'     => $limit,
         'orders'       => $normalized,
         'generated_at' => gmdate( 'c' ),
     ] );
