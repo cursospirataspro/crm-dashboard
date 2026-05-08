@@ -167,6 +167,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
             'customer_email' => (string) $order->get_billing_email(),
             'status'         => cpp_crm_normalize_status( $order->get_status() ),
             'total'          => (float) $order->get_total(),
+            'net_total'      => (float) ( $order->get_subtotal() - $order->get_discount_total() ),
             'payment_method' => $order->get_payment_method_title() ?: (string) $order->get_payment_method(),
             'country_code'   => $country_code,
             'country'        => cpp_crm_country_name( $country_code ),
