@@ -1,6 +1,9 @@
 // =============================================================
 // CONFIG — Cambiar mode:"api" y completar datos para producción
 // =============================================================
+let _pushLastOrderIds = new Set();
+let _pushEnabled = false;
+
 const CONFIG = {
   mode:       "demo",   // "demo" | "api"
   apiBaseUrl: "https://tudominio.com/wp-json/cpp-crm-dashboard/v1",
@@ -2799,9 +2802,6 @@ function switchView(id) {
 // =============================================================
 // PUSH NOTIFICATIONS (Notification API)
 // =============================================================
-let _pushLastOrderIds = new Set();
-let _pushEnabled = false;
-
 async function requestPushNotifications() {
   if (!("Notification" in window)) {
     toast("Tu navegador no soporta notificaciones push", "error"); return;
