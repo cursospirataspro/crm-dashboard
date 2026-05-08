@@ -543,6 +543,18 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 
 /* Payment bars */
 .payment-bars { display: grid; gap: 8px; }
+/* Badge de código de país (ej: MX, ES, US) */
+.pp-cc {
+  display: inline-block;
+  background: var(--border, #1e293b);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-family: var(--mono, monospace);
+  font-weight: 600;
+  margin-right: 2px;
+  color: var(--muted, #64748b);
+}
 .pb-row  { display: grid; grid-template-columns: 110px 1fr 80px; align-items: center; gap: 10px; }
 .pb-label { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pb-track { background: rgba(255,255,255,.07); border-radius: 6px; height: 8px; overflow: hidden; }
