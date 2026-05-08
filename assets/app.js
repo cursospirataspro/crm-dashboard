@@ -2558,22 +2558,38 @@ function bind() {
 // SIDEBAR TOGGLE
 // =============================================================
 function initSidebarToggle() {
-  const btn = $("#sidebarToggle");
-  const app = document.querySelector(".app");
-  if (!btn || !app) return;
+  const btn      = $("#sidebarToggle");
+  const mobileBtn = $("#mobileMenuBtn");
+  const backdrop = $("#sidebarBackdrop");
+  const app      = document.querySelector(".app");
+  if (!app) return;
 
+  // ── Escritorio: toggle clásico ──
   function update() {
     const hidden = app.classList.contains("sidebar-hidden");
-    btn.textContent = hidden ? "▶" : "◀";
-    btn.title = hidden ? "Mostrar barra lateral" : "Ocultar barra lateral";
+    if (btn) { btn.textContent = hidden ? "▶" : "◀"; btn.title = hidden ? "Mostrar barra lateral" : "Ocultar barra lateral"; }
   }
-
-  btn.addEventListener("click", () => {
-    app.classList.toggle("sidebar-hidden");
-    update();
-  });
-
+  btn?.addEventListener("click", () => { app.classList.toggle("sidebar-hidden"); update(); });
   update();
+
+  // ── Móvil: hamburguesa overlay ──
+  function openMobileSidebar()  { app.classList.add("sidebar-mobile-open");    if (mobileBtn) mobileBtn.textContent = "✕"; }
+  function closeMobileSidebar() { app.classList.remove("sidebar-mobile-open"); if (mobileBtn) mobileBtn.textContent = "☰"; }
+
+  mobileBtn?.addEventListener("click", () => {
+    app.classList.contains("sidebar-mobile-open") ? closeMobileSidebar() : openMobileSidebar();
+  });
+  backdrop?.addEventListener("click", closeMobileSidebar);
+
+  // Cerrar sidebar al clicar un item del nav en móvil
+  $$(".nav-btn")?.forEach(b => b.addEventListener("click", () => {
+    if (window.innerWidth <= 768) closeMobileSidebar();
+  }));
+
+  // Detectar resize para resetear estado
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 768) closeMobileSidebar();
+  });
 }
 
 // =============================================================
@@ -2769,10 +2785,15 @@ function renderGlobalSearch(q) {
 }
 
 // Helper switchView
+let _paypalInited = false;
 function switchView(id) {
   $$(".view").forEach(v => v.classList.remove("active"));
   $(`#view-${id}`)?.classList.add("active");
   $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === id));
+  if (id === "paypal" && !_paypalInited) {
+    _paypalInited = true;
+    initPaypalView();
+  }
 }
 
 // =============================================================
@@ -3493,5 +3514,201 @@ async function syncOrdersToGA4(orders) {
   if (newSent.length) {
     markGA4Sent(newSent);
     console.log(`[GA4] ${newSent.length} pedido(s) sincronizados. Total enviados: ${getGA4SentIds().size}`);
+  }
+}
+
+// =============================================================
+// PAYPAL — Fetch y render
+// =============================================================
+
+const PAYPAL_BASE = "/wp-json/cpp-crm-dashboard/v1";
+
+function getPaypalApiBase() {
+  const cfg = loadConfig();
+  if (!cfg || !cfg.url) return null;
+  // Remove trailing path to get the WP base + inject paypal routes
+  return cfg.url.replace(/\/wp-json.*$/, '') + '/wp-json/cpp-crm-dashboard/v1';
+}
+
+async function fetchPaypalSummary(from, to) {
+  const base = getPaypalApiBase();
+  if (!base) throw new Error("Configura primero la URL de WordPress en Conexión.");
+  const cfg = loadConfig();
+  const token = cfg.token || "";
+  const url = `${base}/paypal/summary?from=${from}&to=${to}&token=${encodeURIComponent(token)}`;
+  const res = await fetch(url, {
+    headers: { "X-CPP-CRM-Dashboard-Token": token }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function fetchPaypalTransactions(from, to, page = 1) {
+  const base = getPaypalApiBase();
+  if (!base) throw new Error("Configura primero la URL de WordPress en Conexión.");
+  const cfg = loadConfig();
+  const token = cfg.token || "";
+  const url = `${base}/paypal/transactions?from=${from}&to=${to}&page=${page}&token=${encodeURIComponent(token)}`;
+  const res = await fetch(url, {
+    headers: { "X-CPP-CRM-Dashboard-Token": token }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+function fmt(n, currency = "USD") {
+  return new Intl.NumberFormat("es-PE", { style: "currency", currency, maximumFractionDigits: 2 }).format(n);
+}
+
+function renderPaypalSummary(data) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const cur = data.by_day ? "USD" : "USD"; // siempre USD para PayPal
+  set("ppGross", fmt(data.total_gross));
+  set("ppFees",  "-" + fmt(data.total_fees));
+  set("ppNet",   fmt(data.total_net));
+  set("ppCount", data.count.toLocaleString("es-PE"));
+  set("ppAvg",   fmt(data.avg_order));
+
+  // Barras diarias
+  const dayBars = document.getElementById("paypalDayBars");
+  if (dayBars && data.by_day) {
+    const entries = Object.entries(data.by_day);
+    const maxVal = Math.max(...entries.map(([,v]) => v), 1);
+    dayBars.innerHTML = entries.map(([date, val]) => {
+      const pct = (val / maxVal * 100).toFixed(1);
+      return `<div class="pay-row">
+        <span class="pay-label" style="min-width:90px;font-size:11px">${date}</span>
+        <div class="pay-track"><div class="pay-fill" style="width:${pct}%"></div></div>
+        <span class="pay-val">${fmt(val)}</span>
+      </div>`;
+    }).join("");
+  }
+
+  // Por país
+  const countryBars = document.getElementById("paypalCountryBars");
+  if (countryBars && data.by_country) {
+    const entries = Object.entries(data.by_country).slice(0, 15);
+    const maxVal = Math.max(...entries.map(([,v]) => v), 1);
+    countryBars.innerHTML = entries.map(([country, val]) => {
+      const pct = (val / maxVal * 100).toFixed(1);
+      const flag = country.length === 2
+        ? String.fromCodePoint(...[...country.toUpperCase()].map(c => 0x1F1E6 - 65 + c.charCodeAt(0)))
+        : "🌍";
+      return `<div class="pay-row">
+        <span class="pay-label">${flag} ${country}</span>
+        <div class="pay-track"><div class="pay-fill" style="width:${pct}%"></div></div>
+        <span class="pay-val">${fmt(val)}</span>
+      </div>`;
+    }).join("");
+  }
+
+  // Top clientes
+  const topCustomers = document.getElementById("paypalTopCustomers");
+  if (topCustomers && data.top_customers) {
+    const maxVal = Math.max(...data.top_customers.map(c => c.total), 1);
+    topCustomers.innerHTML = data.top_customers.slice(0, 10).map(c => {
+      const pct = (c.total / maxVal * 100).toFixed(1);
+      return `<div class="pay-row">
+        <span class="pay-label" title="${esc(c.email)}">${esc(c.name)}</span>
+        <div class="pay-track"><div class="pay-fill" style="width:${pct}%"></div></div>
+        <span class="pay-val">${fmt(c.total)} (${c.orders})</span>
+      </div>`;
+    }).join("");
+  }
+}
+
+function renderPaypalTransactions(data) {
+  const tbody = document.getElementById("paypalTxnBody");
+  const badge = document.getElementById("paypalTxnCount");
+  if (!tbody) return;
+  if (badge) badge.textContent = `${data.total_items || data.transactions.length} transacciones`;
+
+  if (!data.transactions || !data.transactions.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Sin transacciones en el periodo.</td></tr>`;
+    return;
+  }
+
+  const COUNTRY_NAMES = {
+    ES:"España", MX:"México", CL:"Chile", CO:"Colombia", US:"EEUU", PE:"Perú",
+    AR:"Argentina", EC:"Ecuador", BO:"Bolivia", PY:"Paraguay", UY:"Uruguay",
+    VE:"Venezuela", CR:"Costa Rica", GT:"Guatemala", PA:"Panamá", DO:"Rep. Dominicana"
+  };
+
+  tbody.innerHTML = data.transactions.map(t => {
+    const d = t.date ? t.date.substring(0,10) : "—";
+    const country = COUNTRY_NAMES[t.country] || t.country || "—";
+    const status = t.status === "S" ? `<span style="color:var(--good)">✓</span>` : esc(t.status);
+    return `<tr>
+      <td>${d}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(t.id)}</td>
+      <td>${esc(t.payer_name)}<br><span style="font-size:11px;color:var(--muted)">${esc(t.payer_email)}</span></td>
+      <td>${country}</td>
+      <td style="font-size:12px">${esc(t.subject||"—")}</td>
+      <td class="text-right">${fmt(t.amount)}</td>
+      <td class="text-right" style="color:var(--bad)">-${fmt(t.fee)}</td>
+      <td class="text-right" style="color:var(--good)">${fmt(t.net)}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadPaypalData() {
+  const statusEl = document.getElementById("paypalStatus");
+  const btn = document.getElementById("paypalLoadBtn");
+  const noteEl = document.getElementById("paypalConfigNote");
+
+  const fromEl = document.getElementById("paypalFrom");
+  const toEl   = document.getElementById("paypalTo");
+
+  if (!fromEl || !toEl) return;
+
+  const from = fromEl.value || new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+  const to   = toEl.value   || new Date().toISOString().slice(0,10);
+
+  if (statusEl) statusEl.textContent = "Cargando...";
+  if (btn) btn.disabled = true;
+
+  try {
+    const [summary, txns] = await Promise.all([
+      fetchPaypalSummary(from, to),
+      fetchPaypalTransactions(from, to, 1)
+    ]);
+    renderPaypalSummary(summary);
+    renderPaypalTransactions(txns);
+    if (statusEl) statusEl.textContent = `Actualizado ${new Date().toLocaleTimeString("es-PE")}`;
+    if (noteEl) noteEl.style.display = "none";
+  } catch(err) {
+    const msg = String(err.message || err);
+    if (statusEl) statusEl.textContent = "Error: " + msg;
+    // Mostrar guía de configuración si falta config
+    if (noteEl && (msg.includes("CPP_PAYPAL") || msg.includes("403") || msg.includes("404"))) {
+      noteEl.style.display = "";
+    }
+    console.warn("[PayPal]", err);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function initPaypalView() {
+  const fromEl = document.getElementById("paypalFrom");
+  const toEl   = document.getElementById("paypalTo");
+  const btn    = document.getElementById("paypalLoadBtn");
+
+  // Poner fechas por defecto (últimos 30 días)
+  if (fromEl && !fromEl.value) {
+    fromEl.value = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+  }
+  if (toEl && !toEl.value) {
+    toEl.value = new Date().toISOString().slice(0,10);
+  }
+
+  if (btn) {
+    btn.addEventListener("click", loadPaypalData);
   }
 }

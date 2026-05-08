@@ -170,3 +170,188 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         'generated_at' => gmdate( 'c' ),
     ] );
 }
+
+// =============================================================
+// PAYPAL API PROXY
+// Endpoints: /paypal/summary  /paypal/transactions
+// Define en wp-config.php:
+//   define('CPP_PAYPAL_CLIENT_ID',     'TU_CLIENT_ID_LIVE');
+//   define('CPP_PAYPAL_CLIENT_SECRET', 'TU_SECRET_LIVE');
+// =============================================================
+
+add_action( 'rest_api_init', function () {
+    $base_args = [
+        'methods'             => 'GET',
+        'permission_callback' => 'cpp_crm_dashboard_check_token',
+    ];
+
+    register_rest_route( 'cpp-crm-dashboard/v1', '/paypal/summary', array_merge( $base_args, [
+        'callback' => 'cpp_paypal_summary',
+        'args'     => [
+            'from' => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
+            'to'   => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
+        ],
+    ] ) );
+
+    register_rest_route( 'cpp-crm-dashboard/v1', '/paypal/transactions', array_merge( $base_args, [
+        'callback' => 'cpp_paypal_transactions',
+        'args'     => [
+            'from' => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
+            'to'   => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
+            'page' => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+        ],
+    ] ) );
+} );
+
+function cpp_paypal_get_token() {
+    if ( ! defined('CPP_PAYPAL_CLIENT_ID') || ! defined('CPP_PAYPAL_CLIENT_SECRET') ) {
+        return new WP_Error('paypal_no_config', 'Define CPP_PAYPAL_CLIENT_ID y CPP_PAYPAL_CLIENT_SECRET en wp-config.php');
+    }
+
+    $cached = get_transient('cpp_paypal_access_token');
+    if ( $cached ) return $cached;
+
+    $response = wp_remote_post( 'https://api-m.paypal.com/v1/oauth2/token', [
+        'headers' => [
+            'Authorization' => 'Basic ' . base64_encode( CPP_PAYPAL_CLIENT_ID . ':' . CPP_PAYPAL_CLIENT_SECRET ),
+            'Content-Type'  => 'application/x-www-form-urlencoded',
+        ],
+        'body'    => 'grant_type=client_credentials',
+        'timeout' => 15,
+        'sslverify' => true,
+    ] );
+
+    if ( is_wp_error($response) ) return $response;
+
+    $body = json_decode( wp_remote_retrieve_body($response), true );
+    if ( empty($body['access_token']) ) {
+        return new WP_Error('paypal_token_error', 'Error obteniendo token PayPal: ' . wp_remote_retrieve_body($response));
+    }
+
+    $expires = max(60, intval($body['expires_in'] ?? 3600) - 60);
+    set_transient('cpp_paypal_access_token', $body['access_token'], $expires);
+    return $body['access_token'];
+}
+
+function cpp_paypal_fetch_transactions( $from, $to, $page = 1 ) {
+    $token = cpp_paypal_get_token();
+    if ( is_wp_error($token) ) return $token;
+
+    $url = add_query_arg( [
+        'start_date'         => $from . 'T00:00:00-0000',
+        'end_date'           => $to   . 'T23:59:59-0000',
+        'transaction_status' => 'S',
+        'page_size'          => 500,
+        'page'               => $page,
+        'fields'             => 'all',
+    ], 'https://api-m.paypal.com/v1/reporting/transactions' );
+
+    $response = wp_remote_get( $url, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $token,
+            'Content-Type'  => 'application/json',
+        ],
+        'timeout'   => 20,
+        'sslverify' => true,
+    ] );
+
+    if ( is_wp_error($response) ) return $response;
+    return json_decode( wp_remote_retrieve_body($response), true );
+}
+
+function cpp_paypal_transactions( WP_REST_Request $request ) {
+    $from = $request->get_param('from') ?: date('Y-m-d', strtotime('-30 days'));
+    $to   = $request->get_param('to')   ?: date('Y-m-d');
+    $page = max(1, intval($request->get_param('page') ?: 1));
+
+    $data = cpp_paypal_fetch_transactions( $from, $to, $page );
+    if ( is_wp_error($data) ) return $data;
+
+    $txns = $data['transaction_details'] ?? [];
+
+    $result = array_map( function($t) {
+        $info  = $t['transaction_info'] ?? [];
+        $payer = $t['payer_info']       ?? [];
+        $name  = $payer['payer_name']['alternate_full_name'] ?? ($payer['email_address'] ?? 'Desconocido');
+        $amt   = floatval($info['transaction_amount']['value'] ?? 0);
+        $fee   = floatval($info['fee_amount']['value']         ?? 0);
+        return [
+            'id'          => $info['transaction_id']                          ?? '',
+            'date'        => $info['transaction_initiation_date']             ?? '',
+            'amount'      => $amt,
+            'fee'         => abs($fee),
+            'net'         => $amt - abs($fee),
+            'currency'    => $info['transaction_amount']['currency_code']     ?? 'USD',
+            'status'      => $info['transaction_status']                      ?? '',
+            'subject'     => $info['transaction_subject']                     ?? '',
+            'payer_name'  => $name,
+            'payer_email' => $payer['email_address']                          ?? '',
+            'country'     => $payer['address']['country_code']                ?? '',
+        ];
+    }, $txns );
+
+    return rest_ensure_response( [
+        'transactions' => $result,
+        'total_items'  => intval($data['total_items']  ?? count($result)),
+        'total_pages'  => intval($data['total_pages']  ?? 1),
+        'page'         => $page,
+    ] );
+}
+
+function cpp_paypal_summary( WP_REST_Request $request ) {
+    $from = $request->get_param('from') ?: date('Y-m-d', strtotime('-30 days'));
+    $to   = $request->get_param('to')   ?: date('Y-m-d');
+
+    $data = cpp_paypal_fetch_transactions( $from, $to, 1 );
+    if ( is_wp_error($data) ) return $data;
+
+    $txns = $data['transaction_details'] ?? [];
+
+    $total_gross = 0;
+    $total_fees  = 0;
+    $count       = 0;
+    $by_country  = [];
+    $by_customer = [];
+    $by_day      = [];
+
+    foreach ($txns as $t) {
+        $info    = $t['transaction_info'] ?? [];
+        $payer   = $t['payer_info']       ?? [];
+        $amt     = floatval($info['transaction_amount']['value'] ?? 0);
+        $fee     = floatval($info['fee_amount']['value']         ?? 0);
+        $date    = substr($info['transaction_initiation_date'] ?? '', 0, 10);
+        $country = $payer['address']['country_code']  ?? 'XX';
+        $email   = $payer['email_address']            ?? 'desconocido';
+        $name    = $payer['payer_name']['alternate_full_name'] ?? $email;
+
+        $total_gross += $amt;
+        $total_fees  += abs($fee);
+        $count++;
+
+        $by_country[$country] = round(($by_country[$country] ?? 0) + $amt, 2);
+
+        if ( ! isset($by_customer[$email]) ) {
+            $by_customer[$email] = [ 'name' => $name, 'email' => $email, 'total' => 0, 'orders' => 0 ];
+        }
+        $by_customer[$email]['total']  = round($by_customer[$email]['total'] + $amt, 2);
+        $by_customer[$email]['orders'] += 1;
+
+        $by_day[$date] = round(($by_day[$date] ?? 0) + $amt, 2);
+    }
+
+    arsort($by_country);
+    uasort($by_customer, function($a, $b) { return $b['total'] <=> $a['total']; });
+    ksort($by_day);
+
+    return rest_ensure_response( [
+        'total_gross'   => round($total_gross, 2),
+        'total_fees'    => round($total_fees,  2),
+        'total_net'     => round($total_gross - $total_fees, 2),
+        'count'         => $count,
+        'avg_order'     => $count ? round($total_gross / $count, 2) : 0,
+        'by_country'    => $by_country,
+        'top_customers' => array_values(array_slice($by_customer, 0, 20)),
+        'by_day'        => $by_day,
+        'period'        => [ 'from' => $from, 'to' => $to ],
+    ] );
+}

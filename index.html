@@ -19,7 +19,13 @@
 <body>
 <div class="app">
 
-  <!-- BOTÓN TOGGLE SIDEBAR -->
+  <!-- BOTÓN HAMBURGUESA MÓVIL (solo visible en Android/móvil) -->
+  <button id="mobileMenuBtn" class="mobile-menu-btn" title="Abrir menú" style="display:none">☰</button>
+
+  <!-- OVERLAY oscuro para cerrar sidebar en móvil -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+  <!-- BOTÓN TOGGLE SIDEBAR (escritorio) -->
   <button id="sidebarToggle" class="sidebar-toggle" title="Ocultar / mostrar barra lateral">◀</button>
 
   <!-- BARRA LATERAL -->
@@ -40,6 +46,7 @@
       <button class="nav-btn" data-view="sales">💳 Ventas</button>
       <button class="nav-btn" data-view="courses">🎓 Cursos</button>
       <button class="nav-btn" data-view="geo">📍 Geografía</button>
+      <button class="nav-btn" data-view="paypal">💰 PayPal</button>
       <button class="nav-btn" data-view="settings">⚙️ Conexión</button>
     </nav>
     <div class="sidebar-tools">
@@ -566,6 +573,98 @@
     </section>
 
     <!-- VISTA: CONFIGURACIÓN -->
+    <!-- VISTA: PAYPAL -->
+    <section id="view-paypal" class="view">
+
+      <!-- Filtro de fechas PayPal -->
+      <article class="panel" style="padding:14px 20px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <p class="eyebrow" style="margin:0">💰 PayPal — Periodo</p>
+          <label class="sf-label" style="margin:0;flex-direction:row;align-items:center;gap:6px">
+            Desde <input id="paypalFrom" type="date" class="sf-input" style="max-width:150px">
+          </label>
+          <label class="sf-label" style="margin:0;flex-direction:row;align-items:center;gap:6px">
+            Hasta <input id="paypalTo" type="date" class="sf-input" style="max-width:150px">
+          </label>
+          <button id="paypalLoadBtn" class="btn">🔄 Cargar datos</button>
+          <span id="paypalStatus" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+      </article>
+
+      <!-- KPIs PayPal -->
+      <div id="paypalKpis" class="kpi-grid" style="margin-top:14px">
+        <div class="kpi-card"><p class="kpi-label">Ingresos brutos</p><p class="kpi-val" id="ppGross">—</p></div>
+        <div class="kpi-card"><p class="kpi-label">Comisiones PayPal</p><p class="kpi-val" id="ppFees" style="color:var(--bad)">—</p></div>
+        <div class="kpi-card"><p class="kpi-label">Ingresos netos</p><p class="kpi-val" id="ppNet" style="color:var(--good)">—</p></div>
+        <div class="kpi-card"><p class="kpi-label">Transacciones</p><p class="kpi-val" id="ppCount">—</p></div>
+        <div class="kpi-card"><p class="kpi-label">Ticket promedio</p><p class="kpi-val" id="ppAvg">—</p></div>
+      </div>
+
+      <!-- Ingresos por día -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Tendencia</p><h2>Ingresos diarios PayPal</h2></div>
+        </div>
+        <div id="paypalDayBars" class="payment-bars"></div>
+      </article>
+
+      <div class="two-col" style="margin-top:14px">
+        <!-- Por país -->
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Distribución</p><h2>Ventas por país</h2></div></div>
+          <div id="paypalCountryBars" class="payment-bars"></div>
+        </article>
+        <!-- Top clientes -->
+        <article class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Ranking</p><h2>Top clientes PayPal</h2></div></div>
+          <div id="paypalTopCustomers" class="payment-bars"></div>
+        </article>
+      </div>
+
+      <!-- Tabla de transacciones -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Detalle</p><h2>Últimas transacciones PayPal</h2></div>
+          <span id="paypalTxnCount" class="badge">—</span>
+        </div>
+        <div class="table-wrap">
+          <table class="crm-table">
+            <thead><tr>
+              <th>Fecha</th><th>ID</th><th>Cliente</th><th>País</th>
+              <th>Concepto</th><th class="text-right">Monto</th><th class="text-right">Comisión</th><th class="text-right">Neto</th>
+            </tr></thead>
+            <tbody id="paypalTxnBody"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- Aviso configuración -->
+      <article id="paypalConfigNote" class="panel" style="margin-top:14px;display:none">
+        <div class="panel-head"><div><p class="eyebrow">Configuración requerida</p><h2>Credenciales PayPal Live</h2></div></div>
+        <div class="setup-steps">
+          <div class="setup-step"><div class="step-num">1</div><div>
+            <strong>Crea una app en PayPal Developer</strong>
+            <p>Ve a <a href="https://developer.paypal.com/dashboard/applications/live" target="_blank" rel="noopener">developer.paypal.com → Applications → Live</a> y crea una nueva app.</p>
+          </div></div>
+          <div class="setup-step"><div class="step-num">2</div><div>
+            <strong>Copia Client ID y Secret (Live)</strong>
+            <p>Usa las credenciales <strong>Live</strong>, no las de Sandbox.</p>
+          </div></div>
+          <div class="setup-step"><div class="step-num">3</div><div>
+            <strong>Añade en wp-config.php de tu servidor</strong>
+            <pre><code>define('CPP_PAYPAL_CLIENT_ID',     'TU_CLIENT_ID_LIVE');
+define('CPP_PAYPAL_CLIENT_SECRET', 'TU_SECRET_LIVE');</code></pre>
+          </div></div>
+          <div class="setup-step"><div class="step-num">4</div><div>
+            <strong>Sube el plugin actualizado al servidor</strong>
+            <p>Reemplaza <code>cpp-dashboard-crm-api.php</code> en <code>wp-content/plugins/cpp-dashboard-crm-api/</code></p>
+          </div></div>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- VISTA: CONEXIÓN -->
     <section id="view-settings" class="view">
 
       <!-- Pasos de instalación -->
