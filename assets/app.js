@@ -1143,11 +1143,11 @@ function renderCourseRanking() {
     const pct = Math.round((s.units / maxUnits) * 100);
     const medal = i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i+1}.`;
     return `<div style="margin-bottom:10px">
-      <div style="display:flex;align-items:center;margin-bottom:3px;gap:6px;min-width:0">
-        <span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">
+      <div style="display:flex;align-items:flex-start;margin-bottom:3px;gap:6px;min-width:0">
+        <span style="font-size:13px;flex:1;min-width:0;word-break:break-word;line-height:1.35" title="${esc(name)}">
           <span style="margin-right:4px">${medal}</span>${esc(name)}
         </span>
-        <span style="font-size:11px;flex-shrink:0;color:var(--muted);text-align:right;max-width:42%">
+        <span style="font-size:11px;flex-shrink:0;color:var(--muted);text-align:right;white-space:nowrap;padding-top:1px">
           ${s.units}u &middot; ${fmtMoney(s.revenue)}
         </span>
       </div>
