@@ -1180,6 +1180,14 @@ function cmBuildCourseList(orders) {
   return Object.values(map).sort((a, b) => b.revenue - a.revenue);
 }
 
+// Lookup global para que onclick="cmToggleIdx(n)" funcione siempre
+window._cmVisibleNames = [];
+
+function cmToggleIdx(i) {
+  const name = window._cmVisibleNames[i];
+  if (name !== undefined) cmToggleCourse(name);
+}
+
 function cmRenderChips(filter = "") {
   const container = document.getElementById("cmCourseChips");
   if (!container) return;
@@ -1188,25 +1196,18 @@ function cmRenderChips(filter = "") {
     ? _cmState.allCourses.filter(c => c.name.toLowerCase().includes(lower))
     : _cmState.allCourses;
 
+  // Guardar nombres en array global (los índices en onclick son enteros, nunca se rompen)
+  window._cmVisibleNames = visible.map(c => c.name);
+
   container.innerHTML = visible.map((c, i) => {
     const active = _cmState.selectedCourses.includes(c.name);
     const label  = c.name.length > 32 ? c.name.slice(0, 32) + "…" : c.name;
     return `<button class="cm-chip${active ? " cm-chip-active" : ""}"
-      data-cm-idx="${i}"
+      onclick="cmToggleIdx(${i})"
       title="${esc(c.name)} · ${c.sales} ventas · ${fmtMoney(c.revenue)}">
       ${esc(label)}<span class="cm-chip-count">${c.sales}</span>
     </button>`;
   }).join("");
-
-  // Un solo listener en el contenedor (event delegation)
-  container._cmVisible = visible;
-  container.onclick = e => {
-    const btn = e.target.closest("button[data-cm-idx]");
-    if (!btn) return;
-    const course = container._cmVisible[+btn.dataset.cmIdx];
-    if (!course) return;
-    cmToggleCourse(course.name);
-  };
 }
 
 function cmToggleCourse(name) {
