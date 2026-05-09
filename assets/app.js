@@ -1188,19 +1188,15 @@ function cmRenderChips(filter = "") {
     ? _cmState.allCourses.filter(c => c.name.toLowerCase().includes(lower))
     : _cmState.allCourses;
 
-  container.innerHTML = visible.slice(0, 60).map(c => {
+  container.innerHTML = visible.map(c => {
     const active = _cmState.selectedCourses.includes(c.name);
     return `<button class="cm-chip${active ? " cm-chip-active" : ""}"
       onclick="cmToggleCourse(${JSON.stringify(c.name)})"
       title="${esc(c.name)} · ${c.sales} ventas · ${fmtMoney(c.revenue)}">
-      ${esc(c.name.length > 28 ? c.name.slice(0, 28) + "…" : c.name)}
+      ${esc(c.name.length > 32 ? c.name.slice(0, 32) + "…" : c.name)}
       <span class="cm-chip-count">${c.sales}</span>
     </button>`;
   }).join("");
-
-  if (visible.length > 60) {
-    container.innerHTML += `<span class="cm-chip-more">+${visible.length - 60} más — usa el buscador</span>`;
-  }
 }
 
 function cmToggleCourse(name) {
@@ -1208,10 +1204,6 @@ function cmToggleCourse(name) {
   if (idx >= 0) {
     _cmState.selectedCourses.splice(idx, 1);
   } else {
-    if (_cmState.selectedCourses.length >= 10) {
-      toast("Máximo 10 cursos a la vez", "warn");
-      return;
-    }
     _cmState.selectedCourses.push(name);
   }
   _cmState.page = 1;
@@ -1277,19 +1269,32 @@ function cmRenderTable() {
   const tbody = `<tbody>${slice.map((c, i) => {
     const bought    = courses.filter(name =>  c.courses.has(name));
     const notBought = courses.filter(name => !c.courses.has(name));
-    const badges =
+    // Otros cursos que este cliente comprò, fuera de la seleccion actual
+    const otherCourses = [...c.courses].filter(name => !courses.includes(name)).sort();
+    const selectedBadges =
       bought.map(name =>
-        `<span class="cm-badge-yes" title="${esc(name)}">${esc(name.length > 28 ? name.slice(0,28)+"…" : name)}</span>`
+        `<span class="cm-badge-yes" title="${esc(name)}">${esc(name.length > 30 ? name.slice(0,30)+"\u2026" : name)}</span>`
       ).join("") +
       notBought.map(name =>
-        `<span class="cm-badge-no" title="${esc(name)}">${esc(name.length > 28 ? name.slice(0,28)+"…" : name)}</span>`
+        `<span class="cm-badge-no" title="${esc(name)}">${esc(name.length > 30 ? name.slice(0,30)+"\u2026" : name)}</span>`
       ).join("");
+    const otherSection = otherCourses.length
+      ? `<div class="cm-other-courses">
+          <span class="cm-other-label">Tambi\u00e9n compr\u00f3 (${otherCourses.length}):</span>
+          ${otherCourses.map(name =>
+            `<span class="cm-badge-other" title="${esc(name)}">${esc(name.length > 30 ? name.slice(0,30)+"\u2026" : name)}</span>`
+          ).join("")}
+        </div>`
+      : "";
     return `<tr class="cm-client-row">
       <td class="cm-client-cell">
         <div class="cm-client-name">${esc(c.name)}</div>
         <div class="cm-client-email">${esc(c.email)}</div>
       </td>
-      <td class="cm-badges-cell"><div class="cm-badge-list">${badges}</div></td>
+      <td class="cm-badges-cell">
+        <div class="cm-badge-list">${selectedBadges}</div>
+        ${otherSection}
+      </td>
       <td class="cm-val-r"><strong>${fmtMoney(c.revenue)}</strong></td>
       <td class="cm-val-c">${c.orders}</td>
     </tr>`;
