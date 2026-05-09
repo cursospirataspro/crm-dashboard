@@ -1590,39 +1590,9 @@ function _initGlobeNow() {
 }
 
 
+
 // =============================================================
-// GRÁFICO DE LÍNEA — ingresos por día
-// =============================================================
-function drawLine(canvas, series) {
-  ctx.fillStyle = shine; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
-  ctx.restore();
-
-  // ── 10. LEYENDA MODO ──
-  const modeLabels = { default:'Estándar', choropleth:'Coropleta de ingresos', pulse:'Radar pulsante', arcs:'Arcos de rutas', all:'Modo completo ✨' };
-  ctx.fillStyle = 'rgba(255,255,255,.52)';
-  ctx.font      = '12px Inter, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('Ã¯Â¿Â½Ã‚Â Países con ventas activas', 16, h - 28);
-  ctx.fillStyle = 'rgba(255,255,255,.30)';
-  ctx.fillText(`Modo: ${modeLabels[mode] || mode}`, 16, h - 10);
-
-  // ── 11. MINI LEYENDA COROPLETA ──
-  if (doChoropleth) {
-    const lx = w - 110, ly = h - 60, lw = 80, lh = 10;
-    const lgrd = ctx.createLinearGradient(lx, 0, lx + lw, 0);
-    lgrd.addColorStop(0, 'hsl(140,55%,28%)');
-    lgrd.addColorStop(0.5, 'hsl(70,75%,42%)');
-    lgrd.addColorStop(1, 'hsl(0,90%,50%)');
-    ctx.fillStyle = lgrd;
-    ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, 3); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = '9px Inter,sans-serif'; ctx.textAlign = 'left';
-    ctx.fillText('Bajo', lx, ly + lh + 11);
-    ctx.textAlign = 'right';
-    ctx.fillText('Alto', lx + lw, ly + lh + 11);
-  }
-}
-
-// GRÃ¯Â¿Â½Ã‚ÂFICO DE LÃ¯Â¿Â½Ã‚ÂNEA — ingresos por día
+// GRAFICO DE LINEA - ingresos por dia
 // =============================================================
 function drawLine(canvas, series) {
   const ctx    = canvas.getContext("2d");
@@ -2434,28 +2404,7 @@ function bind() {
   $("#refreshBtn").addEventListener("click", load);
   $("#exportBtn").addEventListener("click", exportCSV);
 
-  $("#autoRotateBtn").addEventListener("click", () => {
-    state.globe.autoRotate = !state.globe.autoRotate;
-    $("#autoRotateBtn").classList.toggle("active", state.globe.autoRotate);
-  });
-  $("#resetGlobeBtn").addEventListener("click", () => {
-    state.globe.rotationX = -10; state.globe.rotationY = -35;
-    _zoom.target = 1; _zoom.current = 1; state.globe.zoom = 1;
-  });
-
   window.addEventListener("resize", debounce(() => renderRevenueChart(), 150));
-
-  // ── Modos visuales del globo ──
-  $$('.globe-mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      GLOBE_MODE = btn.dataset.mode;
-      try { localStorage.setItem('crm_globe_mode', GLOBE_MODE); } catch(e) {}
-      $$('.globe-mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
-  // Marcar activo al cargar
-  $$('.globe-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === GLOBE_MODE));
 
   // ── Modo claro/oscuro ──
   $("#themeToggle")?.addEventListener("click", toggleTheme);
