@@ -320,9 +320,27 @@
           </div>
           <span id="matrixBadge" class="badge">—</span>
         </div>
+
+        <!-- Selector de cursos -->
+        <div class="cm-selector">
+          <div class="cm-selector-top">
+            <input id="cmCourseSearch" type="text" placeholder="🔍 Buscar curso..." class="cm-search-input" autocomplete="off">
+            <button id="cmClearBtn" class="cm-action-btn">Limpiar selección</button>
+            <button id="cmSelectTopBtn" class="cm-action-btn cm-action-primary">Top 10 cursos</button>
+          </div>
+          <div id="cmCourseChips" class="cm-chips"></div>
+        </div>
+
+        <!-- Mini-tarjetas resumen por curso seleccionado -->
+        <div id="cmCourseSummary" class="cm-course-summary"></div>
+
+        <!-- Tabla -->
         <div class="table-wrap crm-matrix-wrap">
           <table id="courseMatrix" class="crm-matrix"></table>
         </div>
+
+        <!-- Paginación -->
+        <div id="cmPagination" class="cm-pagination"></div>
       </article>
 
       <!-- Mapa de calor: ventas por hora y día -->

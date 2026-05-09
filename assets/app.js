@@ -1156,44 +1156,128 @@ function renderCourseRanking() {
   }).join("");
 }
 
-function renderCourseMatrix() {
-  const allOrders  = state.filtered;
-  const customers  = Object.values(customerMap(allOrders))
-    .sort((a, b) => b.revenue - a.revenue);
+// =============================================================
+// MATRIZ CURSOS × CLIENTES — con selector interactivo y paginación
+// =============================================================
+const _cmState = {
+  selectedCourses: [],   // cursos activos (max 10)
+  allCourses: [],        // todos los cursos con stats
+  page: 1,
+  perPage: 25,
+};
 
-  // Recopilar todos los cursos distintos ordenados por ventas totales
-  const courseCount = {};
-  allOrders.forEach(o =>
+function cmBuildCourseList(orders) {
+  const map = {};
+  validRevenueOrders(orders).forEach(o =>
     (o.products || []).forEach(p => {
       const n = p.name || "Curso sin nombre";
-      courseCount[n] = (courseCount[n] || 0) + Number(p.quantity || 1);
+      map[n] ??= { name: n, sales: 0, revenue: 0, customers: new Set() };
+      map[n].sales   += Number(p.quantity || 1);
+      map[n].revenue += Number(p.total    || 0);
+      map[n].customers.add(o.customer_email || o.customer || o.id);
     })
   );
-  const allCourses = Object.keys(courseCount).sort((a, b) => courseCount[b] - courseCount[a]);
+  return Object.values(map).sort((a, b) => b.revenue - a.revenue);
+}
 
-  const tbl = $("#courseMatrix");
-  if (!customers.length || !allCourses.length) {
-    tbl.innerHTML = `<tbody><tr><td>${empty("Sin datos en el periodo.")}</td></tr></tbody>`;
-    $("#matrixBadge").textContent = "—";
+function cmRenderChips(filter = "") {
+  const container = document.getElementById("cmCourseChips");
+  if (!container) return;
+  const lower = filter.toLowerCase();
+  const visible = filter
+    ? _cmState.allCourses.filter(c => c.name.toLowerCase().includes(lower))
+    : _cmState.allCourses;
+
+  container.innerHTML = visible.slice(0, 60).map(c => {
+    const active = _cmState.selectedCourses.includes(c.name);
+    return `<button class="cm-chip${active ? " cm-chip-active" : ""}"
+      onclick="cmToggleCourse(${JSON.stringify(c.name)})"
+      title="${esc(c.name)} · ${c.sales} ventas · ${fmtMoney(c.revenue)}">
+      ${esc(c.name.length > 28 ? c.name.slice(0, 28) + "…" : c.name)}
+      <span class="cm-chip-count">${c.sales}</span>
+    </button>`;
+  }).join("");
+
+  if (visible.length > 60) {
+    container.innerHTML += `<span class="cm-chip-more">+${visible.length - 60} más — usa el buscador</span>`;
+  }
+}
+
+function cmToggleCourse(name) {
+  const idx = _cmState.selectedCourses.indexOf(name);
+  if (idx >= 0) {
+    _cmState.selectedCourses.splice(idx, 1);
+  } else {
+    if (_cmState.selectedCourses.length >= 10) {
+      toast("Máximo 10 cursos a la vez", "warn");
+      return;
+    }
+    _cmState.selectedCourses.push(name);
+  }
+  _cmState.page = 1;
+  cmRenderChips(document.getElementById("cmCourseSearch")?.value || "");
+  cmRenderSummary();
+  cmRenderTable();
+}
+
+function cmRenderSummary() {
+  const el = document.getElementById("cmCourseSummary");
+  if (!el) return;
+  if (!_cmState.selectedCourses.length) { el.innerHTML = ""; return; }
+  const statsMap = Object.fromEntries(_cmState.allCourses.map(c => [c.name, c]));
+  el.innerHTML = _cmState.selectedCourses.map(name => {
+    const s = statsMap[name] || { sales: 0, revenue: 0, customers: new Set() };
+    return `<div class="cm-summary-card">
+      <div class="cm-summary-name" title="${esc(name)}">${esc(name.length > 30 ? name.slice(0,30)+"…" : name)}</div>
+      <div class="cm-summary-stats">
+        <span>💰 ${fmtMoney(s.revenue)}</span>
+        <span>🛒 ${s.sales} ventas</span>
+        <span>👤 ${s.customers.size} clientes</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function cmRenderTable() {
+  const tbl  = document.getElementById("courseMatrix");
+  const pag  = document.getElementById("cmPagination");
+  if (!tbl) return;
+
+  const courses = _cmState.selectedCourses;
+  if (!courses.length) {
+    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;color:var(--muted);text-align:center">
+      Selecciona al menos un curso arriba para ver la matriz de clientes.
+    </td></tr></tbody>`;
+    if (pag) pag.innerHTML = "";
+    $("#matrixBadge").textContent = `${_cmState.allCourses.length} cursos disponibles`;
     return;
   }
 
-  $("#matrixBadge").textContent = `${customers.length} clientes · ${allCourses.length} cursos`;
+  // Clientes que compraron al menos un curso seleccionado
+  const allCustomers = Object.values(customerMap(state.filtered))
+    .filter(c => courses.some(name => c.courses.has(name)))
+    .sort((a, b) => b.revenue - a.revenue);
 
-  // Cabecera: nombre + email + cursos (texto vertical) + ingresos
+  const total = allCustomers.length;
+  const pages = Math.max(1, Math.ceil(total / _cmState.perPage));
+  _cmState.page = Math.min(_cmState.page, pages);
+  const start = (_cmState.page - 1) * _cmState.perPage;
+  const slice = allCustomers.slice(start, start + _cmState.perPage);
+
+  $("#matrixBadge").textContent = `${total} clientes · ${courses.length} cursos`;
+
   const thead = `<thead><tr>
     <th class="cm-th cm-fixed">Cliente</th>
     <th class="cm-th cm-fixed">Email</th>
-    ${allCourses.map(c =>
+    ${courses.map(c =>
       `<th class="cm-th cm-rotate" title="${esc(c)}"><span>${esc(c)}</span></th>`
     ).join("")}
     <th class="cm-th">Ingresos</th>
-    <th class="cm-th"># Pedidos</th>
+    <th class="cm-th">Pedidos</th>
   </tr></thead>`;
 
-  // Filas de clientes
-  const tbody = `<tbody>${customers.map(c => {
-    const cells = allCourses.map(course =>
+  const tbody = `<tbody>${slice.map(c => {
+    const cells = courses.map(course =>
       c.courses.has(course)
         ? `<td class="cm-cell cm-yes" title="${esc(c.name)} compró ${esc(course)}">✓</td>`
         : `<td class="cm-cell"></td>`
@@ -1208,7 +1292,71 @@ function renderCourseMatrix() {
   }).join("")}</tbody>`;
 
   tbl.innerHTML = thead + tbody;
+
+  // Paginación
+  if (pag) {
+    if (pages <= 1) { pag.innerHTML = ""; return; }
+    pag.innerHTML = `
+      <button class="cm-page-btn" ${_cmState.page <= 1 ? "disabled" : ""}
+        onclick="_cmState.page--;cmRenderTable()">‹ Anterior</button>
+      <span class="cm-page-info">Página ${_cmState.page} de ${pages} · ${total} clientes</span>
+      <button class="cm-page-btn" ${_cmState.page >= pages ? "disabled" : ""}
+        onclick="_cmState.page++;cmRenderTable()">Siguiente ›</button>`;
+  }
 }
+
+function renderCourseMatrix() {
+  _cmState.allCourses = cmBuildCourseList(state.filtered);
+  _cmState.page = 1;
+
+  // Si no hay selección previa, auto-seleccionar top 5
+  if (_cmState.selectedCourses.length === 0 && _cmState.allCourses.length > 0) {
+    _cmState.selectedCourses = _cmState.allCourses.slice(0, 5).map(c => c.name);
+  } else {
+    // Mantener solo los que siguen existiendo en el periodo actual
+    _cmState.selectedCourses = _cmState.selectedCourses.filter(
+      name => _cmState.allCourses.some(c => c.name === name)
+    );
+  }
+
+  // Buscador
+  const searchEl = document.getElementById("cmCourseSearch");
+  if (searchEl && !searchEl._cmBound) {
+    searchEl._cmBound = true;
+    searchEl.addEventListener("input", () => cmRenderChips(searchEl.value));
+  }
+
+  // Botón limpiar
+  const clearBtn = document.getElementById("cmClearBtn");
+  if (clearBtn && !clearBtn._cmBound) {
+    clearBtn._cmBound = true;
+    clearBtn.addEventListener("click", () => {
+      _cmState.selectedCourses = [];
+      _cmState.page = 1;
+      cmRenderChips(searchEl?.value || "");
+      cmRenderSummary();
+      cmRenderTable();
+    });
+  }
+
+  // Botón top 10
+  const topBtn = document.getElementById("cmSelectTopBtn");
+  if (topBtn && !topBtn._cmBound) {
+    topBtn._cmBound = true;
+    topBtn.addEventListener("click", () => {
+      _cmState.selectedCourses = _cmState.allCourses.slice(0, 10).map(c => c.name);
+      _cmState.page = 1;
+      cmRenderChips(searchEl?.value || "");
+      cmRenderSummary();
+      cmRenderTable();
+    });
+  }
+
+  cmRenderChips();
+  cmRenderSummary();
+  cmRenderTable();
+}
+
 
 function renderOrders() {
   const total = state.filtered.length;
