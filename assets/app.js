@@ -1465,6 +1465,8 @@ function _globeRefresh() {
   // Puntos (columnas 3D proporcionales a ingresos)
   _globe
     .pointsData(pts)
+    .pointLat('lat')
+    .pointLng('lon')
     .pointAltitude(p => 0.04 + (p.revenue / maxRev) * 0.18)
     .pointRadius(p => 0.35 + (p.revenue / maxRev) * 1.4)
     .pointColor(p => {
@@ -1526,24 +1528,33 @@ function _initGlobeNow() {
   const container = document.getElementById('globeCanvas');
   if (!container) return;
 
-  // Dimensionar el contenedor
   const wrap = container.parentElement;
-  const size = wrap ? Math.min(wrap.offsetWidth || 520, wrap.offsetHeight || 520) : 520;
-  container.style.width  = '100%';
-  container.style.height = (size || 520) + 'px';
+  const W = wrap ? (wrap.offsetWidth || 700) : 700;
+  const H = Math.max(460, Math.round(W * 0.65));
+  container.style.width  = W + 'px';
+  container.style.height = H + 'px';
 
-  _globe = Globe({ animateIn: true })(container)
+  // Constructor correcto: new Globe(domElement, options)
+  _globe = new Globe(container, { animateIn: true })
+    .width(W)
+    .height(H)
     .globeImageUrl(GLOBE_IMG)
     .bumpImageUrl(GLOBE_BUMP)
     .backgroundImageUrl(GLOBE_NIGHT)
-    .atmosphereColor('rgba(100,180,255,0.7)')
+    .showAtmosphere(true)
+    .atmosphereColor('lightskyblue')
     .atmosphereAltitude(0.18)
+    .showGraticules(true)
+    // lon → lng (mis datos usan 'lon', globe.gl espera 'lng')
+    .pointLat('lat')
+    .pointLng('lon')
     .pointsMerge(false)
     .onPointClick(p => {
       const sel = document.getElementById('countryFilter');
       if (sel) { sel.value = p.code; applyFilters(); }
       toast('País seleccionado: ' + p.name);
-    });
+    })
+    .onGlobeReady(() => { _globeRefresh(); });
 
   // Auto-rotación
   _globe.controls().autoRotate      = state.globe.autoRotate;
@@ -1559,39 +1570,23 @@ function _initGlobeNow() {
 
   // Botón Centrar
   document.getElementById('resetGlobeBtn')?.addEventListener('click', () => {
-    _globe.pointOfView({ lat: 10, lng: -20, altitude: 2.2 }, 800);
+    _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 }, 800);
   });
 
-  // Botones de modo (ahora controlan arcos y etiquetas)
+  // Botones de modo
   document.querySelectorAll('.globe-mode-btn').forEach(btn => {
     btn.addEventListener('click', function() {
       document.querySelectorAll('.globe-mode-btn').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
       const mode = this.dataset.mode;
       try { localStorage.setItem('crm_globe_mode', mode); } catch(e) {}
-      const showArcs   = ['arcs','all','default'].includes(mode);
-      const showLabels = ['pulse','all'].includes(mode);
-      if (!showArcs)   _globe.arcsData([]);
-      else             _globeRefresh();
-      _globe.pointLabel(showLabels
-        ? p => `<div style="background:rgba(8,12,24,.92);border:1px solid rgba(255,255,255,.18);
-            border-radius:8px;padding:.5rem .75rem;font-family:Inter,sans-serif;font-size:13px;color:#fff">
-            <strong>${esc(p.name)}</strong><br>
-            <span style="color:#f87171">${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
-            <span style="color:#4ade80">${fmtMoney(p.revenue)}</span></div>`
-        : p => `<div style="background:rgba(8,12,24,.92);border:1px solid rgba(255,255,255,.18);
-            border-radius:8px;padding:.5rem .75rem;font-family:Inter,sans-serif;font-size:13px;color:#fff;min-width:150px">
-            <strong>${esc(p.name)}</strong><br>
-            <span style="color:#f87171">&#128197; ${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
-            <span style="color:#4ade80">${fmtMoney(p.revenue)}</span></div>`
-      );
+      if (!['arcs','all','default'].includes(mode)) _globe.arcsData([]);
+      else _globeRefresh();
     });
   });
 
-  // Punto de vista inicial centrado en Latinoamérica
+  // Vista inicial centrada en Latinoamérica
   _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 });
-
-  _globeRefresh();
 }
 
 
