@@ -1509,8 +1509,22 @@ function _globeRefresh() {
 }
 
 function initGlobe() {
+  // Si globe.gl aún no cargó, esperar hasta 10s
+  if (typeof Globe === 'undefined') {
+    let tries = 0;
+    const wait = setInterval(() => {
+      tries++;
+      if (typeof Globe !== 'undefined') { clearInterval(wait); _initGlobeNow(); }
+      else if (tries > 100) clearInterval(wait); // abandona tras 10s
+    }, 100);
+    return;
+  }
+  _initGlobeNow();
+}
+
+function _initGlobeNow() {
   const container = document.getElementById('globeCanvas');
-  if (!container || typeof Globe === 'undefined') return;
+  if (!container) return;
 
   // Dimensionar el contenedor
   const wrap = container.parentElement;
