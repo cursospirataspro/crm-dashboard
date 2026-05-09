@@ -1,4 +1,4 @@
-// =============================================================
+﻿// =============================================================
 // CONFIG — Cambiar mode:"api" y completar datos para producción
 // =============================================================
 let _pushLastOrderIds = new Set();
@@ -408,7 +408,7 @@ function metrics(orders) {
   const repeat   = Object.values(cm).filter(c => c.orders > 1).length;
   const refunded = orders.filter(o => statusNorm(o.status) === "refunded").length;
   return {
-    revenue, orders: orders.length,
+    revenue, orders: valid.length,
     avg:        valid.length ? revenue / valid.length : 0,
     customers:  Object.keys(cm).length,
     repeat,
@@ -526,7 +526,7 @@ function renderRecentFeed() {
 
   $("#recentCount").textContent = `${state.filtered.length} pedidos`;
 
-  const statusIcon = s => ({ completed:'✅', processing:'Ã¯Â¿Â½Ã‚Â�', pending:'🔔', cancelled:'Ã¯Â¿Â½Ã‚Â�', refunded:'↩', 'on-hold':'Ã¯Â¿Â½Ã‚Â�' }[s] || '📦');
+  const statusIcon = s => ({ completed:'✅', processing:'⏳', pending:'🔔', cancelled:'❌', refunded:'↩', 'on-hold':'⏸' }[s] || '📦');
   const timeAgo = d => {
     const mins = Math.floor((Date.now() - new Date(d)) / 60000);
     if (mins < 60)  return `hace ${mins}m`;
@@ -609,7 +609,7 @@ function renderAlerts() {
 
 function topProducts(orders) {
   const map = {};
-  orders.forEach(o =>
+  validRevenueOrders(orders).forEach(o =>
     (o.products || []).forEach(p => {
       const name = p.name || "Curso sin nombre";
       map[name] ??= { name, sales: 0, revenue: 0, customers: new Set() };
@@ -687,8 +687,8 @@ function renderWeekdayChart() {
   const avgVal = orders.length ? sum(validRevenueOrders(orders), netRev) / validRevenueOrders(orders).length : 0;
   $("#orderSummary").innerHTML = [
     ['✅ Completados', paid],
-    ['Ã¯Â¿Â½Ã‚Â� Pendientes',  pend],
-    ['Ã¯Â¿Â½Ã‚Â� Cancelados',  canc],
+    ['⏳ Pendientes',  pend],
+    ['❌ Cancelados',  canc],
     ['📊 Ticket medio', fmtMoney(avgVal)]
   ].map(([label, val]) =>
     `<div class="os-card"><strong>${val}</strong><span>${label}</span></div>`
@@ -1025,11 +1025,11 @@ function rfmScore(c, allCustomers) {
   const maxRev = Math.max(...allCustomers.map(x => x.revenue), 1);
   const mScore = Math.round((c.revenue / maxRev) * 34);
   const total  = rScore + fScore + mScore;
-  if (total >= 80) return { score: total, label: 'Ã¯Â¿Â½Ã‚Â VIP',        cls: 'rfm-vip' };
+  if (total >= 80) return { score: total, label: '💎 VIP',        cls: 'rfm-vip' };
   if (total >= 60) return { score: total, label: '🔥 Activo',     cls: 'rfm-active' };
   if (total >= 40) return { score: total, label: '⚡ Potencial',  cls: 'rfm-potential' };
   if (total >= 20) return { score: total, label: '😴 En riesgo',  cls: 'rfm-risk' };
-  return              { score: total, label: 'Ã¯Â¿Â½Ã‚Â� Inactivo',    cls: 'rfm-inactive' };
+  return              { score: total, label: '💤 Inactivo',    cls: 'rfm-inactive' };
 }
 
 // ── Predicción próxima compra ──
@@ -1798,7 +1798,7 @@ function renderRfmScatter() {
 
   const W = 540, H = 280, padL = 40, padB = 30, padT = 10, padR = 10;
 
-  const colors = { 'Ã¯Â¿Â½Ã‚Â VIP':'#fbbf24', '🔥 Activo':'#ef233c', '⚡ Potencial':'#38bdf8', '😴 En riesgo':'#f59e0b', 'Ã¯Â¿Â½Ã‚Â� Inactivo':'#9ca3af' };
+  const colors = { '💎 VIP':'#fbbf24', '🔥 Activo':'#ef233c', '⚡ Potencial':'#38bdf8', '😴 En riesgo':'#f59e0b', '💤 Inactivo':'#9ca3af' };
 
   const dots = list.slice(0, 120).map(c => {
     const rfm   = rfmScore(c, allC);
@@ -1994,7 +1994,7 @@ function renderKanban() {
       const initials = (lead.name || '??').split(' ').map(w => w[0] || '').join('').slice(0,2).toUpperCase();
       const otherCols = ['new','contacted','won','lost'].filter(c => c !== col);
       const mvBtns = otherCols.map(c => {
-        const labels = { new:'Nuevo', contacted:'Contactado', won:'✅ Ganado', lost:'Ã¯Â¿Â½Ã‚Â� Perdido' };
+        const labels = { new:'Nuevo', contacted:'Contactado', won:'✅ Ganado', lost:'❌ Perdido' };
         return `<button class="kanban-move-btn" onclick="kanbanMove('${esc(id)}','${c}')">${labels[c]}</button>`;
       }).join('');
 
@@ -2039,7 +2039,7 @@ function kanbanMove(id, newStatus) {
     KANBAN_STATE[id].status = newStatus;
     saveKanban();
     renderKanban();
-    const labels = { new:'Nuevo', contacted:'Contactado', won:'Ganado ✅', lost:'Perdido Ã¯Â¿Â½Ã‚Â�' };
+    const labels = { new:'Nuevo', contacted:'Contactado', won:'Ganado ✅', lost:'Perdido ❌' };
     toast(`Lead movido a: ${labels[newStatus]}`, 'success');
   }
 }
@@ -2196,7 +2196,7 @@ function openCustomerModal(emailOrName) {
     .filter(o => o.customer_email === (c.email || c.name) || o.customer === c.name)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const stIcon = s => ({ completed:'✅', processing:'Ã¯Â¿Â½Ã‚Â�', pending:'🔔', cancelled:'Ã¯Â¿Â½Ã‚Â�', refunded:'↩' }[s] || '📦');
+  const stIcon = s => ({ completed:'✅', processing:'⏳', pending:'🔔', cancelled:'❌', refunded:'↩' }[s] || '📦');
 
   $("#modalTimeline").innerHTML = customerOrders.map(o => {
     const st      = statusNorm(o.status);
@@ -2537,7 +2537,7 @@ function bind() {
   $("#cfgShowToken")?.addEventListener("click", () => {
     const inp = $("#cfgToken");
     inp.type = inp.type === "password" ? "text" : "password";
-    $("#cfgShowToken").textContent = inp.type === "password" ? "Ã¯Â¿Â½Ã‚Â Ver" : "🙈 Ocultar";
+    $("#cfgShowToken").textContent = inp.type === "password" ? "👁 Ver" : "🙈 Ocultar";
   });
 
   $("#cfgTestBtn")?.addEventListener("click", async () => {
@@ -2557,13 +2557,13 @@ function bind() {
       } else if (res.status === 403) {
         st.className = "cfg-status error"; st.textContent = "🔑 Token incorrecto (403 Forbidden).";
       } else if (res.status === 404) {
-        st.className = "cfg-status error"; st.textContent = "Ã¯Â¿Â½Ã‚Â Plugin no encontrado (404). Verifica que el plugin esté activo.";
+        st.className = "cfg-status error"; st.textContent = "🔌 Plugin no encontrado (404). Verifica que el plugin esté activo.";
       } else {
         st.className = "cfg-status error"; st.textContent = "⚠ Respuesta inesperada: " + res.status;
       }
     } catch (e) {
       st.className = "cfg-status error";
-      st.textContent = "Ã¯Â¿Â½Ã‚Â� No se pudo conectar. Verifica la URL o CORS del servidor.";
+      st.textContent = "❌ No se pudo conectar. Verifica la URL o CORS del servidor.";
     }
   });
 
@@ -3295,7 +3295,7 @@ function detectDuplicates() {
 // =============================================================
 async function exportPDF() {
   const btn = $("#pdfExportBtn");
-  if (btn) { btn.textContent = "Ã¯Â¿Â½Ã‚Â� Generando PDF..."; btn.disabled = true; }
+  if (btn) { btn.textContent = "⏳ Generando PDF..."; btn.disabled = true; }
 
   try {
     // Capturar la sección activa
@@ -3328,14 +3328,14 @@ async function exportPDF() {
 // MODO PRESENTACIÓN
 // =============================================================
 const PRES_VIEWS = [
-  { id: "command",      label: "Ã¯Â¿Â½Ã‚Â Centro de mando" },
+  { id: "command",      label: "🌐 Centro de mando" },
   { id: "crm",          label: "👥 CRM clientes" },
   { id: "oportunidades",label: "🎯 Oportunidades" },
   { id: "kanban",       label: "📌 Kanban leads" },
   { id: "analytics",    label: "📈 Análisis avanzado" },
   { id: "sales",        label: "💳 Ventas" },
   { id: "courses",      label: "🎓 Cursos" },
-  { id: "geo",          label: "Ã¯Â¿Â½Ã‚Â Geografía" },
+  { id: "geo",          label: "🗺 Geografía" },
 ];
 let _presIdx     = 0;
 let _presTimer   = null;
@@ -3421,13 +3421,13 @@ function updatePresTimer() {
 // =============================================================
 const WIDGET_DEFS = [
   { id: "kpiGrid",       label: "📊 KPIs principales",     sub: "Ingresos, pedidos, clientes" },
-  { id: "view-command",  label: "Ã¯Â¿Â½Ã‚Â Centro de mando",      sub: "Globo + ventas + feed" },
+  { id: "view-command",  label: "🌐 Centro de mando",      sub: "Globo + ventas + feed" },
   { id: "view-crm",      label: "👥 CRM clientes",         sub: "Segmentos, tabla, heatmap" },
   { id: "view-analytics",label: "📈 Análisis avanzado",    sub: "Forecast, RFM, abandono" },
   { id: "view-kanban",   label: "📌 Kanban de leads",      sub: "Pipeline drag & drop" },
   { id: "view-oportunidades",label: "🎯 Oportunidades",    sub: "Leads, upsell, email" },
   { id: "view-courses",  label: "🎓 Cursos",               sub: "Rendimiento y comparativa" },
-  { id: "view-geo",      label: "Ã¯Â¿Â½Ã‚Â Geografía",            sub: "Rankings de países y ciudades" },
+  { id: "view-geo",      label: "🗺 Geografía",            sub: "Rankings de países y ciudades" },
 ];
 
 function loadWidgetConfig() {
@@ -3747,8 +3747,8 @@ async function ppFetchTransactions(from, to, page) {
     : "https://api-m.sandbox.paypal.com";
 
   const params = new URLSearchParams({
-    start_date:         from + "T00:00:00+0000",
-    end_date:           to   + "T23:59:59+0000",
+    start_date:         from + "T00:00:00+00:00",
+    end_date:           to   + "T23:59:59+00:00",
     transaction_status: "S",
     page_size:          "500",
     page:               String(page || 1),
