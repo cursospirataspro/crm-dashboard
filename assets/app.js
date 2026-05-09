@@ -1587,6 +1587,21 @@ function _initGlobeNow() {
 
   // Vista inicial centrada en Latinoamérica
   _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 });
+
+  // Redimensionar el globo automáticamente cuando cambia el tamaño del contenedor
+  // (rotación de pantalla, resize de ventana, cambio de orientación en móvil)
+  if (typeof ResizeObserver !== 'undefined') {
+    const _ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const newW = Math.round(entry.contentRect.width);
+        const newH = Math.round(entry.contentRect.height);
+        if (_globe && newW > 50 && newH > 50) {
+          _globe.width(newW).height(newH);
+        }
+      }
+    });
+    _ro.observe(container);
+  }
 }
 
 

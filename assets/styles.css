@@ -2730,3 +2730,135 @@ h3 { font-size: clamp(15px, 1.5vw + 8px, 20px); }
   .modal-tasks-add { flex-direction: column; }
   .email-compose .btn { font-size: 12px; padding: 8px 12px; }
 }
+
+/* ============================================================
+   RESPONSIVE MÓVIL GLOBAL — correcciones finales
+   ============================================================ */
+
+/* ── Tablet y móvil grande (≤ 768px) ── */
+@media (max-width: 768px) {
+
+  /* Globo: altura fluida en lugar de valor fijo */
+  .globe-panel   { min-height: 0 !important; }
+  .globe-wrap    { min-height: 0 !important; border-radius: 16px; }
+  #globeCanvas   { height: clamp(240px, 56vw, 420px) !important; }
+
+  /* Panel-head: apilar título y controles */
+  .panel-head {
+    flex-direction: column !important;
+    align-items:    flex-start !important;
+    gap:            10px !important;
+  }
+
+  /* Globe controls: ancho completo, columna */
+  .globe-controls {
+    display:     flex !important;
+    flex-wrap:   wrap !important;
+    gap:         6px !important;
+    width:       100%;
+    align-items: center;
+  }
+  /* Chips de auto-giro y centrar */
+  .globe-controls .chip {
+    font-size: 12px;
+    padding:   6px 12px;
+  }
+
+  /* Pills de modo: scroll horizontal, sin wrap */
+  .globe-mode-pills {
+    display:        flex !important;
+    flex-wrap:      nowrap !important;
+    overflow-x:     auto !important;
+    width:          100%;
+    gap:            5px;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+  }
+  .globe-mode-pills::-webkit-scrollbar { display: none; }
+  .globe-mode-btn {
+    flex-shrink: 0;
+    font-size:   11px;
+    padding:     5px 11px;
+  }
+
+  /* Hint del globo: ocultar en móvil para ganar espacio */
+  .globe-hint { display: none; }
+
+  /* Grillas de comandos: 1 columna */
+  .command-grid  { grid-template-columns: 1fr !important; gap: 12px; }
+  .globe-panel,
+  .country-panel,
+  .panel-wide    { grid-column: auto !important; }
+
+  /* KPIs: 2 columnas */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px; }
+
+  /* Filtros: 2 columnas */
+  .filters { grid-template-columns: 1fr 1fr !important; gap: 8px; }
+
+  /* Tabla: scroll horizontal */
+  table { min-width: 680px; }
+
+  /* Content bottom: espacio para la nav inferior */
+  .main { padding-bottom: 76px !important; }
+
+  /* Courses y setup: 1 columna */
+  .courses-grid { grid-template-columns: 1fr !important; }
+  .setup-grid   { grid-template-columns: 1fr !important; }
+  .two-col      { grid-template-columns: 1fr !important; }
+
+  /* Oportunidades KPI: 2 columnas */
+  .opo-kpis { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Segmentos: 1 columna */
+  .segments-grid { grid-template-columns: 1fr !important; }
+}
+
+/* ── Móvil pequeño (≤ 480px) ── */
+@media (max-width: 480px) {
+
+  /* Globo más compacto */
+  #globeCanvas { height: clamp(200px, 62vw, 280px) !important; }
+
+  /* Controles del globo: 2 columnas para chips */
+  .globe-controls { flex-direction: column !important; align-items: flex-start !important; }
+
+  /* KPIs: 2 columnas ajustadas */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
+  .kpi strong { font-size: 22px !important; }
+
+  /* Filtros: 1 columna */
+  .filters { grid-template-columns: 1fr !important; }
+
+  /* Nav inferior: margen inferior extra (safe area + nav) */
+  .main { padding-bottom: 80px !important; }
+
+  /* Tabla más pequeña */
+  table { min-width: 580px; font-size: 12px; }
+  th, td { padding: 9px 10px; font-size: 11px; }
+
+  /* Toast: sobre la nav inferior */
+  .toast { bottom: 80px !important; }
+
+  /* Hero */
+  .hero-actions { flex-direction: column; width: 100%; }
+  .hero-actions .btn { width: 100%; justify-content: center; }
+
+  /* PayPal: columna en tablas */
+  .pb-row { grid-template-columns: 80px 1fr 60px; }
+
+  /* Compare */
+  .compare-result       { grid-template-columns: 1fr !important; }
+  .period-compare-result { grid-template-columns: 1fr 1fr !important; }
+
+  /* Modal: bottom sheet */
+  .modal-backdrop { align-items: flex-end !important; padding: 0 !important; }
+  .modal-box {
+    width:         100% !important;
+    max-width:     100% !important;
+    border-radius: 24px 24px 0 0 !important;
+    max-height:    92dvh;
+    overflow-y:    auto;
+    margin:        0 !important;
+  }
+}
