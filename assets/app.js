@@ -370,9 +370,9 @@ function applyFilters() {
   renderAll();
 }
 // =============================================================
-// Igual que WooCommerce Analytics: solo completed + processing cuentan como venta válida
+// Igual que WooCommerce Analytics: completed + processing + on-hold cuentan como venta válida
 function validRevenueOrders(o) {
-  return o.filter(x => ["completed","processing"].includes(statusNorm(x.status)));
+  return o.filter(x => ["completed","processing","on-hold"].includes(statusNorm(x.status)));
 }
 
 // Ingresos netos = subtotal - descuentos (sin impuestos ni envío), igual que WooCommerce Net Sales
@@ -3747,8 +3747,8 @@ async function ppFetchTransactions(from, to, page) {
     : "https://api-m.sandbox.paypal.com";
 
   const params = new URLSearchParams({
-    start_date:         from + "T00:00:00+00:00",
-    end_date:           to   + "T23:59:59+00:00",
+    start_date:         from + "T00:00:00.000Z",
+    end_date:           to   + "T23:59:59.000Z",
     transaction_status: "S",
     page_size:          "500",
     page:               String(page || 1),
