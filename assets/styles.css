@@ -513,14 +513,16 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 
 .customer, .rank {
   display:       grid;
-  grid-template-columns: 44px 1fr auto;
-  gap:           12px;
+  grid-template-columns: 44px 1fr minmax(0, auto);
+  gap:           10px;
   align-items:   center;
   border:        1px solid var(--line);
   background:    rgba(255,255,255,.04);
   border-radius: 17px;
   padding:       12px;
   transition:    background .15s;
+  min-width:     0;
+  overflow:      hidden;
 }
 .customer:hover, .rank:hover { background: rgba(255,255,255,.07); }
 
@@ -536,8 +538,24 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
   color:         #fff;
   flex-shrink:   0;
 }
-.customer h3, .rank h3 { margin: 0 0 4px; font-size: 14px; }
+.customer h3, .rank h3 { margin: 0 0 4px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .customer p,  .rank p  { margin: 0; color: var(--muted); font-size: 12px; }
+/* Monto en ranking: nunca desborda */
+.rank > strong, .customer > strong {
+  font-size:    13px;
+  font-weight:  800;
+  text-align:   right;
+  white-space:  nowrap;
+  overflow:     hidden;
+  text-overflow: ellipsis;
+  min-width:    0;
+}
+@media (max-width: 480px) {
+  .customer, .rank { grid-template-columns: 36px 1fr minmax(0, auto); gap: 8px; padding: 10px; }
+  .avatar, .rank-no { width: 36px; height: 36px; font-size: 12px; border-radius: 10px; }
+  .customer h3, .rank h3 { font-size: 13px; }
+  .rank > strong, .customer > strong { font-size: 12px; }
+}
 
 /* Payment bars */
 .payment-bars { display: grid; gap: 8px; }

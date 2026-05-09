@@ -1143,13 +1143,15 @@ function renderCourseRanking() {
     const pct = Math.round((s.units / maxUnits) * 100);
     const medal = i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i+1}.`;
     return `<div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;gap:8px">
+      <div style="display:flex;align-items:center;margin-bottom:3px;gap:6px;min-width:0">
         <span style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">
           <span style="margin-right:4px">${medal}</span>${esc(name)}
         </span>
-        <span style="font-size:12px;white-space:nowrap;color:var(--muted)">${s.units} vendido${s.units!==1?"s":""} &middot; ${fmtMoney(s.revenue)}</span>
+        <span style="font-size:11px;flex-shrink:0;color:var(--muted);text-align:right;max-width:42%">
+          ${s.units}u &middot; ${fmtMoney(s.revenue)}
+        </span>
       </div>
-      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+      <div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
         <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2,var(--accent)));border-radius:3px;transition:width .4s"></div>
       </div>
     </div>`;
