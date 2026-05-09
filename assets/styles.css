@@ -346,6 +346,10 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
   gap:                   14px;
 }
 
+/* Prevenir desborde horizontal global */
+.app, .main { overflow-x: hidden; }
+.main { max-width: 100%; }
+
 /* ============================================================
    PANELS
    ============================================================ */
@@ -948,7 +952,7 @@ pre { font-size: 13px; line-height: 1.6; }
    RESPONSIVE — 900px (tablet)
    ============================================================ */
 @media (max-width: 900px) {
-  .app      { grid-template-columns: 1fr; }
+  .app      { grid-template-columns: 1fr !important; }
   .sidebar  { height: auto; position: relative; padding: 18px; }
   .nav      { grid-template-columns: repeat(3, 1fr); }
   .main     { padding: 18px; }
@@ -960,9 +964,10 @@ pre { font-size: 13px; line-height: 1.6; }
   .two-col,
   .segments-grid,
   .courses-grid,
-  .setup-grid  { grid-template-columns: 1fr; }
+  .setup-grid  { grid-template-columns: 1fr !important; }
   .globe-panel,
-  .panel-wide  { grid-column: auto; }
+  .country-panel,
+  .panel-wide  { grid-column: 1 / -1 !important; }
   #globeCanvas { height: 380px; }
   .globe-wrap  { min-height: 380px; }
 }
