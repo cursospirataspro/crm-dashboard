@@ -370,9 +370,9 @@ function applyFilters() {
   renderAll();
 }
 // =============================================================
-// Igual que WooCommerce Analytics: completed + processing + on-hold cuentan como venta válida
+// Igual que WooCommerce Analytics: solo completed + processing cuentan como venta válida
 function validRevenueOrders(o) {
-  return o.filter(x => ["completed","processing","on-hold"].includes(statusNorm(x.status)));
+  return o.filter(x => ["completed","processing"].includes(statusNorm(x.status)));
 }
 
 // Ingresos netos = subtotal - descuentos (sin impuestos ni envío), igual que WooCommerce Net Sales
@@ -3879,12 +3879,21 @@ function ppRenderAll(txnDetails) {
   const fmtUSD = n => new Intl.NumberFormat("es-PE", { style:"currency", currency:"USD", maximumFractionDigits:2 }).format(n);
   const setEl  = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
+  // Filtrar solo pagos reales recibidos: event_code T00xx (payment received) con monto positivo
+  // Excluye comisiones, reembolsos, ajustes internos, transferencias entre cuentas, etc.
+  const payments = txnDetails.filter(t => {
+    const info = t.transaction_info || {};
+    const code = info.transaction_event_code || "";
+    const amt  = parseFloat(info.transaction_amount?.value || 0);
+    return code.startsWith("T00") && amt > 0;
+  });
+
   let gross = 0, fees = 0, count = 0;
   const byCountry  = {};
   const byCustomer = {};
   const byDay      = {};
 
-  txnDetails.forEach(t => {
+  payments.forEach(t => {
     const info  = t.transaction_info || {};
     const payer = t.payer_info       || {};
     const amt   = parseFloat(info.transaction_amount?.value  || 0);
@@ -3994,13 +4003,13 @@ function ppRenderAll(txnDetails) {
   // ── Tabla de transacciones ────────────────────────────────────
   const tbody = document.getElementById("paypalTxnBody");
   const badge = document.getElementById("paypalTxnCount");
-  if (badge) badge.textContent = `${txnDetails.length} transacciones`;
+  if (badge) badge.textContent = `${payments.length} transacciones`;
   if (tbody) {
-    if (!txnDetails.length) {
+    if (!payments.length) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:24px">Sin transacciones en el periodo.</td></tr>`;
       return;
     }
-    tbody.innerHTML = txnDetails.map(t => {
+    tbody.innerHTML = payments.map(t => {
       const info  = t.transaction_info || {};
       const payer = t.payer_info       || {};
       const amt   = parseFloat(info.transaction_amount?.value || 0);
