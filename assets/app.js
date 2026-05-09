@@ -1245,15 +1245,15 @@ function cmRenderTable() {
 
   const courses = _cmState.selectedCourses;
   if (!courses.length) {
-    tbl.innerHTML = `<tbody><tr><td style="padding:2rem;color:var(--muted);text-align:center">
-      Selecciona al menos un curso arriba para ver la matriz de clientes.
+    tbl.innerHTML = `<tbody><tr><td colspan="4" class="cm-empty-msg">
+      Selecciona al menos un curso arriba para ver los clientes.
     </td></tr></tbody>`;
     if (pag) pag.innerHTML = "";
-    $("#matrixBadge").textContent = `${_cmState.allCourses.length} cursos disponibles`;
+    const badge = document.getElementById("matrixBadge");
+    if (badge) badge.textContent = `${_cmState.allCourses.length} cursos disponibles`;
     return;
   }
 
-  // Clientes que compraron al menos un curso seleccionado
   const allCustomers = Object.values(customerMap(state.filtered))
     .filter(c => courses.some(name => c.courses.has(name)))
     .sort((a, b) => b.revenue - a.revenue);
@@ -1264,36 +1264,39 @@ function cmRenderTable() {
   const start = (_cmState.page - 1) * _cmState.perPage;
   const slice = allCustomers.slice(start, start + _cmState.perPage);
 
-  $("#matrixBadge").textContent = `${total} clientes · ${courses.length} cursos`;
+  const badge = document.getElementById("matrixBadge");
+  if (badge) badge.textContent = `${total} clientes · ${courses.length} cursos`;
 
   const thead = `<thead><tr>
-    <th class="cm-th cm-fixed">Cliente</th>
-    <th class="cm-th cm-fixed">Email</th>
-    ${courses.map(c =>
-      `<th class="cm-th cm-rotate" title="${esc(c)}"><span>${esc(c)}</span></th>`
-    ).join("")}
-    <th class="cm-th">Ingresos</th>
-    <th class="cm-th">Pedidos</th>
+    <th class="cm-th" style="width:220px">Cliente</th>
+    <th class="cm-th">Cursos comprados</th>
+    <th class="cm-th cm-th-r" style="width:110px">Ingresos</th>
+    <th class="cm-th cm-th-c" style="width:80px">Pedidos</th>
   </tr></thead>`;
 
-  const tbody = `<tbody>${slice.map(c => {
-    const cells = courses.map(course =>
-      c.courses.has(course)
-        ? `<td class="cm-cell cm-yes" title="${esc(c.name)} compró ${esc(course)}">✓</td>`
-        : `<td class="cm-cell"></td>`
-    ).join("");
-    return `<tr>
-      <td class="cm-name"><strong>${esc(c.name)}</strong></td>
-      <td class="cm-email"><small>${esc(c.email)}</small></td>
-      ${cells}
-      <td class="cm-val"><strong>${fmtMoney(c.revenue)}</strong></td>
-      <td class="cm-val">${c.orders}</td>
+  const tbody = `<tbody>${slice.map((c, i) => {
+    const bought    = courses.filter(name =>  c.courses.has(name));
+    const notBought = courses.filter(name => !c.courses.has(name));
+    const badges =
+      bought.map(name =>
+        `<span class="cm-badge-yes" title="${esc(name)}">${esc(name.length > 28 ? name.slice(0,28)+"…" : name)}</span>`
+      ).join("") +
+      notBought.map(name =>
+        `<span class="cm-badge-no" title="${esc(name)}">${esc(name.length > 28 ? name.slice(0,28)+"…" : name)}</span>`
+      ).join("");
+    return `<tr class="cm-client-row">
+      <td class="cm-client-cell">
+        <div class="cm-client-name">${esc(c.name)}</div>
+        <div class="cm-client-email">${esc(c.email)}</div>
+      </td>
+      <td class="cm-badges-cell"><div class="cm-badge-list">${badges}</div></td>
+      <td class="cm-val-r"><strong>${fmtMoney(c.revenue)}</strong></td>
+      <td class="cm-val-c">${c.orders}</td>
     </tr>`;
   }).join("")}</tbody>`;
 
   tbl.innerHTML = thead + tbody;
 
-  // Paginación
   if (pag) {
     if (pages <= 1) { pag.innerHTML = ""; return; }
     pag.innerHTML = `
