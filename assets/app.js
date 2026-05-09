@@ -1436,11 +1436,15 @@ function renderGeoRankings() {
 
 // =============================================================
 // =============================================================
-// GLOBO 3D — Mapa real con polígonos Natural Earth 110m
+// GLOBO 3D — globe.gl (WebGL real con textura NASA)
 // =============================================================
 
-// Polígonos reales Natural Earth 110m (cargados desde world-polys-inline.js)
-let WORLD_POLYS = window.WORLD_POLYS_DATA || null;
+let _globe = null;   // instancia globe.gl
+
+// Texturas alojadas en unpkg (no dependen de servidores externos propios)
+const GLOBE_IMG   = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+const GLOBE_BUMP  = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
+const GLOBE_NIGHT = 'https://unpkg.com/three-globe/example/img/night-sky.png';
 
 function updateGlobePoints() {
   state.globe.points = Object.entries(groupBy(state.filtered, o => o.country_code || o.country))
@@ -1450,334 +1454,137 @@ function updateGlobePoints() {
       return { code, name: arr[0]?.country || ref.name, lat: ref.lat, lon: ref.lon,
                orders: arr.length, revenue: sum(validRevenueOrders(arr), netRev) };
     });
+  _globeRefresh();
+}
+
+function _globeRefresh() {
+  if (!_globe) return;
+  const pts     = state.globe.points;
+  const maxRev  = Math.max(...pts.map(p => p.revenue), 1);
+
+  // Puntos (columnas 3D proporcionales a ingresos)
+  _globe
+    .pointsData(pts)
+    .pointAltitude(p => 0.04 + (p.revenue / maxRev) * 0.18)
+    .pointRadius(p => 0.35 + (p.revenue / maxRev) * 1.4)
+    .pointColor(p => {
+      const t = p.revenue / maxRev;
+      const r = Math.round(220 + t * 35);
+      const g = Math.round(40  - t * 30);
+      const b = Math.round(60  - t * 40);
+      return `rgba(${r},${g},${b},0.92)`;
+    })
+    .pointLabel(p =>
+      `<div style="background:rgba(8,12,24,.92);border:1px solid rgba(255,255,255,.18);
+        border-radius:8px;padding:.5rem .75rem;font-family:Inter,sans-serif;font-size:13px;color:#fff;min-width:150px">
+        <strong>${esc(p.name)}</strong><br>
+        <span style="color:#f87171">&#128197; ${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
+        <span style="color:#4ade80">${fmtMoney(p.revenue)}</span>
+      </div>`
+    );
+
+  // Arcos: top país → los demás (solo si hay 2+)
+  if (pts.length >= 2) {
+    const sorted  = [...pts].sort((a, b) => b.revenue - a.revenue);
+    const origin  = sorted[0];
+    const targets = sorted.slice(1, Math.min(9, sorted.length));
+    const arcs    = targets.map(t => ({
+      startLat: origin.lat, startLng: origin.lon,
+      endLat:   t.lat,      endLng:   t.lon,
+      color:    ['rgba(255,200,60,0.8)', 'rgba(255,100,60,0.5)']
+    }));
+    _globe
+      .arcsData(arcs)
+      .arcStartLat('startLat').arcStartLng('startLng')
+      .arcEndLat('endLat').arcEndLng('endLng')
+      .arcColor('color')
+      .arcAltitudeAutoScale(0.4)
+      .arcStroke(0.5)
+      .arcDashLength(0.4)
+      .arcDashGap(0.2)
+      .arcDashAnimateTime(2000);
+  } else {
+    _globe.arcsData([]);
+  }
 }
 
 function initGlobe() {
-  const canvas  = $('#globeCanvas');
-  const wrap    = canvas.parentElement;
-  const tooltip = $('#globeTooltip');
+  const container = document.getElementById('globeCanvas');
+  if (!container || typeof Globe === 'undefined') return;
 
-  const getPos = e => {
-    const r = canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  };
+  // Dimensionar el contenedor
+  const wrap = container.parentElement;
+  const size = wrap ? Math.min(wrap.offsetWidth || 520, wrap.offsetHeight || 520) : 520;
+  container.style.width  = '100%';
+  container.style.height = (size || 520) + 'px';
 
-  canvas.addEventListener('pointerdown', e => {
-    state.globe.dragging = true;
-    state.globe.lastX = e.clientX; state.globe.lastY = e.clientY;
-    canvas.setPointerCapture(e.pointerId);
-  });
-
-  canvas.addEventListener('pointermove', e => {
-    if (state.globe.dragging) {
-      const dx = e.clientX - state.globe.lastX, dy = e.clientY - state.globe.lastY;
-      state.globe.rotationY += dx * 0.45;
-      state.globe.rotationX  = Math.max(-75, Math.min(75, state.globe.rotationX + dy * 0.35));
-      state.globe.lastX = e.clientX; state.globe.lastY = e.clientY;
-    } else {
-      const p = getPos(e), hit = hitPoint(p.x, p.y);
-      if (hit) {
-        tooltip.classList.remove('hidden');
-        tooltip.style.left = Math.min(p.x + 14, wrap.clientWidth - 210) + 'px';
-        tooltip.style.top  = Math.max(12, p.y - 20) + 'px';
-        tooltip.innerHTML  =
-          '<strong>' + esc(hit.name) + '</strong>' +
-          hit.orders + ' pedido' + (hit.orders !== 1 ? 's' : '') + '<br>' +
-          fmtMoney(hit.revenue) + ' en ingresos';
-      } else {
-        tooltip.classList.add('hidden');
-      }
-    }
-  });
-
-  canvas.addEventListener('pointerup',    () => { state.globe.dragging = false; });
-  canvas.addEventListener('pointerleave', () => { state.globe.dragging = false; tooltip.classList.add('hidden'); });
-  canvas.addEventListener('wheel', e => {
-    e.preventDefault();
-    _zoom.target = Math.max(0.72, Math.min(1.55, _zoom.target + (e.deltaY > 0 ? -0.07 : 0.07)));
-  }, { passive: false });
-  canvas.addEventListener('click', e => {
-    const p = getPos(e), hit = hitPoint(p.x, p.y);
-    if (hit) { $('#countryFilter').value = hit.code; applyFilters(); toast('País seleccionado: ' + hit.name); }
-  });
-
-  requestAnimationFrame(drawGlobeLoop);
-}
-
-function hitPoint(x, y) {
-  let best = null;
-  for (const p of state.globe.projectedPoints || []) {
-    const d = Math.hypot(x - p.x, y - p.y);
-    if (d < p.r + 8 && (!best || d < best.d)) best = { ...p, d };
-  }
-  return best;
-}
-
-// Modo visual del globo: 'default' | 'choropleth' | 'pulse' | 'arcs' | 'all'
-let GLOBE_MODE = (function() {
-  try { return localStorage.getItem('crm_globe_mode') || 'default'; } catch(e) { return 'default'; }
-})();
-
-// Zoom con momentum
-const _zoom = { target: 1, current: 1 };
-
-function drawGlobeLoop() {
-  if (state.globe.autoRotate && !state.globe.dragging) state.globe.rotationY += 0.09;
-  // Suavizar zoom con momentum
-  _zoom.current += (_zoom.target - _zoom.current) * 0.12;
-  state.globe.zoom = _zoom.current;
-  try { drawGlobe(); } catch(e) { /* silently ignore per-frame errors */ }
-  requestAnimationFrame(drawGlobeLoop);
-}
-
-function rotate3D(x, y, z) {
-  const rx = state.globe.rotationX * Math.PI / 180;
-  const ry = state.globe.rotationY * Math.PI / 180;
-  const y1 =  y * Math.cos(rx) - z * Math.sin(rx);
-  const z1 =  y * Math.sin(rx) + z * Math.cos(rx);
-  const x2 =  x * Math.cos(ry) + z1 * Math.sin(ry);
-  const z2 = -x * Math.sin(ry) + z1 * Math.cos(ry);
-  return { x: x2, y: y1, z: z2 };
-}
-
-function project(lat, lon, cx, cy, R) {
-  const phi = lat * Math.PI / 180, lam = lon * Math.PI / 180;
-  const x =  Math.cos(phi) * Math.sin(lam);
-  const y = -Math.sin(phi);
-  const z =  Math.cos(phi) * Math.cos(lam);
-  const r = rotate3D(x, y, z);
-  return { x: cx + r.x * R, y: cy + r.y * R, z: r.z, visible: r.z > -0.05 };
-}
-
-// Traza un anillo [lon,lat][] manejando cortes de visibilidad (cara trasera del globo)
-function traceRing(ctx, ring, cx, cy, R) {
-  let started = false, lastVis = false;
-  for (let i = 0; i < ring.length; i++) {
-    const pt = ring[i];              // pt = [lon, lat]
-    const p  = project(pt[1], pt[0], cx, cy, R);
-    if (p.visible) {
-      if (!started || !lastVis) { ctx.moveTo(p.x, p.y); started = true; }
-      else ctx.lineTo(p.x, p.y);
-      lastVis = true;
-    } else {
-      lastVis = false;
-    }
-  }
-}
-
-function drawGlobe() {
-  const canvas = $('#globeCanvas');
-  const ctx    = canvas.getContext('2d');
-  const rect   = canvas.getBoundingClientRect();
-  const dpr    = window.devicePixelRatio || 1;
-  if (!rect.width || !rect.height) return;
-
-  canvas.width  = rect.width  * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.scale(dpr, dpr);
-
-  const w  = rect.width, h = rect.height, cx = w / 2, cy = h / 2;
-  const R  = Math.min(w, h) * 0.38 * state.globe.zoom;
-  if (!R) return;
-
-  const mode       = GLOBE_MODE;
-  const doChoropleth = mode === 'choropleth' || mode === 'all';
-  const doPulse      = mode === 'pulse'      || mode === 'all';
-  const doArcs       = mode === 'arcs'       || mode === 'all';
-  const t            = Date.now() / 1000;   // tiempo en segundos para animaciones
-
-  ctx.clearRect(0, 0, w, h);
-
-  // ── 1. FONDO: océano con gradiente esférico ──
-  const oceanGrad = ctx.createRadialGradient(cx - R * 0.28, cy - R * 0.28, R * 0.04, cx, cy, R);
-  oceanGrad.addColorStop(0,    'rgba(80,170,255,.68)');
-  oceanGrad.addColorStop(0.45, 'rgba(14,90,155,.88)');
-  oceanGrad.addColorStop(1,    'rgba(2,16,38,.99)');
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.fillStyle = oceanGrad; ctx.fill();
-
-  // ── 2. CLIP ──
-  ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
-
-  // ── 3. GRATICULE ──
-  ctx.strokeStyle = 'rgba(255,255,255,.09)'; ctx.lineWidth = 0.7;
-  for (let lat = -80; lat <= 80; lat += 20) {
-    ctx.beginPath(); let s = false;
-    for (let lon = -180; lon <= 180; lon += 3) {
-      const p = project(lat, lon, cx, cy, R);
-      if (p.visible) { if (!s) { ctx.moveTo(p.x, p.y); s = true; } else ctx.lineTo(p.x, p.y); } else s = false;
-    }
-    ctx.stroke();
-  }
-  for (let lon = -180; lon < 180; lon += 30) {
-    ctx.beginPath(); let s = false;
-    for (let lat2 = -85; lat2 <= 85; lat2 += 3) {
-      const p = project(lat2, lon, cx, cy, R);
-      if (p.visible) { if (!s) { ctx.moveTo(p.x, p.y); s = true; } else ctx.lineTo(p.x, p.y); } else s = false;
-    }
-    ctx.stroke();
-  }
-
-  // ── 4. TIERRAS ──
-  if (WORLD_POLYS && WORLD_POLYS.length) {
-    // Precalcular revenue por código de país para coropleta
-    const revenueByCode = {};
-    if (doChoropleth) {
-      state.globe.points.forEach(p => { revenueByCode[p.code] = p.revenue || 0; });
-    }
-    const maxRev = doChoropleth ? Math.max(...state.globe.points.map(p => p.revenue), 1) : 1;
-
-    WORLD_POLYS.forEach(poly => {
-      const code = poly._code || '';
-      ctx.beginPath();
-      poly.forEach(ring => traceRing(ctx, ring, cx, cy, R));
-
-      if (doChoropleth && revenueByCode[code]) {
-        // Escala logarítmica → color HSL verde→amarillo→rojo
-        const t2 = Math.log1p(revenueByCode[code]) / Math.log1p(maxRev);
-        const hue = 140 - t2 * 140;   // 140 verde → 0 rojo
-        const sat = 55 + t2 * 35;
-        const lit = 28 + t2 * 28;
-        ctx.fillStyle   = `hsla(${hue},${sat}%,${lit}%,.92)`;
-        ctx.strokeStyle = `hsla(${hue},${sat}%,${lit + 25}%,.45)`;
-      } else {
-        ctx.fillStyle   = 'rgba(55,175,85,.82)';
-        ctx.strokeStyle = 'rgba(255,255,255,.20)';
-      }
-      ctx.lineWidth = 0.8;
-      ctx.fill('evenodd');
-      ctx.stroke();
+  _globe = Globe({ animateIn: true })(container)
+    .globeImageUrl(GLOBE_IMG)
+    .bumpImageUrl(GLOBE_BUMP)
+    .backgroundImageUrl(GLOBE_NIGHT)
+    .atmosphereColor('rgba(100,180,255,0.7)')
+    .atmosphereAltitude(0.18)
+    .pointsMerge(false)
+    .onPointClick(p => {
+      const sel = document.getElementById('countryFilter');
+      if (sel) { sel.value = p.code; applyFilters(); }
+      toast('País seleccionado: ' + p.name);
     });
-  }
 
-  // ── 5. ARCOS ANIMADOS (líneas entre el top país y los demás) ──
-  if (doArcs && state.globe.points.length >= 2) {
-    const sorted  = [...state.globe.points].sort((a, b) => b.revenue - a.revenue);
-    const origin  = sorted[0];
-    const targets = sorted.slice(1, Math.min(8, sorted.length));
-    const pO      = project(origin.lat, origin.lon, cx, cy, R);
+  // Auto-rotación
+  _globe.controls().autoRotate      = state.globe.autoRotate;
+  _globe.controls().autoRotateSpeed = 0.5;
+  _globe.controls().enableZoom      = true;
 
-    if (pO.visible) {
-      targets.forEach((tgt, i) => {
-        const pT = project(tgt.lat, tgt.lon, cx, cy, R);
-        if (!pT.visible) return;
-
-        // Progreso animado por onda (0→1→0) con desfase por índice
-        const phase   = (t * 0.5 + i * 0.18) % 1;
-        const progress = Math.sin(phase * Math.PI);    // pico en el medio del ciclo
-        const alpha   = 0.15 + progress * 0.6;
-
-        // Punto de control para la curva Bézier (elevado hacia el espectador)
-        const mcx  = (pO.x + pT.x) / 2;
-        const mcy  = (pO.y + pT.y) / 2 - Math.hypot(pT.x - pO.x, pT.y - pO.y) * 0.35;
-
-        // Trazar solo el segmento hasta el progreso animado
-        const px = (1-progress)**2 * pO.x + 2*(1-progress)*progress*mcx + progress**2 * pT.x;
-        const py = (1-progress)**2 * pO.y + 2*(1-progress)*progress*mcy + progress**2 * pT.y;
-
-        ctx.beginPath();
-        ctx.moveTo(pO.x, pO.y);
-        ctx.quadraticCurveTo(mcx, mcy, px, py);
-        ctx.strokeStyle = `rgba(250,200,80,${alpha})`;
-        ctx.lineWidth   = 1.2 + progress * 1.5;
-        ctx.setLineDash([]);
-        ctx.stroke();
-
-        // Punto de cabeza del arco
-        ctx.beginPath();
-        ctx.arc(px, py, 3 + progress * 3, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,230,80,${alpha + 0.2})`;
-        ctx.shadowColor = 'rgba(255,220,60,.8)'; ctx.shadowBlur = 8;
-        ctx.fill(); ctx.shadowBlur = 0;
-      });
-    }
-  }
-
-  // ── 6. PUNTOS DE VENTAS ──
-  state.globe.projectedPoints = [];
-  const maxRevenue = Math.max(...state.globe.points.map(p => p.revenue), 1);
-
-  state.globe.points.forEach((p, idx) => {
-    const pr = project(p.lat, p.lon, cx, cy, R);
-    if (!pr.visible) return;
-    const r = 6 + Math.sqrt(p.revenue / maxRevenue) * 20;
-    state.globe.projectedPoints.push({ ...p, x: pr.x, y: pr.y, r });
-
-    if (doPulse) {
-      // Anillos de onda concéntricos (efecto radar)
-      const numRings = 3;
-      for (let k = 0; k < numRings; k++) {
-        const wavePhase  = ((t * 1.2 + k / numRings + idx * 0.11) % 1);
-        const waveR      = r + wavePhase * (r * 3.5);
-        const waveAlpha  = (1 - wavePhase) * 0.45;
-        ctx.beginPath();
-        ctx.arc(pr.x, pr.y, waveR, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,80,100,${waveAlpha})`;
-        ctx.lineWidth   = 1.2;
-        ctx.stroke();
-      }
-    } else {
-      // Halo suave estático
-      ctx.beginPath(); ctx.arc(pr.x, pr.y, r + 10, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,60,80,.12)'; ctx.fill();
-    }
-
-    // Círculo con degradado radial
-    ctx.beginPath(); ctx.arc(pr.x, pr.y, r, 0, Math.PI * 2);
-    const rg = ctx.createRadialGradient(pr.x - r * 0.3, pr.y - r * 0.3, 1, pr.x, pr.y, r);
-    rg.addColorStop(0, 'rgba(255,130,150,1)');
-    rg.addColorStop(1, 'rgba(210,20,45,.92)');
-    ctx.fillStyle   = rg;
-    ctx.shadowColor = 'rgba(255,50,80,.9)'; ctx.shadowBlur = 22;
-    ctx.fill(); ctx.shadowBlur = 0;
-
-    // Borde del punto
-    ctx.beginPath(); ctx.arc(pr.x, pr.y, r, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255,210,215,.85)'; ctx.lineWidth = 1.2; ctx.stroke();
-
-    // Código ISO
-    const fontSize = Math.max(9, Math.min(13, r * 0.7));
-    ctx.fillStyle    = '#fff';
-    ctx.font         = `900 ${fontSize}px Inter, sans-serif`;
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor  = 'rgba(0,0,0,.8)'; ctx.shadowBlur = 6;
-    ctx.fillText(p.code, pr.x, pr.y);
-    ctx.shadowBlur   = 0; ctx.textBaseline = 'alphabetic';
+  // Botón Auto-giro
+  document.getElementById('autoRotateBtn')?.addEventListener('click', function() {
+    state.globe.autoRotate = !state.globe.autoRotate;
+    _globe.controls().autoRotate = state.globe.autoRotate;
+    this.classList.toggle('active', state.globe.autoRotate);
   });
 
-  ctx.restore(); // fin clip
+  // Botón Centrar
+  document.getElementById('resetGlobeBtn')?.addEventListener('click', () => {
+    _globe.pointOfView({ lat: 10, lng: -20, altitude: 2.2 }, 800);
+  });
 
-  // ── 7. BORDE EXTERIOR ──
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; ctx.stroke();
+  // Botones de modo (ahora controlan arcos y etiquetas)
+  document.querySelectorAll('.globe-mode-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.globe-mode-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const mode = this.dataset.mode;
+      try { localStorage.setItem('crm_globe_mode', mode); } catch(e) {}
+      const showArcs   = ['arcs','all','default'].includes(mode);
+      const showLabels = ['pulse','all'].includes(mode);
+      if (!showArcs)   _globe.arcsData([]);
+      else             _globeRefresh();
+      _globe.pointLabel(showLabels
+        ? p => `<div style="background:rgba(8,12,24,.92);border:1px solid rgba(255,255,255,.18);
+            border-radius:8px;padding:.5rem .75rem;font-family:Inter,sans-serif;font-size:13px;color:#fff">
+            <strong>${esc(p.name)}</strong><br>
+            <span style="color:#f87171">${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
+            <span style="color:#4ade80">${fmtMoney(p.revenue)}</span></div>`
+        : p => `<div style="background:rgba(8,12,24,.92);border:1px solid rgba(255,255,255,.18);
+            border-radius:8px;padding:.5rem .75rem;font-family:Inter,sans-serif;font-size:13px;color:#fff;min-width:150px">
+            <strong>${esc(p.name)}</strong><br>
+            <span style="color:#f87171">&#128197; ${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
+            <span style="color:#4ade80">${fmtMoney(p.revenue)}</span></div>`
+      );
+    });
+  });
 
-  // ── 8. ATMÓSFERA / HALO (siempre, pero más intenso en modo all/default) ──
-  const atmoIntensity = (mode === 'all') ? 0.38 : 0.25;
-  const atmoColor     = doChoropleth ? '99,80,220' : '56,189,248';
-  const glow = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.22);
-  glow.addColorStop(0, `rgba(${atmoColor},${atmoIntensity})`);
-  glow.addColorStop(0.5, `rgba(${atmoColor},${atmoIntensity * 0.4})`);
-  glow.addColorStop(1, `rgba(${atmoColor},0)`);
-  ctx.beginPath(); ctx.arc(cx, cy, R * 1.22, 0, Math.PI * 2);
-  ctx.fillStyle = glow; ctx.fill();
+  // Punto de vista inicial centrado en Latinoamérica
+  _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 });
 
-  // Halo polar (aurora simulada en modo all)
-  if (mode === 'all') {
-    const aurora = ctx.createRadialGradient(cx, cy - R * 0.8, 0, cx, cy - R * 0.8, R * 0.6);
-    aurora.addColorStop(0, `rgba(80,255,150,${0.06 + Math.sin(t * 0.7) * 0.04})`);
-    aurora.addColorStop(1, 'rgba(80,255,150,0)');
-    ctx.beginPath(); ctx.arc(cx, cy, R * 1.1, 0, Math.PI * 2);
-    ctx.fillStyle = aurora; ctx.fill();
-  }
+  _globeRefresh();
+}
 
-  // ── 9. REFLEJO ESPECULAR ──
-  const shine = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.34, 0, cx - R * 0.3, cy - R * 0.34, R * 0.58);
-  shine.addColorStop(0,   'rgba(255,255,255,.14)');
-  shine.addColorStop(0.5, 'rgba(255,255,255,.03)');
-  shine.addColorStop(1,   'rgba(255,255,255,0)');
-  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+
+// =============================================================
+// GRÁFICO DE LÍNEA — ingresos por día
+// =============================================================
+function drawLine(canvas, series) {
   ctx.fillStyle = shine; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
   ctx.restore();
 

@@ -411,18 +411,16 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
   min-height: 520px;
   border:     1px solid rgba(255,255,255,.075);
   border-radius: 22px;
-  background:
-    radial-gradient(circle at center, rgba(56,189,248,.11), transparent 55%),
-    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+  background: #000510;
   overflow: hidden;
 }
 #globeCanvas {
   width:   100%;
   height:  520px;
   display: block;
-  cursor:  grab;
 }
-#globeCanvas:active { cursor: grabbing; }
+/* El canvas interno de globe.gl */
+#globeCanvas canvas { display: block; outline: none; }
 
 #revenueChart {
   width:   100%;
