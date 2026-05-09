@@ -1188,15 +1188,25 @@ function cmRenderChips(filter = "") {
     ? _cmState.allCourses.filter(c => c.name.toLowerCase().includes(lower))
     : _cmState.allCourses;
 
-  container.innerHTML = visible.map(c => {
+  container.innerHTML = visible.map((c, i) => {
     const active = _cmState.selectedCourses.includes(c.name);
+    const label  = c.name.length > 32 ? c.name.slice(0, 32) + "…" : c.name;
     return `<button class="cm-chip${active ? " cm-chip-active" : ""}"
-      onclick="cmToggleCourse(${JSON.stringify(c.name)})"
+      data-cm-idx="${i}"
       title="${esc(c.name)} · ${c.sales} ventas · ${fmtMoney(c.revenue)}">
-      ${esc(c.name.length > 32 ? c.name.slice(0, 32) + "…" : c.name)}
-      <span class="cm-chip-count">${c.sales}</span>
+      ${esc(label)}<span class="cm-chip-count">${c.sales}</span>
     </button>`;
   }).join("");
+
+  // Un solo listener en el contenedor (event delegation)
+  container._cmVisible = visible;
+  container.onclick = e => {
+    const btn = e.target.closest("button[data-cm-idx]");
+    if (!btn) return;
+    const course = container._cmVisible[+btn.dataset.cmIdx];
+    if (!course) return;
+    cmToggleCourse(course.name);
+  };
 }
 
 function cmToggleCourse(name) {
