@@ -800,22 +800,23 @@
       <!-- KPIs Stripe -->
       <div id="stripeKpis" class="kpi-grid" style="margin-top:0"></div>
 
-      <!-- Ingresos diarios -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Tendencia</p><h2>Ingresos diarios v&#xED;a Stripe</h2></div>
-        </div>
-        <div id="stripeDayBars" class="payment-bars"></div>
-      </article>
+      <!-- Ingresos diarios + Top productos lado a lado -->
+      <section class="two-col" style="margin-top:14px">
+        <article class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Tendencia</p><h2>Ingresos diarios v&#xED;a Stripe</h2></div>
+          </div>
+          <div id="stripeDayBars" class="payment-bars"></div>
+        </article>
 
-      <!-- Top productos Stripe -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Productos</p><h2>Cursos m&#xE1;s vendidos por Stripe</h2></div>
-          <span id="stripeProductsBadge" class="badge">&#x2014;</span>
-        </div>
-        <div id="stripeProductBars" class="payment-bars"></div>
-      </article>
+        <article class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Productos</p><h2>Cursos m&#xE1;s vendidos por Stripe</h2></div>
+            <span id="stripeProductsBadge" class="badge">&#x2014;</span>
+          </div>
+          <div id="stripeProductBars" class="payment-bars"></div>
+        </article>
+      </section>
 
       <!-- Tabla transacciones -->
       <article class="panel" style="margin-top:14px">
@@ -1161,6 +1162,6 @@
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=19"></script>
+<script src="assets/app.js?v=20"></script>
 </body>
 </html>
