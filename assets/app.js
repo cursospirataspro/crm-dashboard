@@ -3278,7 +3278,7 @@ function renderRevenuePrediction() {
 // CALENDARIO HEATMAP DE VENTAS — ultimas 12 semanas
 // =============================================================
 function renderSalesHeatmap() {
-  const el = document.getElementById("salesHeatmap");
+  const el = document.getElementById("salesHeatmapCalendar");
   if (!el) return;
 
   const byDay = {};
