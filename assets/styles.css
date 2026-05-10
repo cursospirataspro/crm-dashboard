@@ -346,9 +346,8 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
   gap:                   14px;
 }
 
-/* Prevenir desborde horizontal global */
-.app, .main { overflow-x: hidden; }
-.main { max-width: 100%; }
+/* Prevenir desborde horizontal en el contenido (no en .app para no romper sticky del sidebar) */
+.main { overflow-x: hidden; max-width: 100%; }
 
 /* ============================================================
    PANELS
