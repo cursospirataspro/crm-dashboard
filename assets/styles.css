@@ -1567,28 +1567,21 @@ pre { font-size: 13px; line-height: 1.6; }
 .modal-notes-wrap textarea { resize: vertical; min-height: 80px; }
 
 /* ============================================================
-   SALES HEATMAP
+   SALES HEATMAP rediseno
    ============================================================ */
 .sales-heatmap { overflow-x: auto; padding-bottom: 4px; }
-.heatmap-grid  {
-  display: grid;
-  grid-template-columns: 36px repeat(24, minmax(22px, 1fr));
-  gap: 2px;
-  min-width: 640px;
-}
-.hm-corner { }
-.hm-hour   { font-size: 9px; color: var(--muted); text-align: center; padding: 2px 0; }
-.hm-day    { font-size: 11px; color: var(--muted); display: flex; align-items: center; white-space: nowrap; }
-.hm-cell   { height: 22px; border-radius: 4px; cursor: default; transition: opacity .12s; }
-.hm-cell:hover { opacity: .7; outline: 1px solid rgba(255,255,255,.3); }
-.hm-legend {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 10px; font-size: 11px; color: var(--muted);
-}
-.hm-scale  {
-  flex: 1; height: 8px; border-radius: 4px;
-  background: linear-gradient(90deg, rgba(239,35,60,.08), rgba(239,35,60,1));
-}
+.hmg-wrap  { min-width: 600px; }
+.hmg-grid  { display: grid; gap: 3px; }
+.hmg-row   { display:grid; grid-template-columns: 44px repeat(24, 1fr); gap: 3px; align-items: center; }
+.hmg-header { margin-bottom: 2px; }
+.hmg-hour-label { font-size:9px;color:var(--muted);text-align:center;line-height:1;height:14px;display:flex;align-items:flex-end;justify-content:center; }
+.hmg-day-label  { font-size:11px;font-weight:600;color:var(--muted);text-align:right;padding-right:6px;white-space:nowrap; }
+.hmg-cell { height:32px;border-radius:5px;cursor:default;transition:transform .12s,outline .12s;position:relative;display:flex;align-items:center;justify-content:center; }
+.hmg-cell:hover { transform:scale(1.15);outline:1px solid rgba(255,255,255,.35);z-index:2; }
+.hmg-cell span  { font-size:9px;font-weight:700;color:rgba(255,255,255,.9);pointer-events:none; }
+.hmg-legend       { display:flex;align-items:center;gap:10px;margin-top:12px; }
+.hmg-legend-label { font-size:11px;color:var(--muted);white-space:nowrap; }
+.hmg-legend-scale { flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(239,35,60,.08),rgba(239,35,60,1)); }
 
 /* ============================================================
    SIDEBAR TOOLS
@@ -1745,28 +1738,21 @@ body:has(.app.light-mode) {
 .modal-notes-wrap textarea { resize: vertical; min-height: 80px; }
 
 /* ============================================================
-   SALES HEATMAP
+   SALES HEATMAP rediseno
    ============================================================ */
 .sales-heatmap { overflow-x: auto; padding-bottom: 4px; }
-.heatmap-grid  {
-  display: grid;
-  grid-template-columns: 36px repeat(24, minmax(22px, 1fr));
-  gap: 2px;
-  min-width: 640px;
-}
-.hm-corner { }
-.hm-hour   { font-size: 9px; color: var(--muted); text-align: center; padding: 2px 0; }
-.hm-day    { font-size: 11px; color: var(--muted); display: flex; align-items: center; white-space: nowrap; }
-.hm-cell   { height: 22px; border-radius: 4px; cursor: default; transition: opacity .12s; }
-.hm-cell:hover { opacity: .7; outline: 1px solid rgba(255,255,255,.3); }
-.hm-legend {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 10px; font-size: 11px; color: var(--muted);
-}
-.hm-scale  {
-  flex: 1; height: 8px; border-radius: 4px;
-  background: linear-gradient(90deg, rgba(239,35,60,.08), rgba(239,35,60,1));
-}
+.hmg-wrap  { min-width: 600px; }
+.hmg-grid  { display: grid; gap: 3px; }
+.hmg-row   { display:grid; grid-template-columns: 44px repeat(24, 1fr); gap: 3px; align-items: center; }
+.hmg-header { margin-bottom: 2px; }
+.hmg-hour-label { font-size:9px;color:var(--muted);text-align:center;line-height:1;height:14px;display:flex;align-items:flex-end;justify-content:center; }
+.hmg-day-label  { font-size:11px;font-weight:600;color:var(--muted);text-align:right;padding-right:6px;white-space:nowrap; }
+.hmg-cell { height:32px;border-radius:5px;cursor:default;transition:transform .12s,outline .12s;position:relative;display:flex;align-items:center;justify-content:center; }
+.hmg-cell:hover { transform:scale(1.15);outline:1px solid rgba(255,255,255,.35);z-index:2; }
+.hmg-cell span  { font-size:9px;font-weight:700;color:rgba(255,255,255,.9);pointer-events:none; }
+.hmg-legend       { display:flex;align-items:center;gap:10px;margin-top:12px; }
+.hmg-legend-label { font-size:11px;color:var(--muted);white-space:nowrap; }
+.hmg-legend-scale { flex:1;height:8px;border-radius:4px;background:linear-gradient(90deg,rgba(239,35,60,.08),rgba(239,35,60,1)); }
 
 /* ============================================================
    SIDEBAR TOOLS

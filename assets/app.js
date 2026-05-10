@@ -2253,26 +2253,60 @@ function renderHeatmap() {
   const el = $("#salesHeatmap");
   if (!el) return;
 
-  const days  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const DAYS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const HOURS = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
   const grid  = Array.from({ length: 7 }, () => new Array(24).fill(0));
+
   validRevenueOrders(state.filtered).forEach(o => {
     const d = new Date(o.date);
     if (!isNaN(d)) grid[d.getDay()][d.getHours()]++;
   });
   const max = Math.max(...grid.flat(), 1);
 
-  let html = '<div class="heatmap-grid"><div class="hm-corner"></div>';
-  for (let h = 0; h < 24; h++) html += `<div class="hm-hour">${h}h</div>`;
-  days.forEach((day, di) => {
-    html += `<div class="hm-day">${day}</div>`;
-    for (let h = 0; h < 24; h++) {
-      const v   = grid[di][h];
-      const a   = v ? (0.08 + (v / max) * 0.92).toFixed(2) : '0.04';
-      const bg  = v ? `rgba(239,35,60,${a})` : 'rgba(255,255,255,.03)';
-      html += `<div class="hm-cell" style="background:${bg}" title="${day} ${h}:00 — ${v} pedido${v!==1?'s':''}"></div>`;
-    }
+  const colorFor = (v) => {
+    if (!v) return 'rgba(255,255,255,.04)';
+    const t = v / max;
+    if (t < 0.25) return `rgba(239,35,60,${(0.15 + t * 1.2).toFixed(2)})`;
+    if (t < 0.50) return `rgba(239,35,60,${(0.35 + t * 0.9).toFixed(2)})`;
+    if (t < 0.75) return `rgba(239,35,60,${(0.55 + t * 0.6).toFixed(2)})`;
+    return `rgba(239,35,60,${(0.75 + t * 0.25).toFixed(2)})`;
+  };
+
+  // Header de horas — cada 3h para no saturar
+  let html = `<div class="hmg-wrap">`;
+  html += `<div class="hmg-grid">`;
+
+  // Fila de etiquetas de horas
+  html += `<div class="hmg-row hmg-header">`;
+  html += `<div class="hmg-day-label"></div>`;
+  HOURS.forEach(h => {
+    html += `<div class="hmg-hour-label">${h % 3 === 0 ? h + 'h' : ''}</div>`;
   });
-  html += '</div><div class="hm-legend"><span>Menos</span><div class="hm-scale"></div><span>Más ventas</span></div>';
+  html += `</div>`;
+
+  // Filas por día
+  DAYS.forEach((day, di) => {
+    const total = grid[di].reduce((s, v) => s + v, 0);
+    html += `<div class="hmg-row">`;
+    html += `<div class="hmg-day-label"><span>${day}</span></div>`;
+    HOURS.forEach(h => {
+      const v   = grid[di][h];
+      const bg  = colorFor(v);
+      const tip = `${day} ${h}:00 — ${v} pedido${v !== 1 ? 's' : ''}`;
+      html += `<div class="hmg-cell" style="background:${bg}" title="${tip}">${v > 0 ? `<span>${v}</span>` : ''}</div>`;
+    });
+    html += `</div>`;
+  });
+  html += `</div>`; // hmg-grid
+
+  // Leyenda
+  html += `<div class="hmg-legend">
+    <span class="hmg-legend-label">Menos</span>
+    <div class="hmg-legend-scale"></div>
+    <span class="hmg-legend-label">M&#xE1;s ventas</span>
+  </div>`;
+  html += `</div>`; // hmg-wrap
+
   el.innerHTML = html;
 }
 
