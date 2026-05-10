@@ -2799,10 +2799,10 @@ function renderStripeView() {
   const dayBarsEl = document.getElementById("stripeDayBars");
   if (dayBarsEl) {
     dayBarsEl.innerHTML = dayEntries.map(([d, v]) =>
-      `<div class="payment-bar">
-        <span class="bar-label">${d}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxDay*100).toFixed(1)}%"></div></div>
-        <span class="bar-val">${fmtMoney(v)}</span>
+      `<div class="pb-row">
+        <span class="pb-label">${d}</span>
+        <div class="pb-track"><div class="pb-fill" style="width:${(v/maxDay*100).toFixed(1)}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
+        <span class="pb-val">${fmtMoney(v)}</span>
       </div>`
     ).join("") || `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ventas v&#xED;a Stripe en el periodo.</p>`;
   }
@@ -2822,10 +2822,10 @@ function renderStripeView() {
   const prodEl = document.getElementById("stripeProductBars");
   if (prodEl) {
     prodEl.innerHTML = productEntries.map(([name, v]) =>
-      `<div class="payment-bar">
-        <span class="bar-label" style="word-break:break-word;white-space:normal">${esc(name)}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxProd*100).toFixed(1)}%"></div></div>
-        <span class="bar-val">${fmtMoney(v)}</span>
+      `<div class="pb-row pb-wide">
+        <span class="pb-label">${esc(name)}</span>
+        <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(v/maxProd*100).toFixed(1)}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
+        <span class="pb-val">${fmtMoney(v)}</span>
       </div>`
     ).join("") || `<p style="color:var(--muted);font-size:13px">Sin productos.</p>`;
   }
@@ -2920,10 +2920,10 @@ function renderSuscripciones() {
   const mrrEl = document.getElementById("subMrrBars");
   if (mrrEl) {
     mrrEl.innerHTML = mrrEntries.map(([m, v]) =>
-      `<div class="payment-bar">
-        <span class="bar-label">${m}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxMrr*100).toFixed(1)}%;background:var(--good)"></div></div>
-        <span class="bar-val">${fmtMoney(v)}</span>
+      `<div class="pb-row">
+        <span class="pb-label">${m}</span>
+        <div class="pb-track"><div class="pb-fill" style="width:${(v/maxMrr*100).toFixed(1)}%;background:linear-gradient(90deg,#22c55e,#4ade80)"></div></div>
+        <span class="pb-val">${fmtMoney(v)}</span>
       </div>`
     ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos MRR.</p>`;
   }
@@ -2969,10 +2969,10 @@ function renderSuscripciones() {
   const courseEl = document.getElementById("subCourseBars");
   if (courseEl) {
     courseEl.innerHTML = courseEntries.map(([name, v]) =>
-      `<div class="payment-bar">
-        <span class="bar-label" style="word-break:break-word;white-space:normal">${esc(name)}</span>
-        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxCourse*100).toFixed(1)}%"></div></div>
-        <span class="bar-val">${v} clientes</span>
+      `<div class="pb-row pb-wide">
+        <span class="pb-label">${esc(name)}</span>
+        <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(v/maxCourse*100).toFixed(1)}%;background:linear-gradient(90deg,#22c55e,#4ade80)"></div></div>
+        <span class="pb-val">${v} clientes</span>
       </div>`
     ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos.</p>`;
   }
