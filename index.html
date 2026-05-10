@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=2">
+  <link rel="stylesheet" href="assets/styles.css?v=3">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
@@ -54,8 +54,9 @@
     <div class="sidebar-tools">
       <button id="themeToggle" class="chip">☀ Modo claro</button>
       <button id="pollingToggle" class="chip">🔔 Live OFF</button>
-      <button id="pushNotifBtn" class="chip">🔔 Alertas push</button>
-      <button id="globalSearchBtn" class="chip">🔍 Buscar (Ctrl+K)</button>
+      <button id="pushNotifBtn" class="chip">&#x1F514; Alertas push</button>
+      <button id="midnightToggle" class="chip">&#x1F30C; Midnight</button>
+      <button id="globalSearchBtn" class="chip">&#x1F50D; Buscar (Ctrl+K)</button>
       <label class="currency-row">
         <span>💱 Moneda</span>
         <select id="globalCurrency" class="currency-select">
@@ -68,10 +69,28 @@
         </select>
       </label>
     </div>
+    <!-- META MENSUAL -->
+    <section class="sidebar-goal">
+      <div class="goal-header">
+        <small>&#x1F3AF; Meta mensual</small>
+        <span id="goalPct" class="goal-pct">0%</span>
+      </div>
+      <div class="goal-bar-track">
+        <div id="goalBar" class="goal-bar-fill" style="width:0%"></div>
+      </div>
+      <div class="goal-amounts">
+        <span id="goalCurrent">&#x2014;</span>
+        <span id="goalTarget">Sin meta</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input id="goalInput" type="number" class="sf-input" placeholder="Meta en USD" style="flex:1;min-width:0;padding:6px 8px;font-size:12px">
+        <button id="goalSave" class="chip">Guardar</button>
+      </div>
+    </section>
     <section class="mini-status">
       <small>Estado del dashboard</small>
       <strong id="modeLabel">Modo demo</strong>
-      <p id="lastSync">Esperando actualización...</p>
+      <p id="lastSync">Esperando actualizaci&#xF3;n...</p>
     </section>
   </aside>
 
@@ -455,6 +474,14 @@
     <!-- VISTA: ANÁLISIS AVANZADO -->
     <section id="view-analytics" class="view">
 
+      <!-- Prediccion de ingresos del mes -->
+      <article class="panel" style="margin-bottom:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Proyecci&#xF3;n</p><h2>Predicci&#xF3;n de ingresos &#x2014; mes actual</h2></div>
+        </div>
+        <div id="revenuePrediction"></div>
+      </article>
+
       <!-- Forecasting -->
       <article class="panel">
         <div class="panel-head">
@@ -531,11 +558,19 @@
       <!-- Hora óptima de envío -->
       <article class="panel" style="margin-top:14px">
         <div class="panel-head">
-          <div><p class="eyebrow">Email marketing</p><h2>Hora óptima de envío</h2></div>
-          <span id="optimalTimeBadge" class="badge">—</span>
+          <div><p class="eyebrow">Email marketing</p><h2>Hora &#xF3;ptima de env&#xED;o</h2></div>
+          <span id="optimalTimeBadge" class="badge">&#x2014;</span>
         </div>
         <div id="optimalTimeChart" class="payment-bars"></div>
         <p id="optimalTimeRecommend" style="margin-top:12px;font-size:13px;color:var(--muted)"></p>
+      </article>
+
+      <!-- Calendario heatmap de ventas -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Actividad de ventas</p><h2>Calendario de ventas &#x2014; &#xFA;ltimas 12 semanas</h2></div>
+        </div>
+        <div id="salesHeatmap" style="overflow-x:auto"></div>
       </article>
 
     </section>
@@ -862,9 +897,18 @@
         <p style="margin-top:10px;font-size:12px;color:var(--muted)">Con GA4 configurado podrás correlacionar sesiones de usuarios con ventas reales del WooCommerce.</p>
       </article>
 
+      <!-- Log de actividad -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Registro</p><h2>Log de actividad</h2></div>
+          <button id="clearActivityLogBtn" class="chip">Limpiar</button>
+        </div>
+        <div id="activityLog" class="activity-log"></div>
+      </article>
+
       <!-- Intervalo de polling -->
       <article class="panel" style="margin-top:14px">
-        <div class="panel-head"><div><p class="eyebrow">Tiempo real</p><h2>Actualización automática</h2></div></div>
+        <div class="panel-head"><div><p class="eyebrow">Tiempo real</p><h2>Actualizaci&#xF3;n autom&#xE1;tica</h2></div></div>
         <div class="alert-config" style="grid-template-columns:1fr">
           <label class="sf-label">Intervalo de actualización (minutos — 0 = desactivado)
             <input id="cfgPollingInterval" type="number" class="sf-input" value="0" min="0" max="60" style="max-width:120px">
@@ -879,6 +923,22 @@
     </section>
 
   </main>
+
+  <!-- MODAL: Detalle de pedido -->
+  <div id="orderModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <p class="eyebrow">Detalle del pedido</p>
+          <h2 id="orderModalTitle">&#x2014;</h2>
+        </div>
+        <button class="modal-close" id="orderModalClose">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div id="orderModalContent"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: Timeline de cliente -->
   <div id="customerModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
@@ -972,6 +1032,6 @@
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=17"></script>
+<script src="assets/app.js?v=18"></script>
 </body>
 </html>

@@ -2902,3 +2902,90 @@ h3 { font-size: clamp(15px, 1.5vw + 8px, 20px); }
     margin:        0 !important;
   }
 }
+
+/* ============================================================
+   NUEVAS FUNCIONES FASE 1+2
+   ============================================================ */
+
+/* META MENSUAL EN SIDEBAR */
+.sidebar-goal {
+  border:        1px solid var(--line);
+  border-radius: 16px;
+  background:    rgba(255,255,255,.04);
+  padding:       12px;
+  flex-shrink:   0;
+}
+.goal-header {
+  display:         flex;
+  justify-content: space-between;
+  align-items:     center;
+  margin-bottom:   6px;
+}
+.goal-header small { color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em; }
+.goal-pct          { font-size:13px;font-weight:800;color:#fff; }
+.goal-bar-track    { height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:5px; }
+.goal-bar-fill     { height:100%;border-radius:4px;background:var(--accent);transition:width .5s ease,background .3s; }
+.goal-amounts      { display:flex;justify-content:space-between;font-size:11px;color:var(--muted); }
+
+/* MODAL DETALLE DE PEDIDO */
+.om-grid {
+  display:               grid;
+  grid-template-columns: 1fr 1fr;
+  gap:                   10px;
+  margin-bottom:         16px;
+}
+.om-field            { border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.04); }
+.om-field span       { display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px; }
+.om-field strong     { font-size:14px; }
+.om-product          { display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.04);margin-bottom:6px; }
+.om-product-name     { flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.om-product-qty      { font-size:12px;color:var(--muted);flex-shrink:0; }
+.om-product-price    { font-size:13px;flex-shrink:0; }
+.om-total            { display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding:12px 14px;border-radius:12px;background:rgba(239,35,60,.08);border:1px solid rgba(239,35,60,.2); }
+.om-total span       { font-size:13px;color:var(--muted); }
+.om-total strong     { font-size:18px; }
+@media (max-width:480px) { .om-grid { grid-template-columns:1fr; } }
+
+/* LOG DE ACTIVIDAD */
+.activity-log { display:grid;gap:4px; }
+.activity-item { display:flex;gap:10px;align-items:baseline;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.03);font-size:12px; }
+.activity-item:hover { background:rgba(255,255,255,.07); }
+.activity-time { color:var(--muted);white-space:nowrap;flex-shrink:0;font-size:11px;font-variant-numeric:tabular-nums; }
+.activity-msg  { flex:1;color:#fff;word-break:break-word; }
+
+/* PREDICCION DE INGRESOS */
+.pred-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px; }
+.pred-card { border:1px solid var(--line);border-radius:14px;padding:14px 16px;background:rgba(255,255,255,.04);display:flex;flex-direction:column;gap:4px; }
+.pred-card small  { font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em; }
+.pred-card strong { font-size:22px;letter-spacing:-.04em; }
+.pred-sub         { font-size:11px;color:var(--muted); }
+
+/* CALENDARIO HEATMAP */
+.hm-wrap { display:flex;gap:4px;padding:4px 0;overflow-x:auto; }
+.hm-days { display:flex;flex-direction:column;gap:2px;padding-top:2px;flex-shrink:0; }
+.hm-dow  { font-size:9px;color:var(--muted);width:12px;height:14px;display:flex;align-items:center; }
+.hm-grid { display:flex;gap:2px; }
+.hm-col  { display:flex;flex-direction:column;gap:2px; }
+.hm-cell { width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,.06);cursor:default;transition:opacity .15s; }
+.hm-cell:hover { opacity:.8; }
+.hm-empty      { background:transparent !important; }
+.hm-legend     { display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap; }
+
+/* MODO MIDNIGHT */
+.app.midnight-mode {
+  --bg:       #020817;
+  --bg-card:  #0f1629;
+  --line:     rgba(99,130,255,.15);
+  --muted:    #64748b;
+  --soft:     rgba(99,130,255,.12);
+  --accent:   #6366f1;
+  --accent2:  #818cf8;
+  --good:     #22d3ee;
+}
+.app.midnight-mode .sidebar   { background:rgba(2,8,23,.96); }
+.app.midnight-mode .kpi::after { background:rgba(99,130,255,.1); }
+.app.midnight-mode .brand-logo { background:linear-gradient(135deg,#6366f1,#1e1b4b);box-shadow:0 12px 32px rgba(99,130,255,.25); }
+.app.midnight-mode .goal-bar-fill { background:#6366f1; }
+
+/* Hover en filas de pedidos */
+#ordersTable tr[data-id]:hover { background:rgba(239,35,60,.07); }

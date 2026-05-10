@@ -322,11 +322,13 @@ async function load() {
     console.error("Error al cargar datos:", e);
     state.orders = demoOrders();
     $("#modeLabel").textContent = "Modo demo (respaldo)";
-    toast("Sin conexión a la API — se cargaron datos demo.", "error");
+    toast("Sin conexion a la API — se cargaron datos demo.", "error");
   } finally {
     setLoading(false);
   }
-  $("#lastSync").textContent = "Actualizado: " + new Date().toLocaleString("es-PE");
+  const syncTime = new Date().toLocaleString("es-PE");
+  $("#lastSync").textContent = "Actualizado: " + syncTime;
+  logActivity("Datos sincronizados — " + state.orders.length + " pedidos cargados");
   populateCountries();
   applyFilters();
 }
@@ -451,6 +453,10 @@ function renderAll() {
   detectDuplicates();
   renderEmailMarketing();
   renderWidgetCustomizer();
+  renderSalesHeatmap();
+  renderRevenuePrediction();
+  updateGoalBar();
+  renderActivityLog();
 }
 
 function renderKPIs() {
@@ -576,16 +582,24 @@ function renderAlerts() {
   const now       = Date.now();
   const pending   = state.filtered.filter(o => statusNorm(o.status) === "pending").length;
   const cancelled = state.filtered.filter(o => statusNorm(o.status) === "cancelled").length;
+  const failed    = state.filtered.filter(o => statusNorm(o.status) === "failed").length;
+  const onHold    = state.filtered.filter(o => statusNorm(o.status) === "on-hold").length;
   const cm        = Object.values(customerMap(state.filtered));
   const inactiveCt = cm.filter(c => (now - new Date(c.last)) / 864e5 > ALERT_CONFIG.daysInactive).length;
   const alerts    = [];
 
   if (pending > ALERT_CONFIG.maxPending)
     alerts.push(["⚠ Pedidos pendientes",
-      `${pending} pedido${pending > 1 ? "s" : ""} requieren revisión. Umbral configurado: ${ALERT_CONFIG.maxPending}.`]);
+      `${pending} pedido${pending > 1 ? "s" : ""} requieren revision. Umbral configurado: ${ALERT_CONFIG.maxPending}.`]);
   else if (pending)
-    alerts.push(["ℹ Pagos pendientes",
+    alerts.push(["&#x2139; Pagos pendientes",
       `${pending} pedido${pending > 1 ? "s" : ""} pendientes de pago.`]);
+  if (failed > 0)
+    alerts.push(["❌ Pagos fallidos",
+      `${failed} pedido${failed > 1 ? "s" : ""} con pago fallido. Contactar al cliente.`]);
+  if (onHold > 0)
+    alerts.push(["⏸ Pedidos en espera",
+      `${onHold} pedido${onHold > 1 ? "s" : ""} en estado on-hold. Requieren revision manual.`]);
   if (m.refundRate > ALERT_CONFIG.maxRefund)
     alerts.push(["⚠ Reembolsos elevados",
       `Tasa de reembolso en ${m.refundRate.toFixed(1)}%. Umbral: ${ALERT_CONFIG.maxRefund}%.`]);
@@ -593,14 +607,14 @@ function renderAlerts() {
     alerts.push(["⚠ Pedidos cancelados",
       `${cancelled} venta${cancelled > 1 ? "s" : ""} no llegaron a concretarse.`]);
   if (m.repeat < Math.max(1, m.customers * ALERT_CONFIG.minRepeatPct / 100))
-    alerts.push(["ℹ Baja recompra",
+    alerts.push(["&#x2139; Baja recompra",
       `Pocos clientes recurrentes. Meta: ${ALERT_CONFIG.minRepeatPct}% del total.`]);
   if (inactiveCt > 0)
-    alerts.push(["😴 Clientes inactivos",
-      `${inactiveCt} cliente${inactiveCt !== 1 ? "s" : ""} sin comprar en más de ${ALERT_CONFIG.daysInactive} días.`]);
+    alerts.push(["&#x1F634; Clientes inactivos",
+      `${inactiveCt} cliente${inactiveCt !== 1 ? "s" : ""} sin comprar en mas de ${ALERT_CONFIG.daysInactive} dias.`]);
   if (!alerts.length)
-    alerts.push(["✓ Operación saludable",
-      "No hay alertas críticas en el periodo seleccionado."]);
+    alerts.push(["✓ Operacion saludable",
+      "No hay alertas criticas en el periodo seleccionado."]);
 
   $("#alertsList").innerHTML = alerts.map(([title, body]) =>
     `<div class="alert"><strong>${title}</strong><p>${body}</p></div>`
@@ -1387,7 +1401,7 @@ function renderOrders() {
     : `${total} pedido${total !== 1 ? "s" : ""}`;
 
   $("#ordersTable").innerHTML = state.filtered.slice(0, 150).map(o =>
-    `<tr>
+    `<tr data-id="${esc(String(o.id))}" style="cursor:pointer" title="Ver detalle del pedido">
        <td><strong>${esc(o.number || o.id)}</strong></td>
        <td>${fmtDate(o.date)}</td>
        <td>${esc(o.customer || "Cliente")}<br><small style="color:var(--muted)">${esc(o.customer_email || "")}</small></td>
@@ -1397,6 +1411,10 @@ function renderOrders() {
        <td><strong>${fmtMoney(o.total)}</strong></td>
      </tr>`
   ).join("") || `<tr><td colspan="7">${empty("Sin pedidos en el periodo.")}</td></tr>`;
+
+  $$("#ordersTable tr[data-id]").forEach(row => {
+    row.addEventListener("click", () => openOrderModal(row.dataset.id));
+  });
 }
 
 function renderCourses() {
@@ -2640,7 +2658,304 @@ function bind() {
   $("#emailPreviewBtn")?.addEventListener("click", previewEmail);
   $("#emailExportBtn")?.addEventListener("click", exportEmailList);
   $("#emailSendBtn")?.addEventListener("click", sendEmailMailto);
+
+  // ── Meta mensual ──
+  $("#goalSave")?.addEventListener("click", () => {
+    const val = parseFloat($("#goalInput")?.value || "0");
+    if (!val || val <= 0) { toast("Ingresa una meta mayor a 0", "error"); return; }
+    saveMonthlyGoal(val);
+    updateGoalBar();
+    toast("Meta mensual guardada: " + fmtMoney(val), "success");
+    logActivity("Meta mensual actualizada a " + fmtMoney(val));
+  });
+
+  // ── Modal de pedido ──
+  $("#orderModalClose")?.addEventListener("click", closeOrderModal);
+  $("#orderModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeOrderModal(); });
+
+  // ── Log de actividad ──
+  $("#clearActivityLogBtn")?.addEventListener("click", () => {
+    try { localStorage.removeItem("crm_activity_log"); } catch(e) {}
+    renderActivityLog();
+    toast("Log de actividad limpiado", "success");
+  });
+
+  // ── Modo midnight ──
+  $("#midnightToggle")?.addEventListener("click", toggleMidnightMode);
 }
+
+// =============================================================
+// META MENSUAL — barra de progreso en sidebar
+// =============================================================
+function loadMonthlyGoal() {
+  try { return parseFloat(localStorage.getItem("crm_monthly_goal") || "0") || 0; } catch(e) { return 0; }
+}
+function saveMonthlyGoal(val) {
+  try { localStorage.setItem("crm_monthly_goal", String(val)); } catch(e) {}
+}
+function updateGoalBar() {
+  const goal = loadMonthlyGoal();
+  const now  = new Date();
+  const thisMonthOrders = state.orders.filter(o => {
+    const d = new Date(o.date);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  });
+  const current = thisMonthOrders
+    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
+    .reduce((s, o) => s + Number(o.total || 0), 0);
+  const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
+
+  const goalBar     = document.getElementById("goalBar");
+  const goalPct     = document.getElementById("goalPct");
+  const goalCurrent = document.getElementById("goalCurrent");
+  const goalTarget  = document.getElementById("goalTarget");
+  const goalInput   = document.getElementById("goalInput");
+
+  if (goalBar)     goalBar.style.width = pct.toFixed(1) + "%";
+  if (goalPct)     goalPct.textContent = pct.toFixed(0) + "%";
+  if (goalCurrent) goalCurrent.textContent = fmtMoney(current);
+  if (goalTarget)  goalTarget.textContent  = goal > 0 ? "de " + fmtMoney(goal) : "Sin meta";
+  if (goalInput && goal > 0) goalInput.value = goal;
+  if (goalBar) {
+    goalBar.style.background = pct >= 100 ? "var(--good)" : pct >= 70 ? "#f59e0b" : "var(--accent)";
+  }
+}
+
+// =============================================================
+// MODAL DETALLE DE PEDIDO
+// =============================================================
+function openOrderModal(orderId) {
+  const o = state.filtered.find(x => String(x.id) === String(orderId));
+  if (!o) return;
+  const modal = document.getElementById("orderModal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("orderModalTitle");
+  const contentEl = document.getElementById("orderModalContent");
+  if (titleEl) titleEl.textContent = "#" + (o.number || o.id);
+
+  const products = (o.products || []).map(p =>
+    `<div class="om-product">
+      <span class="om-product-name">${esc(p.name || "Producto")}</span>
+      <span class="om-product-qty">x${p.quantity || 1}</span>
+      <strong class="om-product-price">${fmtMoney(p.total || p.subtotal || 0)}</strong>
+    </div>`
+  ).join("") || `<p style="color:var(--muted);font-size:13px">Sin detalle de productos.</p>`;
+
+  if (contentEl) contentEl.innerHTML = `
+    <div class="om-grid">
+      <div class="om-field"><span>Fecha</span><strong>${fmtDate(o.date)}</strong></div>
+      <div class="om-field"><span>Estado</span><strong><span class="status ${statusNorm(o.status)}">${esc(statusNorm(o.status))}</span></strong></div>
+      <div class="om-field"><span>Cliente</span><strong>${esc(o.customer || "Sin nombre")}</strong></div>
+      <div class="om-field"><span>Email</span><strong>${esc(o.customer_email || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Pais</span><strong>${esc(o.country || o.country_code || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Ciudad</span><strong>${esc(o.city || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Pago</span><strong>${esc(o.payment_method || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Numero</span><strong>#${esc(String(o.number || o.id))}</strong></div>
+    </div>
+    <h4 style="margin:16px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-size:11px">Productos</h4>
+    ${products}
+    <div class="om-total">
+      <span>Total del pedido</span>
+      <strong>${fmtMoney(o.total)}</strong>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="chip" onclick="openCustomerModal('${esc(o.customer_email || o.customer || "")}');closeOrderModal()">
+        Ver perfil del cliente
+      </button>
+    </div>`;
+
+  modal.classList.remove("hidden");
+  logActivity("Pedido #" + (o.number || o.id) + " abierto — " + esc(o.customer || "cliente"));
+}
+
+function closeOrderModal() {
+  document.getElementById("orderModal")?.classList.add("hidden");
+}
+
+// =============================================================
+// LOG DE ACTIVIDAD
+// =============================================================
+function logActivity(msg) {
+  try {
+    const log = JSON.parse(localStorage.getItem("crm_activity_log") || "[]");
+    log.unshift({ msg: String(msg), time: new Date().toISOString() });
+    localStorage.setItem("crm_activity_log", JSON.stringify(log.slice(0, 100)));
+  } catch(e) {}
+}
+
+function renderActivityLog() {
+  const box = document.getElementById("activityLog");
+  if (!box) return;
+  try {
+    const log = JSON.parse(localStorage.getItem("crm_activity_log") || "[]");
+    if (!log.length) {
+      box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin actividad registrada aun.</p>`;
+      return;
+    }
+    box.innerHTML = log.slice(0, 30).map(e => {
+      const d = new Date(e.time);
+      const time = d.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) +
+                   " " + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+      return `<div class="activity-item">
+        <span class="activity-time">${esc(time)}</span>
+        <span class="activity-msg">${esc(e.msg)}</span>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    box.innerHTML = `<p style="color:var(--muted);font-size:13px">Error leyendo log.</p>`;
+  }
+}
+
+// =============================================================
+// PREDICCION DE INGRESOS — mes actual (proyeccion lineal)
+// =============================================================
+function renderRevenuePrediction() {
+  const el = document.getElementById("revenuePrediction");
+  if (!el) return;
+  const now        = new Date();
+  const month      = now.getMonth();
+  const year       = now.getFullYear();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const thisMonthOrders = state.orders.filter(o => {
+    const d = new Date(o.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+  const current = thisMonthOrders
+    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
+    .reduce((s, o) => s + Number(o.total || 0), 0);
+
+  const dailyRate = dayOfMonth > 0 ? current / dayOfMonth : 0;
+  const projected = dailyRate * daysInMonth;
+  const remaining = Math.max(0, projected - current);
+  const pctMonth  = Math.round(dayOfMonth / daysInMonth * 100);
+
+  const goal    = loadMonthlyGoal();
+  const goalPct = goal > 0 ? Math.min(100, (projected / goal) * 100) : 0;
+  const goalMsg = goal > 0
+    ? `<div class="pred-card" style="--pred-accent:${goalPct >= 100 ? "var(--good)" : goalPct >= 70 ? "#f59e0b" : "var(--accent)"}">
+        <small>Proyeccion vs meta</small>
+        <strong style="color:var(--pred-accent)">${goalPct.toFixed(0)}% de la meta</strong>
+      </div>`
+    : "";
+
+  el.innerHTML = `
+    <div class="pred-grid">
+      <div class="pred-card">
+        <small>Acumulado este mes</small>
+        <strong>${fmtMoney(current)}</strong>
+        <span class="pred-sub">Dias ${dayOfMonth} de ${daysInMonth} (${pctMonth}%)</span>
+      </div>
+      <div class="pred-card" style="--pred-accent:var(--good)">
+        <small>Proyeccion al cierre</small>
+        <strong style="color:var(--pred-accent)">${fmtMoney(projected)}</strong>
+        <span class="pred-sub">Ritmo: ${fmtMoney(dailyRate)}/dia</span>
+      </div>
+      <div class="pred-card">
+        <small>Pendiente por generar</small>
+        <strong style="color:#f59e0b">${fmtMoney(remaining)}</strong>
+        <span class="pred-sub">En los ${daysInMonth - dayOfMonth} dias restantes</span>
+      </div>
+      ${goalMsg}
+    </div>`;
+}
+
+// =============================================================
+// CALENDARIO HEATMAP DE VENTAS — ultimas 12 semanas
+// =============================================================
+function renderSalesHeatmap() {
+  const el = document.getElementById("salesHeatmap");
+  if (!el) return;
+
+  const byDay = {};
+  state.filtered.forEach(o => {
+    const d = String(o.date).slice(0, 10);
+    byDay[d] = (byDay[d] || 0) + Number(o.total || 0);
+  });
+
+  // Construir 84 dias (12 semanas)
+  const today = new Date();
+  const days  = [];
+  for (let i = 83; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    days.push({ key, val: byDay[key] || 0, dow: d.getDay(), label: d.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) });
+  }
+
+  const maxVal = Math.max(...days.map(d => d.val), 1);
+  const colorFor = v => {
+    if (!v) return "rgba(255,255,255,.06)";
+    const t = Math.sqrt(v / maxVal);
+    const r = Math.round(80  + t * 159);
+    const g = Math.round(0   + t * 35);
+    const b = Math.round(20  + t * 10);
+    return `rgba(${r},${g},${b},${(0.35 + t * 0.65).toFixed(2)})`;
+  };
+
+  // Agrupar en semanas (columnas)
+  const weeks = [];
+  let week    = [];
+  days.forEach((d, i) => {
+    if (i === 0 && d.dow !== 0) {
+      for (let j = 0; j < d.dow; j++) week.push(null);
+    }
+    week.push(d);
+    if (week.length === 7) { weeks.push(week); week = []; }
+  });
+  if (week.length) weeks.push(week);
+
+  const DOW = ["D", "L", "M", "X", "J", "V", "S"];
+  const dowLabels = DOW.map(l => `<div class="hm-dow">${l}</div>`).join("");
+  const cols = weeks.map(w => {
+    const cells = w.map(d => d
+      ? `<div class="hm-cell" style="background:${colorFor(d.val)}" title="${d.key}: ${d.val > 0 ? fmtMoney(d.val) : "Sin ventas"}"></div>`
+      : `<div class="hm-cell hm-empty"></div>`
+    ).join("");
+    return `<div class="hm-col">${cells}</div>`;
+  }).join("");
+
+  const legendStops = [0.1, 0.3, 0.5, 0.7, 1].map(t => {
+    const r = Math.round(80 + t * 159), g = Math.round(t * 35), b = Math.round(20 + t * 10);
+    return `<div style="width:14px;height:14px;border-radius:3px;background:rgba(${r},${g},${b},${(0.35 + t * 0.65).toFixed(2)});flex-shrink:0"></div>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div class="hm-wrap">
+      <div class="hm-days">${dowLabels}</div>
+      <div class="hm-grid">${cols}</div>
+    </div>
+    <div class="hm-legend">
+      <span style="color:var(--muted);font-size:11px">Menos</span>
+      ${legendStops}
+      <span style="color:var(--muted);font-size:11px">Mas ventas</span>
+    </div>`;
+}
+
+// =============================================================
+// MODO MIDNIGHT — tema azul profundo
+// =============================================================
+function toggleMidnightMode() {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  const on = app.classList.toggle("midnight-mode");
+  try { localStorage.setItem("crm_midnight", on ? "1" : "0"); } catch(e) {}
+  const btn = document.getElementById("midnightToggle");
+  if (btn) btn.textContent = on ? "🌙 Midnight ON" : "🌌 Midnight";
+}
+
+// Restaurar modo midnight al cargar
+(function restoreMidnight() {
+  try {
+    if (localStorage.getItem("crm_midnight") === "1") {
+      document.querySelector(".app")?.classList.add("midnight-mode");
+      const btn = document.getElementById("midnightToggle");
+      if (btn) btn.textContent = "🌙 Midnight ON";
+    }
+  } catch(e) {}
+})();
 
 // =============================================================
 // SIDEBAR TOGGLE
