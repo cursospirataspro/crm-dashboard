@@ -660,27 +660,30 @@ function renderCountryDetail() {
   const truncate = (s, n) => s && s.length > n ? s.slice(0, n) + '…' : (s || '—');
 
   $("#countryDetail").innerHTML = `
-    <div class="cd-kpis">
-      <div class="cd-kpi"><span>Ingresos</span><strong>${fmtMoney(m.revenue)}</strong></div>
-      <div class="cd-kpi"><span>Pedidos</span><strong>${m.orders}</strong></div>
-      <div class="cd-kpi"><span>Clientes</span><strong>${m.customers}</strong></div>
-      <div class="cd-kpi"><span>Ticket prom.</span><strong>${fmtMoney(m.avg)}</strong></div>
-      <div class="cd-kpi"><span>Recompra</span><strong>${m.repeat}</strong></div>
-    </div>
-    <div class="cd-lists">
-      <div class="detail-card">
-        <h3>Top cursos</h3>
+    <div class="cd-row">
+      <div class="cd-section cd-summary">
+        <p class="cd-section-title">Resumen</p>
+        <div class="cd-kpi-v"><span>Ingresos</span><strong>${fmtMoney(m.revenue)}</strong></div>
+        <div class="cd-kpi-v"><span>Pedidos</span><strong>${m.orders}</strong></div>
+        <div class="cd-kpi-v"><span>Clientes</span><strong>${m.customers}</strong></div>
+        <div class="cd-kpi-v"><span>Ticket prom.</span><strong>${fmtMoney(m.avg)}</strong></div>
+        <div class="cd-kpi-v"><span>Recompra</span><strong>${m.repeat}</strong></div>
+      </div>
+      <div class="cd-divider"></div>
+      <div class="cd-section cd-flex1">
+        <p class="cd-section-title">Top cursos</p>
         ${top.map(x => `
           <div class="cd-list-row">
-            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 28))}</span>
+            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 34))}</span>
             <strong>${fmtMoney(x.revenue)}</strong>
           </div>`).join('') || `<p style="color:var(--muted);font-size:12px">Sin cursos.</p>`}
       </div>
-      <div class="detail-card">
-        <h3>Top ciudades</h3>
+      <div class="cd-divider"></div>
+      <div class="cd-section cd-flex1">
+        <p class="cd-section-title">Top ciudades</p>
         ${cities.map(x => `
           <div class="cd-list-row">
-            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 20))} <em>${x.orders}p</em></span>
+            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 26))} <em>${x.orders}p</em></span>
             <strong>${fmtMoney(x.revenue)}</strong>
           </div>`).join('') || `<p style="color:var(--muted);font-size:12px">Sin ciudades.</p>`}
       </div>

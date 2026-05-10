@@ -449,27 +449,38 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 /* ============================================================
    DETALLE DE PAÍS
    ============================================================ */
-.country-detail { display: flex; flex-direction: column; gap: 12px; }
+.country-detail { display: flex; flex-direction: column; gap: 0; }
 .detail-card    { border: 1px solid var(--line); background: rgba(255,255,255,.04); border-radius: 18px; padding: 14px; min-width: 0; }
 .detail-card h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
 
-/* KPIs en fila compacta */
-.cd-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.cd-kpi  { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 12px; padding: 10px 8px; text-align: center; }
-.cd-kpi span   { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
-.cd-kpi strong { display: block; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Fila horizontal completa */
+.cd-row { display: flex; gap: 0; align-items: stretch; min-height: 120px; }
+.cd-section { display: flex; flex-direction: column; gap: 0; padding: 0 20px; }
+.cd-section:first-child { padding-left: 0; }
+.cd-section:last-child  { padding-right: 0; }
+.cd-section-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
 
-/* Dos columnas: cursos y ciudades */
-.cd-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+/* Columna Resumen: ancho fijo con KPIs apilados */
+.cd-summary { min-width: 160px; flex-shrink: 0; }
+.cd-kpi-v { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.cd-kpi-v:last-child { border-bottom: 0; }
+.cd-kpi-v span   { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.cd-kpi-v strong { font-size: 13px; font-weight: 800; color: #fff; white-space: nowrap; }
 
-/* Filas de lista compactas */
-.cd-list-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 12px; }
+/* Divisor vertical */
+.cd-divider { width: 1px; background: rgba(255,255,255,.07); flex-shrink: 0; margin: 0 4px; align-self: stretch; }
+
+/* Columnas listas flex */
+.cd-flex1 { flex: 1; min-width: 0; }
+
+/* Filas de lista */
+.cd-list-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 12px; }
 .cd-list-row:last-child { border-bottom: 0; }
 .cd-list-name { color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cd-list-name em { font-style: normal; color: rgba(255,255,255,.3); font-size: 10px; }
+.cd-list-name em { font-style: normal; color: rgba(255,255,255,.3); font-size: 10px; margin-left: 3px; }
 .cd-list-row strong { color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
 
-@media (max-width: 900px) { .cd-kpis { grid-template-columns: repeat(3, 1fr); } .cd-lists { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .cd-row { flex-direction: column; } .cd-divider { width: auto; height: 1px; margin: 8px 0; } .cd-summary { min-width: 0; } }
 .detail-row {
   display:         flex;
   justify-content: space-between;
