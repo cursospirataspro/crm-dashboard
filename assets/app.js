@@ -657,24 +657,33 @@ function renderCountryDetail() {
     .map(([name, arr]) => ({ name, revenue: sum(validRevenueOrders(arr), netRev), orders: arr.length }))
     .sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
+  const truncate = (s, n) => s && s.length > n ? s.slice(0, n) + '…' : (s || '—');
+
   $("#countryDetail").innerHTML = `
-    <div class="detail-card">
-      <h3>Resumen</h3>
-      <div class="detail-row"><span>Ingresos</span>      <strong>${fmtMoney(m.revenue)}</strong></div>
-      <div class="detail-row"><span>Pedidos</span>       <strong>${m.orders}</strong></div>
-      <div class="detail-row"><span>Clientes</span>      <strong>${m.customers}</strong></div>
-      <div class="detail-row"><span>Ticket promedio</span><strong>${fmtMoney(m.avg)}</strong></div>
-      <div class="detail-row"><span>Recompra</span>      <strong>${m.repeat} clientes</strong></div>
+    <div class="cd-kpis">
+      <div class="cd-kpi"><span>Ingresos</span><strong>${fmtMoney(m.revenue)}</strong></div>
+      <div class="cd-kpi"><span>Pedidos</span><strong>${m.orders}</strong></div>
+      <div class="cd-kpi"><span>Clientes</span><strong>${m.customers}</strong></div>
+      <div class="cd-kpi"><span>Ticket prom.</span><strong>${fmtMoney(m.avg)}</strong></div>
+      <div class="cd-kpi"><span>Recompra</span><strong>${m.repeat}</strong></div>
     </div>
-    <div class="detail-card">
-      <h3>Top cursos</h3>
-      ${top.map(x => `<div class="detail-row"><span>${esc(x.name)}</span><strong>${fmtMoney(x.revenue)}</strong></div>`).join("")
-        || `<p style="color:var(--muted)">Sin cursos en el periodo.</p>`}
-    </div>
-    <div class="detail-card">
-      <h3>Top ciudades</h3>
-      ${cities.map(x => `<div class="detail-row"><span>${esc(x.name)} · ${x.orders} pedidos</span><strong>${fmtMoney(x.revenue)}</strong></div>`).join("")
-        || `<p style="color:var(--muted)">Sin ciudades.</p>`}
+    <div class="cd-lists">
+      <div class="detail-card">
+        <h3>Top cursos</h3>
+        ${top.map(x => `
+          <div class="cd-list-row">
+            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 28))}</span>
+            <strong>${fmtMoney(x.revenue)}</strong>
+          </div>`).join('') || `<p style="color:var(--muted);font-size:12px">Sin cursos.</p>`}
+      </div>
+      <div class="detail-card">
+        <h3>Top ciudades</h3>
+        ${cities.map(x => `
+          <div class="cd-list-row">
+            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 20))} <em>${x.orders}p</em></span>
+            <strong>${fmtMoney(x.revenue)}</strong>
+          </div>`).join('') || `<p style="color:var(--muted);font-size:12px">Sin ciudades.</p>`}
+      </div>
     </div>`;
 }
 

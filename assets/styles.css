@@ -449,10 +449,27 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 /* ============================================================
    DETALLE DE PAÍS
    ============================================================ */
-.country-detail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: start; }
-.detail-card    { border: 1px solid var(--line); background: rgba(255,255,255,.04); border-radius: 18px; padding: 15px; min-width: 0; }
-.detail-card h3 { font-size: 15px; margin-bottom: 8px; }
-@media (max-width: 900px) { .country-detail { grid-template-columns: 1fr !important; } }
+.country-detail { display: flex; flex-direction: column; gap: 12px; }
+.detail-card    { border: 1px solid var(--line); background: rgba(255,255,255,.04); border-radius: 18px; padding: 14px; min-width: 0; }
+.detail-card h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
+
+/* KPIs en fila compacta */
+.cd-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.cd-kpi  { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 12px; padding: 10px 8px; text-align: center; }
+.cd-kpi span   { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.cd-kpi strong { display: block; font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Dos columnas: cursos y ciudades */
+.cd-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+
+/* Filas de lista compactas */
+.cd-list-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.05); font-size: 12px; }
+.cd-list-row:last-child { border-bottom: 0; }
+.cd-list-name { color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cd-list-name em { font-style: normal; color: rgba(255,255,255,.3); font-size: 10px; }
+.cd-list-row strong { color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+
+@media (max-width: 900px) { .cd-kpis { grid-template-columns: repeat(3, 1fr); } .cd-lists { grid-template-columns: 1fr; } }
 .detail-row {
   display:         flex;
   justify-content: space-between;
