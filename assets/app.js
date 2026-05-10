@@ -2786,25 +2786,25 @@ function renderStripeView() {
     { label: "Ticket promedio", val: fmtMoney(avg), cls: "" }
   ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
 
-  // Ingresos diarios
-  const byDay = {};
-  filtered.forEach(o => {
-    const d = fmtDate(o.date).slice(0, 7) || "—";
-    const day = new Date(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
-    const key = day;
-    byDay[key] = (byDay[key] || 0) + Number(o.total || 0);
-  });
-  const dayEntries = Object.entries(byDay).slice(-30);
-  const maxDay = Math.max(...dayEntries.map(e => e[1]), 1);
+  // Transacciones individuales con curso (ordenadas por fecha desc)
   const dayBarsEl = document.getElementById("stripeDayBars");
   if (dayBarsEl) {
-    dayBarsEl.innerHTML = dayEntries.map(([d, v]) =>
-      `<div class="pb-row">
-        <span class="pb-label">${d}</span>
-        <div class="pb-track"><div class="pb-fill" style="width:${(v/maxDay*100).toFixed(1)}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
-        <span class="pb-val">${fmtMoney(v)}</span>
-      </div>`
-    ).join("") || `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ventas v&#xED;a Stripe en el periodo.</p>`;
+    const txns = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
+    const maxTxn = Math.max(...txns.map(o => Number(o.total || 0)), 1);
+    dayBarsEl.innerHTML = txns.map(o => {
+      const day  = new Date(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
+      const course = (o.products || [])[0]?.name || o.products?.[0] || "Producto";
+      const val  = Number(o.total || 0);
+      const pct  = (val / maxTxn * 100).toFixed(1);
+      return `<div class="stripe-txn-row">
+        <div class="stripe-txn-meta">
+          <span class="stripe-txn-date">${day}</span>
+          <span class="stripe-txn-course">${esc(course)}</span>
+        </div>
+        <div class="pb-track" style="flex:1;min-width:60px"><div class="pb-fill" style="width:${pct}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
+        <span class="pb-val">${fmtMoney(val)}</span>
+      </div>`;
+    }).join("") || `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ventas v&#xED;a Stripe en el periodo.</p>`;
   }
 
   // Top productos
