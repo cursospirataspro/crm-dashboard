@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=3">
+  <link rel="stylesheet" href="assets/styles.css?v=4">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
@@ -49,6 +49,8 @@
       <button class="nav-btn" data-view="courses">🎓 Cursos</button>
       <button class="nav-btn" data-view="geo">📍 Geografía</button>
       <button class="nav-btn" data-view="paypal">💰 PayPal</button>
+      <button class="nav-btn" data-view="stripe">💳 Stripe</button>
+      <button class="nav-btn" data-view="suscripciones">🔄 Suscripciones</button>
       <button class="nav-btn" data-view="settings">⚙️ Conexión</button>
     </nav>
     <div class="sidebar-tools">
@@ -249,6 +251,15 @@
 
     <!-- VISTA: CRM -->
     <section id="view-crm" class="view">
+
+      <!-- Panel VIP -->
+      <article class="panel vip-panel" style="margin-bottom:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Elite</p><h2>&#x1F451; Clientes VIP</h2></div>
+          <span id="vipCountBadge" class="badge">&#x2014;</span>
+        </div>
+        <div id="vipGrid" class="vip-grid"></div>
+      </article>
 
       <!-- Ranking de cursos -->
       <article class="panel" style="margin-bottom:14px">
@@ -660,6 +671,17 @@
           <div id="cityRanking" class="ranking"></div>
         </article>
       </section>
+
+      <!-- Tasa de conversion por pais -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Efectividad</p><h2>&#x1F4CA; Tasa de conversi&#xF3;n por pa&#xED;s</h2></div>
+          <span id="conversionBadge" class="badge">&#x2014;</span>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Pedidos completados vs total de pedidos por pa&#xED;s.</p>
+        <div id="conversionByCountry"></div>
+      </article>
+
     </section>
 
     <!-- VISTA: CONFIGURACIÓN -->
@@ -756,6 +778,104 @@
             <tbody id="paypalTxnBody"></tbody>
           </table>
         </div>
+      </article>
+
+    </section>
+
+    <!-- VISTA: STRIPE -->
+    <section id="view-stripe" class="view">
+
+      <!-- Barra de control Stripe -->
+      <article class="panel" style="margin-bottom:14px;padding:14px 20px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <p class="eyebrow" style="margin:0">&#x1F4B3; Stripe</p>
+          <span id="stripeStatus" style="font-size:12px;color:var(--muted)">Datos desde WooCommerce filtrados por m&#xE9;todo de pago</span>
+          <button id="stripeRefreshBtn" class="btn btn-primary" style="font-weight:700;margin-left:auto">&#x1F504; Actualizar</button>
+        </div>
+        <div style="margin-top:10px">
+          <input id="stripeSearch" type="search" class="sf-input" placeholder="&#x1F50D; Buscar cliente, producto..." style="width:100%;max-width:400px;font-size:13px">
+        </div>
+      </article>
+
+      <!-- KPIs Stripe -->
+      <div id="stripeKpis" class="kpi-grid" style="margin-top:0"></div>
+
+      <!-- Ingresos diarios -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Tendencia</p><h2>Ingresos diarios v&#xED;a Stripe</h2></div>
+        </div>
+        <div id="stripeDayBars" class="payment-bars"></div>
+      </article>
+
+      <!-- Top productos Stripe -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Productos</p><h2>Cursos m&#xE1;s vendidos por Stripe</h2></div>
+          <span id="stripeProductsBadge" class="badge">&#x2014;</span>
+        </div>
+        <div id="stripeProductBars" class="payment-bars"></div>
+      </article>
+
+      <!-- Tabla transacciones -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Detalle</p><h2>Transacciones Stripe</h2></div>
+          <span id="stripeTxnCount" class="badge">&#x2014;</span>
+        </div>
+        <div class="table-wrap">
+          <table class="crm-table">
+            <thead><tr>
+              <th>Fecha</th><th>Pedido</th><th>Cliente</th><th>Pa&#xED;s</th>
+              <th>Producto</th><th class="text-right">Bruto</th><th class="text-right">Comisi&#xF3;n est.</th><th class="text-right">Neto est.</th>
+            </tr></thead>
+            <tbody id="stripeTxnBody"></tbody>
+          </table>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- VISTA: SUSCRIPCIONES -->
+    <section id="view-suscripciones" class="view">
+
+      <!-- KPIs suscripciones -->
+      <div id="subKpis" class="kpi-grid" style="margin-bottom:14px"></div>
+
+      <!-- Panel MRR -->
+      <article class="panel" style="margin-bottom:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Ingresos recurrentes</p><h2>MRR &#x2014; Ingresos mensuales recurrentes</h2></div>
+          <span id="subMrrBadge" class="badge">&#x2014;</span>
+        </div>
+        <div id="subMrrBars" class="payment-bars"></div>
+      </article>
+
+      <!-- Clientes recurrentes -->
+      <article class="panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Base de suscriptores</p><h2>Clientes con compras recurrentes</h2></div>
+          <span id="subCountBadge" class="badge">&#x2014;</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="subSearch" type="search" class="sf-input" placeholder="&#x1F50D; Buscar..." style="flex:1;min-width:160px">
+          <select id="subFilter" class="sf-input" style="min-width:160px;font-size:13px">
+            <option value="all">Todos los recurrentes</option>
+            <option value="active">Activos (&#xFA;lt. 60 d&#xED;as)</option>
+            <option value="atrisk">En riesgo (61&#x2013;180 d&#xED;as)</option>
+            <option value="churned">Perdidos (+180 d&#xED;as)</option>
+          </select>
+          <button id="subExportBtn" class="chip">&#x2B07; CSV</button>
+        </div>
+        <div id="subList" class="customer-list"></div>
+      </article>
+
+      <!-- Cursos con suscriptores -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Retenci&#xF3;n por producto</p><h2>Cursos con m&#xE1;s compras recurrentes</h2></div>
+        </div>
+        <div id="subCourseBars" class="payment-bars"></div>
       </article>
 
     </section>
@@ -936,6 +1056,15 @@
       </div>
       <div class="modal-body">
         <div id="orderModalContent"></div>
+        <div class="om-notes-section" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+          <label class="sf-label" style="margin-bottom:6px">&#x1F4DD; Notas internas del pedido
+            <textarea id="orderModalNotes" class="sf-input" rows="3" placeholder="A&#xF1;ade notas privadas sobre este pedido..."></textarea>
+          </label>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn" id="orderModalSaveNote">Guardar nota</button>
+            <span id="orderModalNoteSaved" style="display:none;font-size:12px;color:var(--good)">&#x2713; Guardada</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1032,6 +1161,6 @@
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=18"></script>
+<script src="assets/app.js?v=19"></script>
 </body>
 </html>

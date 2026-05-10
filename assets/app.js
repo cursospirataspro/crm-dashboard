@@ -457,6 +457,10 @@ function renderAll() {
   renderRevenuePrediction();
   updateGoalBar();
   renderActivityLog();
+  renderVIPPanel();
+  renderStripeView();
+  renderSuscripciones();
+  renderConversionByCountry();
 }
 
 function renderKPIs() {
@@ -2673,6 +2677,18 @@ function bind() {
   $("#orderModalClose")?.addEventListener("click", closeOrderModal);
   $("#orderModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeOrderModal(); });
 
+  // ── Notas por pedido ──
+  $("#orderModalSaveNote")?.addEventListener("click", () => {
+    const notesEl = $("#orderModalNotes");
+    if (!notesEl) return;
+    try {
+      localStorage.setItem(notesEl.dataset.noteKey, notesEl.value);
+      const saved = $("#orderModalNoteSaved");
+      if (saved) { saved.style.display = "inline"; setTimeout(() => saved.style.display = "none", 2000); }
+      toast("Nota del pedido guardada", "success");
+    } catch(e) { toast("No se pudo guardar", "error"); }
+  });
+
   // ── Log de actividad ──
   $("#clearActivityLogBtn")?.addEventListener("click", () => {
     try { localStorage.removeItem("crm_activity_log"); } catch(e) {}
@@ -2682,6 +2698,357 @@ function bind() {
 
   // ── Modo midnight ──
   $("#midnightToggle")?.addEventListener("click", toggleMidnightMode);
+
+  // ── Stripe view ──
+  $("#stripeRefreshBtn")?.addEventListener("click", () => { renderStripeView(); toast("Datos Stripe actualizados", "success"); });
+  $("#stripeSearch")?.addEventListener("input", debounce(() => renderStripeView(), 220));
+
+  // ── Suscripciones ──
+  $("#subSearch")?.addEventListener("input", debounce(() => renderSuscripciones(), 220));
+  $("#subFilter")?.addEventListener("change", () => renderSuscripciones());
+  $("#subExportBtn")?.addEventListener("click", exportSuscripcionesCSV);
+}
+
+// =============================================================
+// VIP PANEL — segmentacion visual elite en CRM
+// =============================================================
+function renderVIPPanel() {
+  const grid    = document.getElementById("vipGrid");
+  const badge   = document.getElementById("vipCountBadge");
+  if (!grid) return;
+
+  const allC = Object.values(customerMap(state.filtered));
+  allC.sort((a, b) => b.revenue - a.revenue);
+  const top10pct = Math.max(1, Math.ceil(allC.length * 0.1));
+  const vips = allC.slice(0, top10pct);
+
+  if (badge) badge.textContent = vips.length + " clientes";
+
+  if (!vips.length) {
+    grid.innerHTML = `<p style="color:var(--muted);font-size:13px">Sin datos de clientes VIP en el periodo.</p>`;
+    return;
+  }
+
+  grid.innerHTML = vips.slice(0, 10).map((c, i) => {
+    const initials = c.name.slice(0, 2).toUpperCase();
+    const rfm = rfmScore(c, allC);
+    return `<div class="vip-card" style="cursor:pointer" data-email="${esc(c.email || c.name)}">
+      <div class="vip-rank">#${i + 1}</div>
+      <div class="vip-avatar" style="background:hsl(${(i * 47) % 360},55%,32%)">${esc(initials)}</div>
+      <div class="vip-info">
+        <strong class="vip-name">${esc(c.name)}</strong>
+        <span class="vip-email">${esc(c.email)}</span>
+        <span class="rfm-badge ${rfm.cls}">${rfm.label}</span>
+      </div>
+      <div class="vip-revenue">
+        <strong>${fmtMoney(c.revenue)}</strong>
+        <span>${c.orders} pedido${c.orders !== 1 ? "s" : ""}</span>
+      </div>
+    </div>`;
+  }).join("");
+
+  grid.querySelectorAll(".vip-card").forEach(el => {
+    el.addEventListener("click", () => openCustomerModal(el.dataset.email));
+  });
+}
+
+// =============================================================
+// STRIPE VIEW — panel con pedidos via Stripe
+// =============================================================
+function renderStripeView() {
+  const search = ($("#stripeSearch")?.value || "").trim().toLowerCase();
+  const stripeOrders = state.filtered.filter(o => {
+    const pm = (o.payment_method || "").toLowerCase();
+    return pm.includes("stripe") || pm.includes("card") || pm === "wc_stripe";
+  });
+
+  const filtered = search
+    ? stripeOrders.filter(o =>
+        (o.customer || "").toLowerCase().includes(search) ||
+        (o.customer_email || "").toLowerCase().includes(search) ||
+        (o.products || []).some(p => (p.name || "").toLowerCase().includes(search))
+      )
+    : stripeOrders;
+
+  // KPIs
+  const total  = filtered.reduce((s, o) => s + Number(o.total || 0), 0);
+  const fees   = filtered.reduce((s, o) => s + (Number(o.total || 0) * 0.029 + 0.30), 0);
+  const net    = total - fees;
+  const count  = filtered.length;
+  const avg    = count ? total / count : 0;
+
+  const kpisEl = document.getElementById("stripeKpis");
+  if (kpisEl) kpisEl.innerHTML = [
+    { label: "Ingresos brutos", val: fmtMoney(total), cls: "" },
+    { label: "Comisiones est. (2.9%+0.30)", val: fmtMoney(fees), cls: "style=\"color:var(--bad)\"" },
+    { label: "Ingresos netos est.", val: fmtMoney(net), cls: "style=\"color:var(--good)\"" },
+    { label: "Transacciones", val: count, cls: "" },
+    { label: "Ticket promedio", val: fmtMoney(avg), cls: "" }
+  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
+
+  // Ingresos diarios
+  const byDay = {};
+  filtered.forEach(o => {
+    const d = fmtDate(o.date).slice(0, 7) || "—";
+    const day = new Date(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
+    const key = day;
+    byDay[key] = (byDay[key] || 0) + Number(o.total || 0);
+  });
+  const dayEntries = Object.entries(byDay).slice(-30);
+  const maxDay = Math.max(...dayEntries.map(e => e[1]), 1);
+  const dayBarsEl = document.getElementById("stripeDayBars");
+  if (dayBarsEl) {
+    dayBarsEl.innerHTML = dayEntries.map(([d, v]) =>
+      `<div class="payment-bar">
+        <span class="bar-label">${d}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxDay*100).toFixed(1)}%"></div></div>
+        <span class="bar-val">${fmtMoney(v)}</span>
+      </div>`
+    ).join("") || `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ventas v&#xED;a Stripe en el periodo.</p>`;
+  }
+
+  // Top productos
+  const byProduct = {};
+  filtered.forEach(o => {
+    (o.products || []).forEach(p => {
+      const name = p.name || "Producto";
+      byProduct[name] = (byProduct[name] || 0) + Number(p.total || p.subtotal || 0);
+    });
+  });
+  const productEntries = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxProd = Math.max(...productEntries.map(e => e[1]), 1);
+  const prodBadge = document.getElementById("stripeProductsBadge");
+  if (prodBadge) prodBadge.textContent = productEntries.length + " cursos";
+  const prodEl = document.getElementById("stripeProductBars");
+  if (prodEl) {
+    prodEl.innerHTML = productEntries.map(([name, v]) =>
+      `<div class="payment-bar">
+        <span class="bar-label" style="word-break:break-word;white-space:normal">${esc(name)}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxProd*100).toFixed(1)}%"></div></div>
+        <span class="bar-val">${fmtMoney(v)}</span>
+      </div>`
+    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin productos.</p>`;
+  }
+
+  // Tabla transacciones
+  const txnCount = document.getElementById("stripeTxnCount");
+  if (txnCount) txnCount.textContent = filtered.length + " transacciones";
+  const tbody = document.getElementById("stripeTxnBody");
+  if (tbody) {
+    const rows = filtered.slice(0, 200);
+    tbody.innerHTML = rows.map(o => {
+      const gross = Number(o.total || 0);
+      const fee   = gross * 0.029 + 0.30;
+      const net_  = gross - fee;
+      const prod  = (o.products || [])[0]?.name || "—";
+      return `<tr>
+        <td>${fmtDate(o.date)}</td>
+        <td>#${esc(String(o.number || o.id))}</td>
+        <td>${esc(o.customer || "—")}</td>
+        <td>${esc(o.country || o.country_code || "—")}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prod)}</td>
+        <td class="text-right">${fmtMoney(gross)}</td>
+        <td class="text-right" style="color:var(--bad)">-${fmtMoney(fee)}</td>
+        <td class="text-right" style="color:var(--good)">${fmtMoney(net_)}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Sin transacciones Stripe en el periodo.</td></tr>`;
+  }
+}
+
+// =============================================================
+// SUSCRIPCIONES — clientes recurrentes WooCommerce
+// =============================================================
+function buildRecurringCustomers() {
+  // Considera "recurrente" a quien tiene 2+ pedidos completados
+  const customers = customerMap(state.orders);
+  const now = new Date();
+  return Object.values(customers)
+    .filter(c => c.orders >= 2)
+    .map(c => {
+      const lastDate = new Date(c.last);
+      const daysSince = Math.floor((now - lastDate) / 86400000);
+      const avgInterval = c.orders > 1 ? Math.floor(daysSince / (c.orders - 1)) : 0;
+      let status = "active";
+      if (daysSince > 180) status = "churned";
+      else if (daysSince > 60) status = "atrisk";
+      return { ...c, daysSince, avgInterval, status };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
+function renderSuscripciones() {
+  const search    = ($("#subSearch")?.value || "").trim().toLowerCase();
+  const filterVal = $("#subFilter")?.value || "all";
+
+  let recurring = buildRecurringCustomers();
+  if (filterVal !== "all") recurring = recurring.filter(c => c.status === filterVal);
+  if (search) recurring = recurring.filter(c =>
+    c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search)
+  );
+
+  // KPIs
+  const all = buildRecurringCustomers();
+  const active  = all.filter(c => c.status === "active").length;
+  const atrisk  = all.filter(c => c.status === "atrisk").length;
+  const churned = all.filter(c => c.status === "churned").length;
+  const totalMrr = all.filter(c => c.status === "active")
+    .reduce((s, c) => s + (c.revenue / Math.max(c.orders, 1)), 0);
+
+  const badge = document.getElementById("subCountBadge");
+  if (badge) badge.textContent = recurring.length + " clientes";
+
+  const kpisEl = document.getElementById("subKpis");
+  if (kpisEl) kpisEl.innerHTML = [
+    { label: "MRR estimado", val: fmtMoney(totalMrr), cls: "style=\"color:var(--good)\"" },
+    { label: "Activos (&#xFA;lt. 60d)", val: active, cls: "" },
+    { label: "En riesgo (61&#x2013;180d)", val: atrisk, cls: "style=\"color:#f59e0b\"" },
+    { label: "Perdidos (+180d)", val: churned, cls: "style=\"color:var(--bad)\"" },
+    { label: "Total recurrentes", val: all.length, cls: "" }
+  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
+
+  const mrrBadge = document.getElementById("subMrrBadge");
+  if (mrrBadge) mrrBadge.textContent = fmtMoney(totalMrr) + "/mes";
+
+  // MRR por mes (bar chart con ingresos de activos por mes)
+  const mrrByMonth = {};
+  all.filter(c => c.status === "active").forEach(c => {
+    const m = new Date(c.last).toLocaleDateString("es-PE", { month: "short", year: "2-digit" });
+    mrrByMonth[m] = (mrrByMonth[m] || 0) + c.revenue / Math.max(c.orders, 1);
+  });
+  const mrrEntries = Object.entries(mrrByMonth).slice(-12);
+  const maxMrr = Math.max(...mrrEntries.map(e => e[1]), 1);
+  const mrrEl = document.getElementById("subMrrBars");
+  if (mrrEl) {
+    mrrEl.innerHTML = mrrEntries.map(([m, v]) =>
+      `<div class="payment-bar">
+        <span class="bar-label">${m}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxMrr*100).toFixed(1)}%;background:var(--good)"></div></div>
+        <span class="bar-val">${fmtMoney(v)}</span>
+      </div>`
+    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos MRR.</p>`;
+  }
+
+  // Lista de clientes recurrentes
+  const listEl = document.getElementById("subList");
+  if (listEl) {
+    const statusColor = { active: "var(--good)", atrisk: "#f59e0b", churned: "var(--bad)" };
+    const statusLabel = { active: "Activo", atrisk: "En riesgo", churned: "Perdido" };
+    listEl.innerHTML = recurring.slice(0, 100).map((c, i) => {
+      const initials = c.name.slice(0, 2).toUpperCase();
+      return `<div class="customer" data-email="${esc(c.email || c.name)}" style="cursor:pointer">
+        <div class="avatar" style="min-width:36px;font-size:13px;background:hsl(${(i*47)%360},50%,32%)">${esc(initials)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <h3 style="margin:0">${esc(c.name)}</h3>
+            <span class="badge" style="background:${statusColor[c.status]}20;color:${statusColor[c.status]};border:1px solid ${statusColor[c.status]}40">${statusLabel[c.status]}</span>
+          </div>
+          <p style="margin:2px 0;font-size:12px;color:var(--muted)">${esc(c.email)} &middot; ${c.orders} pedidos &middot; intervalo ~${c.avgInterval}d</p>
+          <p style="margin:2px 0;font-size:12px;color:var(--muted)">&#xDA;ltima compra: ${c.daysSince}d atr&#xE1;s</p>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <strong style="display:block;font-size:15px">${fmtMoney(c.revenue)}</strong>
+          <span style="font-size:11px;color:var(--muted)">~${fmtMoney(c.revenue/Math.max(c.orders,1))}/compra</span>
+        </div>
+      </div>`;
+    }).join("") || `<p style="color:var(--muted);font-size:13px;padding:12px 0">Sin clientes recurrentes en el filtro seleccionado.</p>`;
+
+    listEl.querySelectorAll(".customer").forEach(el => {
+      el.addEventListener("click", () => openCustomerModal(el.dataset.email));
+    });
+  }
+
+  // Cursos con mas suscriptores
+  const byCourse = {};
+  all.forEach(c => {
+    c.courses.forEach(course => {
+      byCourse[course] = (byCourse[course] || 0) + 1;
+    });
+  });
+  const courseEntries = Object.entries(byCourse).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxCourse = Math.max(...courseEntries.map(e => e[1]), 1);
+  const courseEl = document.getElementById("subCourseBars");
+  if (courseEl) {
+    courseEl.innerHTML = courseEntries.map(([name, v]) =>
+      `<div class="payment-bar">
+        <span class="bar-label" style="word-break:break-word;white-space:normal">${esc(name)}</span>
+        <div class="bar-track"><div class="bar-fill" style="width:${(v/maxCourse*100).toFixed(1)}%"></div></div>
+        <span class="bar-val">${v} clientes</span>
+      </div>`
+    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos.</p>`;
+  }
+}
+
+function exportSuscripcionesCSV() {
+  const rows = buildRecurringCustomers();
+  const header = ["Nombre", "Email", "Pedidos", "Revenue Total", "Ultima Compra", "Dias desde ultima compra", "Estado"].join(",");
+  const body = rows.map(c => [
+    `"${c.name}"`, `"${c.email}"`, c.orders, c.revenue.toFixed(2),
+    new Date(c.last).toLocaleDateString("es-PE"), c.daysSince,
+    c.status === "active" ? "Activo" : c.status === "atrisk" ? "En riesgo" : "Perdido"
+  ].join(","));
+  const csv = [header, ...body].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "suscripciones_crm.csv" });
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// =============================================================
+// CONVERSION POR PAIS
+// =============================================================
+function renderConversionByCountry() {
+  const el = document.getElementById("conversionByCountry");
+  const badge = document.getElementById("conversionBadge");
+  if (!el) return;
+
+  // Agrupar por pais
+  const byCountry = {};
+  state.filtered.forEach(o => {
+    const country = o.country || o.country_code || "Desconocido";
+    if (!byCountry[country]) byCountry[country] = { total: 0, completed: 0 };
+    byCountry[country].total++;
+    if (["completed", "processing"].includes(statusNorm(o.status))) {
+      byCountry[country].completed++;
+    }
+  });
+
+  const entries = Object.entries(byCountry)
+    .filter(([, v]) => v.total >= 2)
+    .map(([country, v]) => ({
+      country,
+      total: v.total,
+      completed: v.completed,
+      rate: v.total > 0 ? (v.completed / v.total) * 100 : 0
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 20);
+
+  if (badge) badge.textContent = entries.length + " paises";
+
+  if (!entries.length) {
+    el.innerHTML = `<p style="color:var(--muted);font-size:13px">Sin datos suficientes.</p>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="conv-table">
+    <div class="conv-header">
+      <span>Pais</span><span style="text-align:right">Pedidos</span>
+      <span style="text-align:right">Completados</span><span>Conversion</span>
+    </div>
+    ${entries.map(e => {
+      const color = e.rate >= 75 ? "var(--good)" : e.rate >= 50 ? "#f59e0b" : "var(--bad)";
+      return `<div class="conv-row">
+        <span class="conv-country">${esc(e.country)}</span>
+        <span class="conv-num">${e.total}</span>
+        <span class="conv-num">${e.completed}</span>
+        <div class="conv-rate-cell">
+          <div class="conv-bar-track">
+            <div class="conv-bar-fill" style="width:${e.rate.toFixed(1)}%;background:${color}"></div>
+          </div>
+          <span class="conv-pct" style="color:${color}">${e.rate.toFixed(1)}%</span>
+        </div>
+      </div>`;
+    }).join("")}
+  </div>`;
 }
 
 // =============================================================
@@ -2767,6 +3134,17 @@ function openOrderModal(orderId) {
 
   modal.classList.remove("hidden");
   logActivity("Pedido #" + (o.number || o.id) + " abierto — " + esc(o.customer || "cliente"));
+
+  // Cargar nota guardada para este pedido
+  const noteKey = "crm_order_note_" + o.id;
+  const notesEl = document.getElementById("orderModalNotes");
+  if (notesEl) {
+    notesEl.value = "";
+    try { notesEl.value = localStorage.getItem(noteKey) || ""; } catch(e) {}
+    notesEl.dataset.noteKey = noteKey;
+  }
+  const savedEl = document.getElementById("orderModalNoteSaved");
+  if (savedEl) savedEl.style.display = "none";
 }
 
 function closeOrderModal() {

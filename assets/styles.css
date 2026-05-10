@@ -2989,3 +2989,76 @@ h3 { font-size: clamp(15px, 1.5vw + 8px, 20px); }
 
 /* Hover en filas de pedidos */
 #ordersTable tr[data-id]:hover { background:rgba(239,35,60,.07); }
+
+/* ============================================================
+   PANEL VIP
+   ============================================================ */
+.vip-panel { border:1px solid rgba(251,191,36,.25) !important;background:linear-gradient(135deg,rgba(251,191,36,.05),rgba(0,0,0,0)) !important; }
+.vip-grid  { display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px; }
+.vip-card  {
+  display:       flex;
+  align-items:   center;
+  gap:           10px;
+  padding:       10px 12px;
+  border:        1px solid rgba(251,191,36,.2);
+  border-radius: 12px;
+  background:    rgba(251,191,36,.04);
+  transition:    background .15s, transform .15s;
+}
+.vip-card:hover      { background:rgba(251,191,36,.1);transform:translateY(-2px); }
+.vip-rank            { font-size:11px;font-weight:800;color:#fbbf24;width:20px;flex-shrink:0;text-align:center; }
+.vip-avatar          { width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;flex-shrink:0;border:2px solid rgba(251,191,36,.4); }
+.vip-info            { flex:1;min-width:0; }
+.vip-name            { display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.vip-email           { display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.vip-revenue         { text-align:right;flex-shrink:0; }
+.vip-revenue strong  { display:block;font-size:15px;color:#fbbf24; }
+.vip-revenue span    { font-size:11px;color:var(--muted); }
+
+/* ============================================================
+   TASA DE CONVERSION POR PAIS
+   ============================================================ */
+.conv-table  { display:grid;gap:4px; }
+.conv-header {
+  display:               grid;
+  grid-template-columns: 1fr 80px 100px 200px;
+  gap:                   8px;
+  padding:               6px 10px;
+  font-size:             11px;
+  color:                 var(--muted);
+  text-transform:        uppercase;
+  letter-spacing:        .05em;
+  font-weight:           700;
+}
+.conv-row {
+  display:               grid;
+  grid-template-columns: 1fr 80px 100px 200px;
+  gap:                   8px;
+  padding:               8px 10px;
+  border-radius:         10px;
+  background:            rgba(255,255,255,.03);
+  align-items:           center;
+  font-size:             13px;
+}
+.conv-row:hover       { background:rgba(255,255,255,.07); }
+.conv-country         { font-weight:600; }
+.conv-num             { text-align:right;color:var(--muted);font-variant-numeric:tabular-nums; }
+.conv-rate-cell       { display:flex;align-items:center;gap:8px; }
+.conv-bar-track       { flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden; }
+.conv-bar-fill        { height:100%;border-radius:4px;transition:width .5s ease; }
+.conv-pct             { font-size:12px;font-weight:700;width:42px;text-align:right;flex-shrink:0; }
+@media (max-width:640px) {
+  .conv-header, .conv-row { grid-template-columns:1fr 60px 100px; }
+  .conv-row .conv-num:nth-child(2) { display:none; }
+  .conv-header span:nth-child(2)   { display:none; }
+}
+
+/* ============================================================
+   NOTAS EN MODAL DE PEDIDO
+   ============================================================ */
+.om-notes-section textarea.sf-input { margin-top:6px;resize:vertical;min-height:70px; }
+
+/* ============================================================
+   SUSCRIPCIONES — panel MRR
+   ============================================================ */
+/* Reutiliza .customer-list y .payment-bars ya existentes */
