@@ -4355,7 +4355,6 @@ function _smartRenderBanner(rows) {
       </div>
     </div>`;
 }
-}
 
 // ── Preview HTML real en iframe ───────────────────────────────────
 function renderEmailPreview() {
