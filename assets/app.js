@@ -995,13 +995,19 @@ function updateEmailCountBadge() {
   const seg   = $('#emailSegment')?.value || 'all';
   const excl  = $('#excludeConverted')?.checked ?? false;
   const unsub = getUnsubscribeList();
+
+  // Mostrar/ocultar filtros avanzados según segmento
+  if ($('#filterCountryWrap')) $('#filterCountryWrap').style.display = seg === 'country'      ? '' : 'none';
+  if ($('#filterTicketWrap'))  $('#filterTicketWrap').style.display  = seg === 'ticket'       ? '' : 'none';
+  if ($('#filterCourseWrap'))  $('#filterCourseWrap').style.display  = seg === 'course'       ? '' : 'none';
+  if ($('#smartCoursePanel'))  $('#smartCoursePanel').style.display  = seg === 'smart_course' ? '' : 'none';
+
+  // Si es smart_course, el conteo lo actualiza renderSmartCourseResults
+  if (seg === 'smart_course') return;
+
   const count = getEmailRecipients(seg, excl).filter(r => !unsub.includes(r.email)).length;
   const badge = $('#emailCountBadge');
   if (badge) badge.textContent = count + ' destinatarios';
-  // Mostrar/ocultar filtros avanzados según segmento
-  if ($('#filterCountryWrap')) $('#filterCountryWrap').style.display = seg === 'country' ? '' : 'none';
-  if ($('#filterTicketWrap'))  $('#filterTicketWrap').style.display  = seg === 'ticket'  ? '' : 'none';
-  if ($('#filterCourseWrap'))  $('#filterCourseWrap').style.display  = seg === 'course'  ? '' : 'none';
 }
 
 function opoRenderList() {
@@ -2728,6 +2734,23 @@ function bind() {
   $("#filterTicket")?.addEventListener("input", updateEmailCountBadge);
   $("#filterCourse")?.addEventListener("change", updateEmailCountBadge);
 
+  // ── Smart Course: botón Analizar ──
+  $("#smartCourseAnalyzeBtn")?.addEventListener("click", () => {
+    const courseName = $("#smartCourseSelect")?.value;
+    if (!courseName) { toast("⚠ Selecciona un curso primero", "warning"); return; }
+    runSmartCourseAnalysis(courseName);
+    renderSmartCourseResults();
+    toast(`🤖 Análisis listo — curso: ${courseName.slice(0, 40)}`, "success");
+  });
+
+  // Re-renderizar tabla cuando cambia el modo (buyers/similar/both)
+  document.querySelectorAll('input[name="smartMode"]').forEach(radio => {
+    radio.addEventListener("change", () => {
+      if (_smartState.selectedCourse) renderSmartCourseResults();
+      updateEmailCountBadge();
+    });
+  });
+
   // ── Contador de caracteres del asunto ──
   $("#emailSubject")?.addEventListener("input", updateSubjectCharCount);
 
@@ -3703,6 +3726,17 @@ async function sendViaBrevo() {
 
 // ── Segmentación avanzada ─────────────────────────────────────────
 function getEmailRecipients(segment, excludeConverted = false) {
+  // ── Segmento Smart Course: usa el estado del panel de recomendaciones ──
+  if (segment === "smart_course") {
+    const mode = document.querySelector('input[name="smartMode"]:checked')?.value || "similar";
+    const { buyers, similar } = _smartState;
+    let list = [];
+    if (mode === "buyers")  list = buyers;
+    if (mode === "similar") list = similar;
+    if (mode === "both")    list = [...buyers, ...similar.filter(s => !buyers.some(b => b.email === s.email))];
+    return list.filter(c => c.email).map(c => ({ email: c.email, name: c.name || c.email }));
+  }
+
   const cm  = Object.values(customerMap(state.filtered));
   const now = Date.now();
   const sortedRevDesc = [...cm].sort((a, b) => b.revenue - a.revenue);
@@ -3813,12 +3847,182 @@ function populateAdvancedFilters() {
     const countries = [...new Set(state.filtered.map(o => o.billing?.country || o.billing_country).filter(Boolean))].sort();
     countrySel.innerHTML = countries.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
   }
-  // Cursos
+  // Cursos (filtro básico)
   const courseSel = $("#filterCourse");
   if (courseSel) {
-    const courses = [...new Set(state.filtered.flatMap(o => (o.line_items || o.items || []).map(i => i.name)).filter(Boolean))].sort();
+    const courses = [...new Set(state.filtered.flatMap(o => (o.line_items || o.items || o.products || []).map(i => i.name)).filter(Boolean))].sort();
     courseSel.innerHTML = courses.slice(0, 100).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
   }
+  // Cursos para el panel Smart
+  populateSmartCourseSelect();
+}
+
+// =============================================================
+// MOTOR DE RECOMENDACIÓN INTELIGENTE POR CURSO
+// =============================================================
+
+// Estado del panel smart
+const _smartState = {
+  selectedCourse: "",
+  buyers: [],       // clientes que ya compraron el curso
+  similar: [],      // clientes similares que no lo compraron
+  relatedCourses: [], // cursos frecuentemente co-comprados
+};
+
+// Poblar el select de cursos del panel smart
+function populateSmartCourseSelect() {
+  const sel = $("#smartCourseSelect");
+  if (!sel) return;
+  const courseList = cmBuildCourseList(state.filtered);
+  sel.innerHTML = '<option value="">— Seleccionar curso —</option>' +
+    courseList.map(c => `<option value="${esc(c.name)}">${esc(c.name.length > 55 ? c.name.slice(0,55)+"…" : c.name)} (${c.sales} ventas)</option>`).join("");
+
+  // Búsqueda en tiempo real filtra el select
+  const search = $("#smartCourseSearch");
+  if (search) {
+    search.addEventListener("input", () => {
+      const q = search.value.toLowerCase();
+      Array.from(sel.options).forEach(opt => {
+        opt.style.display = (opt.value === "" || opt.text.toLowerCase().includes(q)) ? "" : "none";
+      });
+    }, { once: false });
+  }
+}
+
+/**
+ * Análisis de recomendación colaborativa basado en historial de compras.
+ * Para el curso X seleccionado:
+ *  - buyers: clientes que ya compraron X
+ *  - co-courses: todos los cursos que esos buyers también compraron (sin X)
+ *  - similar: clientes que compraron ≥1 co-course pero NO compraron X
+ *    → ordenados por score = (co-courses en común / total cursos del cliente)
+ */
+function runSmartCourseAnalysis(courseName) {
+  if (!courseName) return;
+
+  const cm = Object.values(customerMap(state.filtered));
+
+  // 1. Compradores del curso objetivo
+  const buyers = cm.filter(c => c.courses && c.courses.has(courseName));
+
+  // 2. Cursos co-comprados (frecuencia de aparición en el segmento buyers)
+  const coMap = {};
+  buyers.forEach(c => {
+    c.courses.forEach(name => {
+      if (name === courseName) return;
+      coMap[name] = (coMap[name] || 0) + 1;
+    });
+  });
+  const relatedCourses = Object.entries(coMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([name, freq]) => ({ name, freq }));
+
+  const coCourseSet = new Set(relatedCourses.map(r => r.name));
+
+  // 3. Clientes similares: compraron ≥1 co-course pero NO el curso objetivo
+  const similar = cm
+    .filter(c => {
+      if (!c.email) return false;               // necesita email
+      if (c.courses.has(courseName)) return false; // ya lo compró
+      return [...c.courses].some(n => coCourseSet.has(n)); // tiene ≥1 curso en común
+    })
+    .map(c => {
+      const sharedCourses = [...c.courses].filter(n => coCourseSet.has(n));
+      const score = sharedCourses.length / (c.courses.size || 1);
+      return { ...c, sharedCourses, score };
+    })
+    .sort((a, b) => b.score - a.score || b.revenue - a.revenue)
+    .slice(0, 200); // máx 200 similares
+
+  _smartState.selectedCourse = courseName;
+  _smartState.buyers = buyers.filter(c => c.email);
+  _smartState.similar = similar;
+  _smartState.relatedCourses = relatedCourses;
+}
+
+// Renderizar el panel de resultados
+function renderSmartCourseResults() {
+  const resultsDiv = $("#smartCourseResults");
+  const kpisDiv    = $("#smartCourseKpis");
+  const relWrap    = $("#smartRelatedCoursesWrap");
+  const relDiv     = $("#smartRelatedCourses");
+  const tbody      = $("#smartCourseTable");
+  if (!resultsDiv || !kpisDiv || !tbody) return;
+
+  const mode = document.querySelector('input[name="smartMode"]:checked')?.value || "similar";
+  const { buyers, similar, relatedCourses, selectedCourse } = _smartState;
+
+  const showBuyers = mode === "buyers" || mode === "both";
+  const showSimilar = mode === "similar" || mode === "both";
+
+  const recipientsBuyers  = showBuyers  ? buyers  : [];
+  const recipientsSimilar = showSimilar ? similar : [];
+  const total = [...new Set([...recipientsBuyers.map(r => r.email), ...recipientsSimilar.map(r => r.email)])].length;
+
+  // KPIs
+  kpisDiv.innerHTML = [
+    { label: "Compradores del curso", value: buyers.length, icon: "🛒", color: "var(--good)" },
+    { label: "Clientes similares", value: similar.length, icon: "💡", color: "var(--accent)" },
+    { label: "Cursos relacionados", value: relatedCourses.length, icon: "🔗", color: "var(--warn)" },
+    { label: "A enviar ahora", value: total, icon: "📬", color: "var(--good)" },
+  ].map(k => `<div style="background:var(--bg);border-radius:8px;padding:10px 14px;flex:1;min-width:120px;border:1px solid var(--line)">
+    <div style="font-size:20px;font-weight:800;color:${k.color}">${k.icon} ${k.value}</div>
+    <div style="font-size:11px;color:var(--muted)">${k.label}</div>
+  </div>`).join("");
+
+  // Cursos relacionados (chips)
+  if (relWrap && relDiv) {
+    if (relatedCourses.length) {
+      relWrap.style.display = "block";
+      relDiv.innerHTML = relatedCourses.map(r =>
+        `<span style="background:var(--card2);border:1px solid var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--accent)">
+          ${esc(r.name.length > 35 ? r.name.slice(0,35)+"…" : r.name)}
+          <span style="color:var(--muted);margin-left:4px">${r.freq}x</span>
+        </span>`
+      ).join("");
+    } else {
+      relWrap.style.display = "none";
+    }
+  }
+
+  // Tabla de destinatarios
+  const rows = [];
+  if (showBuyers) {
+    buyers.forEach(c => rows.push({
+      name: c.name, email: c.email, revenue: c.revenue,
+      shared: "— ya compró este curso —",
+      score: "✅",
+      type: "buyer",
+      typeLabel: '<span style="background:#16a34a22;color:#16a34a;padding:2px 8px;border-radius:10px;font-size:11px">Comprador</span>'
+    }));
+  }
+  if (showSimilar) {
+    similar.forEach(c => rows.push({
+      name: c.name, email: c.email, revenue: c.revenue,
+      shared: c.sharedCourses.slice(0, 3).map(n => n.length > 28 ? n.slice(0,28)+"…" : n).join(", "),
+      score: `${Math.round(c.score * 100)}%`,
+      type: "similar",
+      typeLabel: '<span style="background:#0092ff22;color:#0092ff;padding:2px 8px;border-radius:10px;font-size:11px">Similar</span>'
+    }));
+  }
+
+  tbody.innerHTML = rows.slice(0, 150).map(r => `
+    <tr style="border-bottom:1px solid var(--line)">
+      <td style="padding:8px 10px">
+        <div style="font-weight:600;font-size:12px">${esc(r.name)}</div>
+        <div style="color:var(--muted);font-size:11px">${esc(r.email)}</div>
+      </td>
+      <td style="padding:8px 10px;font-size:11px;color:var(--muted);max-width:200px">${esc(r.shared)}</td>
+      <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--accent)">${r.score}</td>
+      <td style="padding:8px 10px;text-align:center">${r.typeLabel}</td>
+    </tr>`).join("");
+
+  resultsDiv.style.display = "block";
+
+  // Actualizar badge de destinatarios
+  const badge = $("#emailCountBadge");
+  if (badge) badge.textContent = `${total} destinatarios`;
 }
 
 // ── Preview HTML real en iframe ───────────────────────────────────
