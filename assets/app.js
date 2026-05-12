@@ -2744,11 +2744,28 @@ function bind() {
 
   // ── Smart Course: botón Analizar ──
   $("#smartCourseAnalyzeBtn")?.addEventListener("click", () => {
-    const courseName = $("#smartCourseSelect")?.value;
-    if (!courseName) { toast("⚠ Selecciona un curso primero", "warning"); return; }
-    runSmartCourseAnalysis(courseName);
+    const selectVal  = $("#smartCourseSelect")?.value;       // del dropdown
+    const searchText = $("#smartCourseSearch")?.value.trim(); // texto escrito
+
+    if (selectVal) {
+      // Curso conocido — análisis normal
+      runSmartCourseAnalysis(selectVal);
+      renderSmartCourseResults();
+      toast(`🤖 Análisis listo — ${selectVal.slice(0, 40)}`, "success");
+      return;
+    }
+
+    if (!searchText) { toast("⚠ Escribe o selecciona un curso", "warning"); return; }
+
+    // Curso nuevo (no está en catálogo) — Modo Prospección
+    const similar = _findSimilarCourses(searchText, 8);
+    if (!similar.length) {
+      toast("⚠ No encontré cursos similares en tu catálogo. Prueba con otras palabras.", "warning");
+      return;
+    }
+    runSmartProspectionAnalysis(searchText, similar);
     renderSmartCourseResults();
-    toast(`🤖 Análisis listo — curso: ${courseName.slice(0, 40)}`, "success");
+    toast(`🔭 Modo Prospección: "${searchText.slice(0, 35)}" — usando ${similar.length} cursos similares`, "success");
   });
 
   // Re-renderizar tabla cuando cambia el modo (buyers/similar/both)
@@ -3888,9 +3905,34 @@ const _smartState = {
   buyers: [],
   similar: [],
   relatedCourses: [],
-  selectedEmails: new Set(), // emails marcados con checkbox
-  allRows: [],               // todos los rows actuales para select-all
+  selectedEmails: new Set(),        // emails marcados con checkbox
+  allRows: [],                      // todos los rows actuales para select-all
+  selectedRelatedCourses: new Set(),// chips de cursos relacionados activados manualmente
+  prospectionMode: false,           // true cuando el curso no existe en catálogo
+  prospectionBaseCourses: [],       // cursos similares usados en prospección
+  prospectionQuery: "",             // nombre del curso nuevo que el usuario escribió
 };
+
+// =============================================================
+// SIMILITUD DE CURSOS — para modo prospección
+// =============================================================
+function _courseWordScore(a, b) {
+  // Jaccard de palabras limpias (≥3 chars)
+  const words = s => new Set(s.toLowerCase().replace(/[^a-záéíóúüñ0-9 ]/gi, " ").split(/\s+/).filter(w => w.length >= 3));
+  const wa = words(a), wb = words(b);
+  const intersection = [...wa].filter(w => wb.has(w)).length;
+  const union = new Set([...wa, ...wb]).size;
+  return union ? intersection / union : 0;
+}
+
+function _findSimilarCourses(query, topN = 8) {
+  const allCourses = cmBuildCourseList(state.filtered);
+  return allCourses
+    .map(c => ({ ...c, sim: _courseWordScore(query, c.name) }))
+    .filter(c => c.sim > 0)
+    .sort((a, b) => b.sim - a.sim || b.sales - a.sales)
+    .slice(0, topN);
+}
 
 // Poblar el select de cursos del panel smart
 function populateSmartCourseSelect() {
@@ -3946,9 +3988,9 @@ function runSmartCourseAnalysis(courseName) {
   // 3. Clientes similares: compraron ≥1 co-course pero NO el curso objetivo
   const similar = cm
     .filter(c => {
-      if (!c.email) return false;               // necesita email
-      if (c.courses.has(courseName)) return false; // ya lo compró
-      return [...c.courses].some(n => coCourseSet.has(n)); // tiene ≥1 curso en común
+      if (!c.email) return false;
+      if (c.courses.has(courseName)) return false;
+      return [...c.courses].some(n => coCourseSet.has(n));
     })
     .map(c => {
       const sharedCourses = [...c.courses].filter(n => coCourseSet.has(n));
@@ -3956,14 +3998,57 @@ function runSmartCourseAnalysis(courseName) {
       return { ...c, sharedCourses, score };
     })
     .sort((a, b) => b.score - a.score || b.revenue - a.revenue)
-    .slice(0, 200); // máx 200 similares
+    .slice(0, 200);
 
   _smartState.selectedCourse = courseName;
   _smartState.buyers = buyers.filter(c => c.email);
   _smartState.similar = similar;
   _smartState.relatedCourses = relatedCourses;
-  _smartState.selectedEmails = new Set(); // resetear para nuevo análisis
+  _smartState.selectedEmails = new Set();
   _smartState.allRows = [];
+  _smartState.prospectionMode = false;
+  _smartState.selectedRelatedCourses = new Set();
+}
+
+// Análisis especial para curso nuevo (no existe en catálogo)
+function runSmartProspectionAnalysis(query, baseCourses) {
+  const cm = Object.values(customerMap(state.filtered));
+  const baseNames = new Set(baseCourses.map(c => c.name));
+
+  // Prospectos: compraron ≥1 curso base
+  const prospectMap = {};
+  cm.forEach(c => {
+    if (!c.email) return;
+    const shared = [...c.courses].filter(n => baseNames.has(n));
+    if (!shared.length) return;
+    const score = shared.length / (c.courses.size || 1);
+    prospectMap[c.email] = { ...c, sharedCourses: shared, score };
+  });
+  const prospects = Object.values(prospectMap)
+    .sort((a, b) => b.score - a.score || b.revenue - a.revenue)
+    .slice(0, 200);
+
+  // co-courses de esos prospectos (para mostrar relaciones)
+  const coMap = {};
+  prospects.forEach(c => {
+    c.courses.forEach(n => { coMap[n] = (coMap[n] || 0) + 1; });
+  });
+  const relatedCourses = Object.entries(coMap)
+    .filter(([n]) => !baseNames.has(n))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, freq]) => ({ name, freq }));
+
+  _smartState.selectedCourse = query;
+  _smartState.buyers = [];
+  _smartState.similar = prospects;
+  _smartState.relatedCourses = relatedCourses;
+  _smartState.selectedEmails = new Set();
+  _smartState.allRows = [];
+  _smartState.prospectionMode = true;
+  _smartState.prospectionQuery = query;
+  _smartState.prospectionBaseCourses = baseCourses;
+  _smartState.selectedRelatedCourses = new Set();
 }
 
 // Renderizar el panel de resultados
@@ -4013,27 +4098,65 @@ function renderSmartCourseResults() {
   const total = [...new Set([...buyers.filter(()=>showBuyers).map(r=>r.email), ...similar.filter(()=>showSimilar).map(r=>r.email)])].length;
   const selCount = _smartState.selectedEmails.size;
 
-  // KPIs
-  kpisDiv.innerHTML = [
-    { label: "Compradores del curso", value: buyers.length,         icon: "🛒", color: "var(--good)"   },
-    { label: "Clientes similares",    value: similar.length,        icon: "💡", color: "var(--accent)" },
-    { label: "Cursos relacionados",   value: relatedCourses.length, icon: "🔗", color: "var(--warn)"   },
-    { label: "Seleccionados",         value: selCount,              icon: "☑️", color: "var(--good)"   },
-  ].map(k => `<div style="background:var(--bg);border-radius:8px;padding:10px 14px;flex:1;min-width:120px;border:1px solid var(--line)">
-    <div style="font-size:20px;font-weight:800;color:${k.color}">${k.icon} ${k.value}</div>
-    <div style="font-size:11px;color:var(--muted)">${k.label}</div>
-  </div>`).join("");
+  // KPIs — ajustar etiquetas según modo prospección
+  const kpiLabels = _smartState.prospectionMode
+    ? [
+        { label: "Compradores base", value: buyers.length,         icon: "🛒", color: "var(--muted)"   },
+        { label: "Prospectos potenciales", value: similar.length,  icon: "🔍", color: "var(--accent)" },
+        { label: "Cursos similares usados", value: relatedCourses.length, icon: "🔗", color: "var(--warn)" },
+        { label: "Seleccionados",    value: selCount,              icon: "☑️", color: "var(--good)"   },
+      ]
+    : [
+        { label: "Compradores del curso", value: buyers.length,         icon: "🛒", color: "var(--good)"   },
+        { label: "Clientes similares",    value: similar.length,        icon: "💡", color: "var(--accent)" },
+        { label: "Cursos relacionados",   value: relatedCourses.length, icon: "🔗", color: "var(--warn)"   },
+        { label: "Seleccionados",         value: selCount,              icon: "☑️", color: "var(--good)"   },
+      ];
+  kpisDiv.innerHTML = kpiLabels.map(k =>
+    `<div style="background:var(--bg);border-radius:8px;padding:10px 14px;flex:1;min-width:120px;border:1px solid var(--line)">
+      <div style="font-size:20px;font-weight:800;color:${k.color}">${k.icon} ${k.value}</div>
+      <div style="font-size:11px;color:var(--muted)">${k.label}</div>
+    </div>`).join("");
 
-  // Cursos relacionados (chips)
+  // Cursos relacionados (chips CLICABLES — toggle agrega compradores de ese curso)
   if (relWrap && relDiv) {
     if (relatedCourses.length) {
       relWrap.style.display = "block";
-      relDiv.innerHTML = relatedCourses.map(r =>
-        `<span style="background:var(--card2);border:1px solid var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--accent)">
-          ${esc(r.name.length > 35 ? r.name.slice(0,35)+"…" : r.name)}
-          <span style="color:var(--muted);margin-left:4px">${r.freq}x</span>
-        </span>`
-      ).join("");
+      // Actualizar texto del encabezado según el modo
+      const relHeadP = relWrap.querySelector("p");
+      if (relHeadP) relHeadP.textContent = _smartState.prospectionMode
+        ? "📊 Cursos similares usados como base — actívalos para agregar más prospectos:"
+        : "📊 Cursos frecuentemente comprados junto a este curso — haz clic para incluir sus compradores:";
+
+      relDiv.innerHTML = relatedCourses.map(r => {
+        const active = _smartState.selectedRelatedCourses.has(r.name);
+        const label  = r.name.length > 38 ? r.name.slice(0, 38) + "…" : r.name;
+        return `<button class="smart-chip-btn${active ? " smart-chip-active" : ""}"
+          data-course="${esc(r.name)}"
+          style="background:${active ? "var(--accent)" : "var(--card2)"};
+            border:1px solid ${active ? "var(--accent)" : "#ffffff33"};
+            border-radius:20px;padding:4px 12px;font-size:11px;
+            color:${active ? "#fff" : "var(--accent)"};
+            cursor:pointer;transition:.15s all;display:inline-flex;align-items:center;gap:4px">
+          ${esc(label)}
+          <span style="opacity:.65">${r.freq}x</span>
+          <span style="font-weight:700">${active ? " ✓" : " +"}</span>
+        </button>`;
+      }).join("");
+
+      // Listeners de chips — toggle + re-render
+      relDiv.querySelectorAll(".smart-chip-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const name = btn.dataset.course;
+          if (_smartState.selectedRelatedCourses.has(name)) {
+            _smartState.selectedRelatedCourses.delete(name);
+          } else {
+            _smartState.selectedRelatedCourses.add(name);
+          }
+          _applyChipRecipients();
+          renderSmartCourseResults();
+        });
+      });
     } else {
       relWrap.style.display = "none";
     }
@@ -4115,6 +4238,30 @@ function renderSmartCourseResults() {
 }
 
 // Actualizar solo los contadores sin re-renderizar la tabla
+// Agregar/quitar de _smartState.buyers+similar los compradores de chips activos
+function _applyChipRecipients() {
+  const cm = Object.values(customerMap(state.filtered));
+  const sel = _smartState.selectedRelatedCourses;
+  if (!sel.size) return; // nada que hacer
+
+  // Compradores de los chips seleccionados que aún no están en ninguna lista
+  const existingEmails = new Set([
+    ..._smartState.buyers.map(c => c.email),
+    ..._smartState.similar.map(c => c.email),
+  ]);
+
+  sel.forEach(courseName => {
+    cm.forEach(c => {
+      if (!c.email || existingEmails.has(c.email)) return;
+      if (c.courses && c.courses.has(courseName)) {
+        // Añadir como "similar" con sharedCourses = [courseName]
+        _smartState.similar.push({ ...c, sharedCourses: [courseName], score: 0.5 });
+        existingEmails.add(c.email);
+      }
+    });
+  });
+}
+
 function _smartUpdateCounters() {
   const selCount = _smartState.selectedEmails.size;
   const badge = $("#emailCountBadge");
@@ -4162,6 +4309,19 @@ function _smartRenderBanner(rows) {
   const moreCount = selRows.length > 4
     ? `<span style="font-size:12px;opacity:.7">+${selRows.length - 4} más</span>` : "";
 
+  // Banner extra: modo prospección
+  const prospBanner = _smartState.prospectionMode ? `
+    <div style="margin-bottom:12px;padding:10px 14px;background:rgba(251,191,36,.1);border:1px solid #fbbf2466;border-radius:8px;font-size:12px">
+      <strong style="color:#fbbf24">🔍 Modo Prospección</strong>
+      <span style="color:var(--muted);margin-left:6px">El curso "<strong>${esc(_smartState.prospectionQuery)}</strong>" no existe aún en tu catálogo.</span><br>
+      <span style="color:var(--muted)">Estos son <strong style="color:#fbbf24">${selCount} prospectos potenciales</strong> basados en ${_smartState.prospectionBaseCourses.length} cursos similares de tu plataforma.</span>
+      <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+        ${_smartState.prospectionBaseCourses.map(c =>
+          `<span style="background:#fbbf2420;border:1px solid #fbbf2444;border-radius:12px;padding:2px 8px;font-size:11px;color:#fbbf24">${esc(c.name.length > 35 ? c.name.slice(0,35)+"…" : c.name)}</span>`
+        ).join("")}
+      </div>
+    </div>` : "";
+
   let banner = $("#smartSelectedBanner");
   if (!banner) {
     banner = document.createElement("div");
@@ -4170,6 +4330,7 @@ function _smartRenderBanner(rows) {
   }
   banner.innerHTML = `
     <div style="margin-top:16px;padding:14px 16px;background:linear-gradient(135deg,rgba(0,146,255,.15),rgba(22,163,74,.12));border:1px solid #16a34a55;border-radius:10px">
+      ${prospBanner}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <span style="font-size:18px">✅</span>
         <span class="smart-banner-count" style="font-weight:700;font-size:14px;color:#4ade80">${selCount} destinatarios seleccionados</span>
@@ -4193,6 +4354,7 @@ function _smartRenderBanner(rows) {
         </button>
       </div>
     </div>`;
+}
 }
 
 // ── Preview HTML real en iframe ───────────────────────────────────
