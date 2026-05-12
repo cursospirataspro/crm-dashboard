@@ -910,15 +910,11 @@ function renderOportunidades() {
   const { pendingLeads, cancelledLeads, inactiveLeads, upsellLeads } = opoLeads();
   const avgTicket = metrics(state.filtered).avg || 40;
 
-  // KPIs — usa #emKpis (nuevo HTML Email Marketing)
-  const emKpisEl = $('#emKpis');
-  if (!emKpisEl) return;
-
   const totalPotential = pendingLeads.reduce((s,l) => s+l.value, 0)
     + cancelledLeads.reduce((s,l) => s+l.value, 0)
     + (inactiveLeads.length + upsellLeads.length) * avgTicket;
 
-  emKpisEl.innerHTML = [
+  const kpisHtml = [
     ['🔥', pendingLeads.length, 'Pagos pendientes', fmtMoney(pendingLeads.reduce((s,l)=>s+l.value,0))],
     ['🛒', cancelledLeads.length, 'Carritos perdidos', fmtMoney(cancelledLeads.reduce((s,l)=>s+l.value,0))],
     ['😴', inactiveLeads.length, 'Inactivos a reactivar', fmtMoney(inactiveLeads.length * avgTicket)],
@@ -935,8 +931,32 @@ function renderOportunidades() {
      </div>`
   ).join('');
 
-  restoreBrevoConfig();
-  renderCampaignHistory();
+  // Soporta HTML nuevo (#emKpis) y HTML viejo (#opoKpis)
+  const emKpisEl = $('#emKpis');
+  const opoKpisEl = $('#opoKpis');
+
+  if (emKpisEl) {
+    // HTML nuevo — Email Marketing
+    emKpisEl.innerHTML = kpisHtml;
+    restoreBrevoConfig();
+    renderCampaignHistory();
+  } else if (opoKpisEl) {
+    // HTML viejo — fallback con tabs
+    opoKpisEl.innerHTML = kpisHtml;
+    if (!$('#view-oportunidades').dataset.tabsInit) {
+      $('#view-oportunidades').dataset.tabsInit = '1';
+      $('#view-oportunidades').querySelectorAll('.opo-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          $('#view-oportunidades').querySelectorAll('.opo-tab').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          OPO_STATE.tab = btn.dataset.opotab;
+          opoRenderList();
+        });
+      });
+      $('#opoExportBtn')?.addEventListener('click', opoExportCSV);
+    }
+    opoRenderList();
+  }
 }
 
 function opoRenderList() {
