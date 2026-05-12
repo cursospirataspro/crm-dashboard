@@ -1233,6 +1233,20 @@ pre { font-size: 13px; line-height: 1.6; }
   transition: border-color .18s;
 }
 .sf-input:focus { border-color: rgba(239,35,60,.6); }
+select.sf-input option,
+.sf-select option,
+select option,
+.currency-select option {
+  background: #1e2235;
+  color: #e2e8f0;
+}
+.app.light-mode select.sf-input option,
+.app.light-mode .sf-select option,
+.app.light-mode select option,
+.app.light-mode .currency-select option {
+  background: #f8faff;
+  color: #0f172a;
+}
 .sf-toggle-pass {
   position: absolute;
   right: 10px; bottom: 9px;
