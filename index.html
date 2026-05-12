@@ -463,32 +463,128 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
       <article class="panel" style="margin-bottom:14px">
         <div class="panel-head">
           <div><p class="eyebrow">Nueva campaña</p><h2>📧 Compositor de email</h2></div>
-          <span id="emailCountBadge" class="badge">0 destinatarios</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span id="brevoQuotaBar" style="font-size:12px;color:var(--muted)">Cargando cuota...</span>
+            <span id="emailCountBadge" class="badge">0 destinatarios</span>
+          </div>
         </div>
         <div class="email-compose">
 
-          <!-- Segmento -->
-          <label class="sf-label">Segmento destinatario
-            <select id="emailSegment" class="sf-input">
-              <option value="all">👥 Todos los clientes</option>
-              <option value="inactive">😴 Inactivos (sin compra +90 días)</option>
-              <option value="vip">⭐ Clientes VIP (top 10% ingresos)</option>
-              <option value="risk">⚠ En riesgo (solo 1 compra)</option>
-              <option value="upsell">🚀 Potencial upsell (1 curso, ticket bajo)</option>
+          <!-- Fila 1: Segmento + Filtros avanzados -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <label class="sf-label" style="flex:2;min-width:200px">Segmento destinatario
+              <select id="emailSegment" class="sf-input">
+                <option value="all">👥 Todos los clientes</option>
+                <option value="inactive">😴 Inactivos (sin compra +90 días)</option>
+                <option value="vip">⭐ Clientes VIP (top 10% ingresos)</option>
+                <option value="risk">⚠ En riesgo (solo 1 compra)</option>
+                <option value="upsell">🚀 Potencial upsell (1 curso, ticket bajo)</option>
+                <option value="country">🌍 Por país</option>
+                <option value="ticket">💰 Por ticket mínimo</option>
+                <option value="course">🎓 Por curso comprado</option>
+              </select>
+            </label>
+            <!-- Filtro país (visible cuando segmento=country) -->
+            <label class="sf-label sf-filter-country" id="filterCountryWrap" style="flex:1;min-width:150px;display:none">País
+              <select id="filterCountry" class="sf-input"></select>
+            </label>
+            <!-- Filtro ticket mínimo -->
+            <label class="sf-label sf-filter-ticket" id="filterTicketWrap" style="flex:1;min-width:140px;display:none">Ticket mínimo ($)
+              <input id="filterTicket" type="number" class="sf-input" value="50" min="0" step="10">
+            </label>
+            <!-- Filtro curso -->
+            <label class="sf-label sf-filter-course" id="filterCourseWrap" style="flex:1;min-width:200px;display:none">Curso comprado
+              <select id="filterCourse" class="sf-input"></select>
+            </label>
+          </div>
+
+          <!-- Excluir ya convertidos + mejor horario -->
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:-4px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer">
+              <input id="excludeConverted" type="checkbox" style="accent-color:var(--accent)">
+              Excluir clientes que ya compraron recientemente
+            </label>
+            <span id="bestHourTip" style="font-size:12px;color:var(--accent);display:none"></span>
+          </div>
+
+          <!-- Plantillas -->
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">📄 Plantillas:</span>
+            <select id="templateSelect" class="sf-input" style="flex:1;min-width:180px;max-width:280px;margin-top:0;font-size:12px">
+              <option value="">— Seleccionar plantilla guardada —</option>
             </select>
+            <button id="templateLoadBtn" class="btn ghost" style="font-size:12px;padding:6px 11px">📂 Cargar</button>
+            <button id="templateSaveBtn" class="btn ghost" style="font-size:12px;padding:6px 11px">💾 Guardar actual</button>
+            <button id="templateDeleteBtn" class="btn ghost" style="font-size:12px;padding:6px 11px;color:var(--danger)">🗑</button>
+          </div>
+
+          <!-- Imagen de cabecera -->
+          <label class="sf-label">
+            🖼 Imagen de cabecera (URL pública — opcional)
+            <input id="emailHeaderImage" type="url" class="sf-input" placeholder="https://tusitio.com/imagen.jpg">
           </label>
 
-          <!-- Asunto -->
-          <label class="sf-label">Asunto del email
+          <!-- Asunto + contador caracteres -->
+          <label class="sf-label">
+            Asunto del email
+            <small style="color:var(--muted);font-weight:400;margin-left:6px">Usa <code style="background:var(--card2);padding:1px 5px;border-radius:3px">{nombre}</code></small>
+            <span id="subjectCharCount" style="float:right;font-size:11px;color:var(--muted);margin-top:2px">0 / 60</span>
             <input id="emailSubject" type="text" class="sf-input" placeholder="Ej: 🎓 Tenemos algo especial para ti, {nombre}">
           </label>
 
-          <!-- Cuerpo -->
+          <!-- Modo HTML toggle + cuerpo -->
           <label class="sf-label">
             Cuerpo del mensaje
-            <small style="color:var(--muted);font-weight:400;margin-left:6px">Usa <code style="background:var(--card2);padding:1px 5px;border-radius:3px">{nombre}</code> para personalizar</small>
+            <small style="color:var(--muted);font-weight:400;margin-left:6px">Usa <code style="background:var(--card2);padding:1px 5px;border-radius:3px">{nombre}</code></small>
+            <span id="htmlModeToggle" style="float:right;font-size:11px;cursor:pointer;color:var(--accent)">&lt;/&gt; Modo HTML</span>
             <textarea id="emailBody" class="sf-input" rows="8" placeholder="Hola {nombre},&#10;&#10;Queremos contarte que tenemos algo especial preparado para ti...&#10;&#10;[Tu mensaje aquí]&#10;&#10;Saludos,&#10;El equipo de Cursos Piratas Pro"></textarea>
           </label>
+
+          <!-- Barra de formato (modo visual) -->
+          <div id="formatBar" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:-6px">
+            <button class="btn ghost fmt-btn" data-fmt="bold" style="font-size:12px;padding:4px 10px;font-weight:700">B</button>
+            <button class="btn ghost fmt-btn" data-fmt="italic" style="font-size:12px;padding:4px 10px;font-style:italic">I</button>
+            <button class="btn ghost fmt-btn" data-fmt="link" style="font-size:12px;padding:4px 10px">🔗 Link</button>
+            <button class="btn ghost fmt-btn" data-fmt="h2" style="font-size:12px;padding:4px 10px">H2</button>
+            <button class="btn ghost fmt-btn" data-fmt="hr" style="font-size:12px;padding:4px 10px">— separador</button>
+          </div>
+
+          <!-- CTA Button -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label class="sf-label" style="flex:2;min-width:200px">
+              🔘 Botón CTA — Texto (opcional)
+              <input id="ctaText" type="text" class="sf-input" placeholder="Ej: Ver curso ahora →">
+            </label>
+            <label class="sf-label" style="flex:2;min-width:200px">
+              URL del botón CTA
+              <input id="ctaUrl" type="url" class="sf-input" placeholder="https://cursospirataspro.com/curso">
+            </label>
+          </div>
+
+          <!-- Footer legal -->
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer;margin-top:2px">
+            <input id="includeFooter" type="checkbox" checked style="accent-color:var(--accent)">
+            Incluir footer legal automático (dirección + link de baja)
+          </label>
+
+          <!-- Delay entre envíos -->
+          <label class="sf-label" style="max-width:280px">
+            ⏱ Pausa entre envíos (ms)
+            <input id="sendDelay" type="number" class="sf-input" value="400" min="0" max="5000" step="100">
+          </label>
+
+          <!-- Test A/B -->
+          <div style="padding:10px 14px;background:var(--card2);border-radius:10px;border:1px solid var(--line)">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:600">
+              <input id="enableAB" type="checkbox" style="accent-color:var(--accent)">
+              🧪 Test A/B — probar 2 versiones del asunto
+            </label>
+            <div id="abPanel" style="display:none;margin-top:10px">
+              <label class="sf-label">Asunto versión B (se envía al 50% del segmento)
+                <input id="emailSubjectB" type="text" class="sf-input" placeholder="Versión alternativa del asunto...">
+              </label>
+            </div>
+          </div>
 
           <!-- Botones de acción -->
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
@@ -510,8 +606,14 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <div id="brevoProgressLog" style="font-size:12px;color:var(--muted);max-height:140px;overflow-y:auto;line-height:2"></div>
           </div>
 
-          <!-- Vista previa del email -->
-          <div id="emailPreviewBox" class="email-preview hidden" style="margin-top:14px"></div>
+          <!-- Vista previa del email (HTML real) -->
+          <div id="emailPreviewBox" style="display:none;margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+            <div style="background:var(--card2);padding:8px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between">
+              <span>Vista previa — como se verá en el inbox</span>
+              <span id="closePreviewBtn" style="cursor:pointer;color:var(--accent)">✕ Cerrar</span>
+            </div>
+            <iframe id="emailPreviewFrame" style="width:100%;height:500px;border:none;background:#fff"></iframe>
+          </div>
 
         </div>
       </article>
@@ -1187,6 +1289,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=33"></script>
+<script src="assets/app.js?v=34"></script>
 </body>
 </html>

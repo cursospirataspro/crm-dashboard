@@ -992,10 +992,16 @@ function renderOportunidades() {
 }
 
 function updateEmailCountBadge() {
-  const seg = $('#emailSegment')?.value || 'all';
-  const count = getEmailRecipients(seg).length;
+  const seg   = $('#emailSegment')?.value || 'all';
+  const excl  = $('#excludeConverted')?.checked ?? false;
+  const unsub = getUnsubscribeList();
+  const count = getEmailRecipients(seg, excl).filter(r => !unsub.includes(r.email)).length;
   const badge = $('#emailCountBadge');
   if (badge) badge.textContent = count + ' destinatarios';
+  // Mostrar/ocultar filtros avanzados según segmento
+  if ($('#filterCountryWrap')) $('#filterCountryWrap').style.display = seg === 'country' ? '' : 'none';
+  if ($('#filterTicketWrap'))  $('#filterTicketWrap').style.display  = seg === 'ticket'  ? '' : 'none';
+  if ($('#filterCourseWrap'))  $('#filterCourseWrap').style.display  = seg === 'course'  ? '' : 'none';
 }
 
 function opoRenderList() {
@@ -2688,7 +2694,9 @@ function bind() {
 
   // ── Email marketing ──
   $("#emailSegment")?.addEventListener("change", renderEmailMarketing);
-  $("#emailPreviewBtn")?.addEventListener("click", previewEmail);
+  $("#emailPreviewBtn")?.addEventListener("click", () => {
+    renderEmailPreview();
+  });
   $("#emailExportBtn")?.addEventListener("click", exportEmailList);
   $("#emailSendBtn")?.addEventListener("click", sendEmailMailto);
 
@@ -2713,8 +2721,82 @@ function bind() {
   $("#subSearch")?.addEventListener("input", renderSuscripciones);
   $("#subFilter")?.addEventListener("change", renderSuscripciones);
 
-  // ── Email Marketing: actualizar badge al cambiar segmento ──
+  // ── Email Marketing: actualizar badge al cambiar segmento/filtros ──
   $("#emailSegment")?.addEventListener("change", updateEmailCountBadge);
+  $("#excludeConverted")?.addEventListener("change", updateEmailCountBadge);
+  $("#filterCountry")?.addEventListener("change", updateEmailCountBadge);
+  $("#filterTicket")?.addEventListener("input", updateEmailCountBadge);
+  $("#filterCourse")?.addEventListener("change", updateEmailCountBadge);
+
+  // ── Contador de caracteres del asunto ──
+  $("#emailSubject")?.addEventListener("input", updateSubjectCharCount);
+
+  // ── Modo HTML toggle ──
+  $("#htmlModeToggle")?.addEventListener("click", () => {
+    const body = $("#emailBody");
+    if (!body) return;
+    const isHtml = body.dataset.mode === "html";
+    body.dataset.mode = isHtml ? "text" : "html";
+    body.style.fontFamily = isHtml ? "" : "monospace";
+    body.style.fontSize   = isHtml ? "" : "12px";
+    $("#htmlModeToggle").textContent = isHtml ? "</> Modo HTML" : "📝 Modo texto";
+  });
+
+  // ── Botones de formato ──
+  document.querySelectorAll(".fmt-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const fmt  = btn.dataset.fmt;
+      const area = $("#emailBody");
+      if (!area) return;
+      const start = area.selectionStart, end = area.selectionEnd;
+      const sel   = area.value.substring(start, end);
+      let ins = sel;
+      if (fmt === "bold")   ins = `<strong>${sel}</strong>`;
+      if (fmt === "italic") ins = `<em>${sel}</em>`;
+      if (fmt === "h2")     ins = `\n<h2>${sel}</h2>\n`;
+      if (fmt === "hr")     ins = `\n<hr>\n`;
+      if (fmt === "link") {
+        const url = prompt("URL del enlace:");
+        if (!url) return;
+        ins = `<a href="${url}">${sel || url}</a>`;
+      }
+      area.value = area.value.substring(0, start) + ins + area.value.substring(end);
+    });
+  });
+
+  // ── Test A/B toggle ──
+  $("#enableAB")?.addEventListener("change", () => {
+    const panel = $("#abPanel");
+    if (panel) panel.style.display = $("#enableAB").checked ? "block" : "none";
+  });
+
+  // ── Plantillas ──
+  $("#templateSaveBtn")?.addEventListener("click", () => {
+    const name = prompt("Nombre de la plantilla:");
+    if (!name?.trim()) return;
+    saveTemplate(name.trim(), {
+      subject:     $("#emailSubject")?.value     || "",
+      body:        $("#emailBody")?.value        || "",
+      headerImage: $("#emailHeaderImage")?.value || "",
+      ctaText:     $("#ctaText")?.value          || "",
+      ctaUrl:      $("#ctaUrl")?.value           || "",
+    });
+    toast(`💾 Plantilla "${name}" guardada`, "success");
+  });
+  $("#templateLoadBtn")?.addEventListener("click", () => {
+    const name = $("#templateSelect")?.value;
+    if (name) loadTemplate(name);
+  });
+  $("#templateDeleteBtn")?.addEventListener("click", () => {
+    const name = $("#templateSelect")?.value;
+    if (name && confirm(`¿Eliminar plantilla "${name}"?`)) deleteTemplate(name);
+  });
+
+  // ── Cerrar vista previa ──
+  $("#closePreviewBtn")?.addEventListener("click", () => {
+    const box = $("#emailPreviewBox");
+    if (box) box.style.display = "none";
+  });
 
   // ── Correo de prueba ──
   $("#testEmailSendBtn")?.addEventListener("click", sendTestEmail);
@@ -3472,8 +3554,16 @@ async function testBrevoConnection() {
         headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken }
       });
       const data = await res.json();
-      if (res.ok && data.success) toast(`✅ Brevo OK — ${data.account || "conectado"}`, "success");
-      else toast(`❌ Error: ${data.message || res.status}`, "error");
+      if (res.ok && data.success) {
+        const left  = data.creditsLeft  ?? "?";
+        const total = data.credits      ?? "?";
+        const used  = data.creditsUsed  ?? "?";
+        const quota = $("#brevoQuotaBar");
+        if (quota) quota.textContent = `📩 Cuota Brevo: ${used} enviados / ${total} — disponibles: ${left}`;
+        toast(`✅ Brevo OK — ${data.account || "conectado"} | ${left} créditos disponibles`, "success");
+      } else {
+        toast(`❌ Error: ${data.message || res.status}`, "error");
+      }
     } else {
       const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
       if (!b?.key) { toast("⚠ Configura tu API Key primero", "warning"); return; }
@@ -3491,13 +3581,69 @@ async function testBrevoConnection() {
   }
 }
 
-async function sendViaBrevo() {
-  const segment = $("#emailSegment")?.value || "all";
-  const subject = $("#emailSubject")?.value.trim();
-  const body    = $("#emailBody")?.value.trim();
-  if (!subject || !body) { toast("⚠ Escribe el asunto y el cuerpo del mensaje", "warning"); return; }
+// ── Construye el HTML completo del email ──────────────────────────
+function buildEmailHtml({ name, bodyText, headerImage, ctaText, ctaUrl, includeFooter }) {
+  const bodyHtml = bodyText
+    .replace(/\{nombre\}/gi, name).replace(/\{name\}/gi, name)
+    .replace(/\n/g, "<br>");
+  const imgBlock = headerImage
+    ? `<img src="${headerImage}" alt="Banner" style="width:100%;max-height:280px;object-fit:cover;display:block;border-radius:8px 8px 0 0;">`
+    : "";
+  const ctaBlock = (ctaText && ctaUrl)
+    ? `<div style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0092ff;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:700">${ctaText}</a></div>`
+    : "";
+  const unsub = getUnsubscribeLink(name);
+  const footerBlock = includeFooter
+    ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center">
+        Cursospirataspro.com · Todos los derechos reservados.<br>
+        <a href="${unsub}" style="color:#9ca3af">Dar de baja</a> de esta lista de correos.
+       </div>`
+    : "";
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 16px">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+<tr><td>${imgBlock}</td></tr>
+<tr><td style="padding:32px 36px;font-size:15px;color:#1f2937;line-height:1.65">${bodyHtml}${ctaBlock}${footerBlock}</td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
 
-  const recipients = getEmailRecipients(segment);
+// ── Enlace de baja (se registra en lista local) ───────────────────
+function getUnsubscribeLink(name) {
+  return `https://cursospirataspro.com/baja?ref=${encodeURIComponent(name)}`;
+}
+
+// ── Lista de bajas (localStorage) ────────────────────────────────
+function getUnsubscribeList() {
+  try { return JSON.parse(localStorage.getItem("crm_unsubscribe") || "[]"); } catch(e) { return []; }
+}
+function addToUnsubscribeList(email) {
+  const list = getUnsubscribeList();
+  if (!list.includes(email)) {
+    list.push(email);
+    localStorage.setItem("crm_unsubscribe", JSON.stringify(list));
+  }
+}
+
+// ── Envío principal via Brevo ─────────────────────────────────────
+async function sendViaBrevo() {
+  const segment      = $("#emailSegment")?.value || "all";
+  const subject      = $("#emailSubject")?.value.trim();
+  const subjectB     = $("#emailSubjectB")?.value.trim();
+  const bodyText     = $("#emailBody")?.value.trim();
+  const headerImage  = $("#emailHeaderImage")?.value.trim();
+  const ctaText      = $("#ctaText")?.value.trim();
+  const ctaUrl       = $("#ctaUrl")?.value.trim();
+  const includeFooter= $("#includeFooter")?.checked ?? true;
+  const delayMs      = parseInt($("#sendDelay")?.value || "400", 10) || 400;
+  const enableAB     = $("#enableAB")?.checked && subjectB;
+  const excludeConv  = $("#excludeConverted")?.checked ?? false;
+
+  if (!subject || !bodyText) { toast("⚠ Escribe el asunto y el cuerpo del mensaje", "warning"); return; }
+
+  const recipients = getEmailRecipients(segment, excludeConv).filter(r => !getUnsubscribeList().includes(r.email));
   if (!recipients.length) { toast("⚠ No hay destinatarios para este segmento", "warning"); return; }
 
   const progressWrap = $("#brevoProgressWrap");
@@ -3511,16 +3657,19 @@ async function sendViaBrevo() {
   let sent = 0, failed = 0;
   const total = recipients.length;
 
-  for (const r of recipients) {
-    const personalSubject = subject.replace(/\{nombre\}/gi, r.name).replace(/\{name\}/gi, r.name);
-    const personalBody    = body.replace(/\{nombre\}/gi, r.name).replace(/\{name\}/gi, r.name);
+  for (let i = 0; i < recipients.length; i++) {
+    const r = recipients[i];
+    // A/B: alternar asunto
+    const chosenSubject = enableAB && i % 2 === 1 ? subjectB : subject;
+    const personalSubject = chosenSubject.replace(/\{nombre\}/gi, r.name).replace(/\{name\}/gi, r.name);
+    const htmlContent = buildEmailHtml({ name: r.name, bodyText, headerImage, ctaText, ctaUrl, includeFooter });
     try {
       let res, data;
       if (CONFIG.mode === "api") {
         res  = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
-          body: JSON.stringify({ to_email: r.email, to_name: r.name, subject: personalSubject, html_content: personalBody.replace(/\n/g,"<br>") })
+          body: JSON.stringify({ to_email: r.email, to_name: r.name, subject: personalSubject, html_content: htmlContent })
         });
         data = await res.json();
       } else {
@@ -3529,7 +3678,7 @@ async function sendViaBrevo() {
         res  = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: { "Content-Type": "application/json", "api-key": b.key },
-          body: JSON.stringify({ sender: { name: b.name, email: b.email }, to: [{ email: r.email, name: r.name }], subject: personalSubject, htmlContent: personalBody.replace(/\n/g,"<br>") })
+          body: JSON.stringify({ sender: { name: b.name, email: b.email }, to: [{ email: r.email, name: r.name }], subject: personalSubject, htmlContent })
         });
         data = await res.json();
       }
@@ -3543,6 +3692,7 @@ async function sendViaBrevo() {
     if (progressBar) progressBar.style.width = pct + "%";
     if (progressPct) progressPct.textContent  = pct + "%";
     if (progressLbl) progressLbl.textContent  = `Enviando ${sent + failed} de ${total}...`;
+    if (delayMs > 0 && i < recipients.length - 1) await new Promise(r => setTimeout(r, delayMs));
   }
 
   saveCampaignToHistory({ segment, subject, total, sent, failed, date: new Date().toISOString() });
@@ -3551,16 +3701,142 @@ async function sendViaBrevo() {
   renderCampaignHistory();
 }
 
-function getEmailRecipients(segment) {
-  const cm = Object.values(customerMap(state.filtered));
+// ── Segmentación avanzada ─────────────────────────────────────────
+function getEmailRecipients(segment, excludeConverted = false) {
+  const cm  = Object.values(customerMap(state.filtered));
   const now = Date.now();
-  const vipThreshold = cm.sort((a,b)=>b.revenue-a.revenue).slice(0, Math.ceil(cm.length*0.1)).map(c=>c.email||c.name);
+  const sortedRevDesc = [...cm].sort((a, b) => b.revenue - a.revenue);
+  const vipEmails = sortedRevDesc.slice(0, Math.ceil(cm.length * 0.1)).map(c => c.email || c.name);
+
   let list = cm;
-  if (segment === "inactive") list = cm.filter(c => new Date(c.last) < new Date(now - 90*864e5));
-  else if (segment === "vip")  list = cm.filter(c => vipThreshold.includes(c.email||c.name));
-  else if (segment === "risk") list = cm.filter(c => c.orders === 1);
+  if (segment === "inactive")    list = cm.filter(c => new Date(c.last) < new Date(now - 90 * 864e5));
+  else if (segment === "vip")    list = cm.filter(c => vipEmails.includes(c.email || c.name));
+  else if (segment === "risk")   list = cm.filter(c => c.orders === 1);
   else if (segment === "upsell") list = cm.filter(c => c.orders === 1 && c.revenue < 100);
+  else if (segment === "country") {
+    const country = $("#filterCountry")?.value;
+    if (country) list = cm.filter(c => c.country === country || c.billing_country === country);
+  }
+  else if (segment === "ticket") {
+    const minTicket = parseFloat($("#filterTicket")?.value || "0");
+    list = cm.filter(c => c.orders > 0 && (c.revenue / c.orders) >= minTicket);
+  }
+  else if (segment === "course") {
+    const course = $("#filterCourse")?.value;
+    if (course) {
+      list = state.filtered.filter(o => (o.items || []).some(i => (i.name || "").toLowerCase().includes(course.toLowerCase())))
+        .map(o => o.billing_email || o.customer_email)
+        .filter(Boolean)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .map(email => cm.find(c => c.email === email))
+        .filter(Boolean);
+    }
+  }
+
+  // Excluir convertidos recientemente (compraron en últimos 30 días)
+  if (excludeConverted) {
+    const recent = new Date(now - 30 * 864e5);
+    list = list.filter(c => !c.last || new Date(c.last) < recent);
+  }
+
   return list.filter(c => c.email).map(c => ({ email: c.email, name: c.name || c.email }));
+}
+
+// ── Plantillas (localStorage) ─────────────────────────────────────
+function getTemplates() {
+  try { return JSON.parse(localStorage.getItem("crm_em_templates") || "{}"); } catch(e) { return {}; }
+}
+function saveTemplate(name, tpl) {
+  const templates = getTemplates();
+  templates[name] = tpl;
+  localStorage.setItem("crm_em_templates", JSON.stringify(templates));
+  renderTemplateSelect();
+}
+function loadTemplate(name) {
+  const templates = getTemplates();
+  const tpl = templates[name];
+  if (!tpl) return;
+  if ($("#emailSubject"))      $("#emailSubject").value      = tpl.subject      || "";
+  if ($("#emailBody"))         $("#emailBody").value         = tpl.body         || "";
+  if ($("#emailHeaderImage"))  $("#emailHeaderImage").value  = tpl.headerImage  || "";
+  if ($("#ctaText"))           $("#ctaText").value           = tpl.ctaText      || "";
+  if ($("#ctaUrl"))            $("#ctaUrl").value            = tpl.ctaUrl       || "";
+  updateSubjectCharCount();
+  toast(`📄 Plantilla "${name}" cargada`, "success");
+}
+function deleteTemplate(name) {
+  const templates = getTemplates();
+  delete templates[name];
+  localStorage.setItem("crm_em_templates", JSON.stringify(templates));
+  renderTemplateSelect();
+  toast(`🗑 Plantilla "${name}" eliminada`, "success");
+}
+function renderTemplateSelect() {
+  const sel = $("#templateSelect");
+  if (!sel) return;
+  const templates = getTemplates();
+  const names = Object.keys(templates);
+  sel.innerHTML = '<option value="">— Seleccionar plantilla guardada —</option>' +
+    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+}
+
+// ── Contador de caracteres del asunto ────────────────────────────
+function updateSubjectCharCount() {
+  const el = $("#emailSubject");
+  const counter = $("#subjectCharCount");
+  if (!el || !counter) return;
+  const len = el.value.length;
+  counter.textContent = `${len} / 60`;
+  counter.style.color = len > 60 ? "var(--danger)" : len > 45 ? "var(--warn)" : "var(--muted)";
+}
+
+// ── Mejor horario de envío ────────────────────────────────────────
+function renderBestSendHour() {
+  const tip = $("#bestHourTip");
+  if (!tip || !state.filtered?.length) return;
+  const hourCounts = Array(24).fill(0);
+  state.filtered.forEach(o => {
+    const d = new Date(o.date_created || o.date_paid || o.created_at || "");
+    if (!isNaN(d)) hourCounts[d.getHours()]++;
+  });
+  const bestHour = hourCounts.indexOf(Math.max(...hourCounts));
+  const h = bestHour.toString().padStart(2, "0");
+  tip.textContent = `🕐 Mejor hora de envío: ${h}:00 (máxima actividad)`;
+  tip.style.display = "inline";
+}
+
+// ── Poblar selects de filtros avanzados ───────────────────────────
+function populateAdvancedFilters() {
+  // Países
+  const countrySel = $("#filterCountry");
+  if (countrySel) {
+    const countries = [...new Set(state.filtered.map(o => o.billing?.country || o.billing_country).filter(Boolean))].sort();
+    countrySel.innerHTML = countries.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  }
+  // Cursos
+  const courseSel = $("#filterCourse");
+  if (courseSel) {
+    const courses = [...new Set(state.filtered.flatMap(o => (o.line_items || o.items || []).map(i => i.name)).filter(Boolean))].sort();
+    courseSel.innerHTML = courses.slice(0, 100).map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  }
+}
+
+// ── Preview HTML real en iframe ───────────────────────────────────
+function renderEmailPreview() {
+  const frame = $("#emailPreviewFrame");
+  const box   = $("#emailPreviewBox");
+  if (!frame || !box) return;
+  const name        = "Cliente";
+  const subject     = $("#emailSubject")?.value.trim() || "(sin asunto)";
+  const bodyText    = $("#emailBody")?.value.trim()    || "";
+  const headerImage = $("#emailHeaderImage")?.value.trim();
+  const ctaText     = $("#ctaText")?.value.trim();
+  const ctaUrl      = $("#ctaUrl")?.value.trim();
+  const includeFooter = $("#includeFooter")?.checked ?? true;
+  const html = buildEmailHtml({ name, bodyText, headerImage, ctaText, ctaUrl, includeFooter });
+  frame.srcdoc = html;
+  box.style.display = "block";
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function saveCampaignToHistory(campaign) {
@@ -4411,25 +4687,20 @@ function getEmailSegment(key) {
 }
 
 function renderEmailMarketing() {
-  const seg     = $("#emailSegment")?.value || "all";
-  const list    = getEmailSegment(seg);
-  const badge   = $("#emailCountBadge");
+  const seg  = $("#emailSegment")?.value || "all";
+  const unsub = getUnsubscribeList();
+  const excl  = $("#excludeConverted")?.checked ?? false;
+  const list = getEmailRecipients(seg, excl).filter(r => !unsub.includes(r.email));
+  const badge = $("#emailCountBadge");
   if (badge) badge.textContent = `${list.length} destinatarios`;
+  populateAdvancedFilters();
+  renderTemplateSelect();
+  renderBestSendHour();
+  updateSubjectCharCount();
 }
 
 function previewEmail() {
-  const box     = $("#emailPreviewBox");
-  const subject = $("#emailSubject")?.value || "(sin asunto)";
-  const body    = $("#emailBody")?.value    || "(sin cuerpo)";
-  const seg     = $("#emailSegment")?.value || "all";
-  const list    = getEmailSegment(seg);
-  const sample  = list[0];
-  if (!box) return;
-  const resolved = body.replace(/{nombre}/g, sample?.name || "Cliente");
-  box.innerHTML = `<strong>Para:</strong> ${list.length} destinatarios<br>
-<strong>Asunto:</strong> ${esc(subject)}<hr style="border-color:var(--line);margin:8px 0">
-${esc(resolved)}`;
-  box.classList.remove("hidden");
+  renderEmailPreview();
 }
 
 function exportEmailList() {

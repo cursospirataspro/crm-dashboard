@@ -442,9 +442,12 @@ function cpp_brevo_test( WP_REST_Request $request ) {
         return new WP_Error( 'brevo_error', $body['message'] ?? 'Error desconocido', [ 'status' => $code ] );
     }
     return rest_ensure_response( [
-        'success' => true,
-        'account' => $body['email'] ?? '',
-        'plan'    => $body['plan'][0]['type'] ?? '',
+        'success'      => true,
+        'account'      => $body['email'] ?? '',
+        'plan'         => $body['plan'][0]['type'] ?? '',
+        'credits'      => $body['plan'][0]['credits'] ?? 0,
+        'creditsUsed'  => $body['plan'][0]['creditsUsed'] ?? 0,
+        'creditsLeft'  => max(0, ($body['plan'][0]['credits'] ?? 0) - ($body['plan'][0]['creditsUsed'] ?? 0)),
     ] );
 }
 
