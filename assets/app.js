@@ -397,11 +397,19 @@ function customerMap(orders) {
   const map = {};
   orders.forEach(o => {
     const key = o.customer_email || o.customer || o.id;
-    map[key] ??= { name: o.customer || "Cliente", email: o.customer_email || "",
+    // Intentar obtener nombre real del billing o del campo customer
+    const billingName = [o.billing?.first_name, o.billing?.last_name].filter(Boolean).join(" ").trim()
+      || [o.first_name, o.last_name].filter(Boolean).join(" ").trim();
+    const resolvedName = billingName || o.customer || "Cliente";
+    map[key] ??= { name: resolvedName, email: o.customer_email || o.billing?.email || "",
                    revenue: 0, orders: 0, countries: new Set(), courses: new Set(), last: o.date };
+    // Actualizar nombre si el actual es genérico y encontramos uno mejor
+    if ((map[key].name === "Cliente" || !map[key].name) && resolvedName !== "Cliente") {
+      map[key].name = resolvedName;
+    }
     map[key].orders++;
     if (["completed","processing"].includes(statusNorm(o.status))) map[key].revenue += netRev(o);
-    map[key].countries.add(o.country || o.country_code || "");
+    map[key].countries.add(o.country || o.country_code || o.billing?.country || "");
     (o.products||[]).forEach(p => map[key].courses.add(p.name));
     if (new Date(o.date) > new Date(map[key].last)) map[key].last = o.date;
   });
@@ -4019,6 +4027,41 @@ function renderSmartCourseResults() {
     </tr>`).join("");
 
   resultsDiv.style.display = "block";
+
+  // ── Banner de confirmación: destinatarios seleccionados + nombres CRM ──
+  const namePreview = rows.slice(0, 4).map(r => {
+    const hasRealName = r.name && r.name !== r.email && r.name !== "Cliente";
+    return `<span style="background:rgba(255,255,255,.08);border-radius:6px;padding:3px 8px;font-size:12px;white-space:nowrap">
+      ${hasRealName ? `<strong>${esc(r.name)}</strong> <span style="opacity:.6">&lt;${esc(r.email)}&gt;</span>` : `<span style="opacity:.8">${esc(r.email)}</span>`}
+    </span>`;
+  }).join("");
+  const moreCount = rows.length > 4 ? `<span style="font-size:12px;opacity:.7">+${rows.length - 4} más</span>` : "";
+
+  // Insertar/actualizar el banner de confirmación
+  let banner = $("#smartSelectedBanner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "smartSelectedBanner";
+    resultsDiv.appendChild(banner);
+  }
+  banner.innerHTML = `
+    <div style="margin-top:16px;padding:14px 16px;background:linear-gradient(135deg,rgba(0,146,255,.15),rgba(22,163,74,.12));border:1px solid #16a34a55;border-radius:10px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:18px">✅</span>
+        <span style="font-weight:700;font-size:14px;color:#4ade80">${total} destinatarios seleccionados automáticamente</span>
+        <span style="font-size:12px;color:var(--muted)">— nombres capturados del CRM para personalización</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+        ${namePreview}${moreCount}
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">
+        💡 Cada correo se enviará con el nombre real del cliente — usa <code style="background:rgba(255,255,255,.1);padding:1px 6px;border-radius:4px">{nombre}</code> en el asunto y cuerpo del mensaje.
+      </div>
+      <button onclick="document.getElementById('emailSubject')?.scrollIntoView({behavior:'smooth',block:'center'})"
+        style="background:linear-gradient(135deg,#0092ff,#16a34a);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">
+        ✏️ Ir a componer el email →
+      </button>
+    </div>`;
 
   // Actualizar badge de destinatarios
   const badge = $("#emailCountBadge");
