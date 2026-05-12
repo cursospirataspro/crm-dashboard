@@ -28,12 +28,24 @@ add_action( 'before_woocommerce_init', function () {
 // Cabeceras CORS — permite peticiones desde cualquier origen
 // (necesario para abrir el dashboard como archivo local)
 // ─────────────────────────────────────────────────────────────
+// Manejo preflight OPTIONS (debe ir ANTES de rest_api_init)
+add_action( 'init', function () {
+    if ( $_SERVER['REQUEST_METHOD'] === 'OPTIONS' ) {
+        header( 'Access-Control-Allow-Origin: *' );
+        header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
+        header( 'Access-Control-Allow-Headers: X-CPP-CRM-Dashboard-Token, Content-Type, Authorization' );
+        header( 'Access-Control-Max-Age: 86400' );
+        status_header( 200 );
+        exit;
+    }
+} );
+
 add_action( 'rest_api_init', function () {
     remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
     add_filter( 'rest_pre_serve_request', function ( $value ) {
         header( 'Access-Control-Allow-Origin: *' );
-        header( 'Access-Control-Allow-Methods: GET, OPTIONS' );
-        header( 'Access-Control-Allow-Headers: X-CPP-CRM-Dashboard-Token, Content-Type' );
+        header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
+        header( 'Access-Control-Allow-Headers: X-CPP-CRM-Dashboard-Token, Content-Type, Authorization' );
         return $value;
     } );
 }, 15 );
