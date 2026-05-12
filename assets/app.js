@@ -2715,6 +2715,9 @@ function bind() {
 
   // ── Email Marketing: actualizar badge al cambiar segmento ──
   $("#emailSegment")?.addEventListener("change", updateEmailCountBadge);
+
+  // ── Correo de prueba ──
+  $("#testEmailSendBtn")?.addEventListener("click", sendTestEmail);
 }
 
 // =============================================================
@@ -3337,6 +3340,87 @@ function toggleMidnightMode() {
 // =============================================================
 // BREVO EMAIL MARKETING
 // =============================================================
+// =============================================================
+// BREVO EMAIL MARKETING
+// =============================================================
+async function sendTestEmail() {
+  const toEmail  = $("#testEmailTo")?.value.trim();
+  const toName   = $("#testEmailName")?.value.trim() || "Test";
+  const subject  = $("#testEmailSubject")?.value.trim() || "Test CRM Dashboard";
+  const body     = $("#testEmailBody")?.value.trim();
+  const btn      = $("#testEmailSendBtn");
+  const result   = $("#testEmailResult");
+  const statusEl = $("#testEmailStatus");
+
+  if (!toEmail) { toast("⚠ Escribe el email destinatario", "warning"); return; }
+  if (!subject) { toast("⚠ Escribe el asunto", "warning"); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = "⏳ Enviando..."; }
+  if (result) { result.style.display = "none"; }
+
+  try {
+    let res, data;
+    if (CONFIG.mode === "api") {
+      res = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken
+        },
+        body: JSON.stringify({
+          to_email:     toEmail,
+          to_name:      toName,
+          subject:      subject,
+          html_content: body.replace(/\n/g, "<br>")
+        })
+      });
+      data = await res.json();
+    } else {
+      const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
+      if (!b?.key) { toast("⚠ Configura tu API Key de Brevo primero", "warning"); return; }
+      res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "api-key": b.key },
+        body: JSON.stringify({
+          sender:      { name: b.name || "CRM", email: b.email },
+          to:          [{ email: toEmail, name: toName }],
+          subject:     subject,
+          htmlContent: body.replace(/\n/g, "<br>")
+        })
+      });
+      data = await res.json();
+    }
+
+    if (res.ok && (data.success || data.messageId)) {
+      if (result) {
+        result.style.display = "inline";
+        result.style.color   = "var(--good)";
+        result.textContent   = "✅ Correo enviado correctamente a " + toEmail;
+      }
+      if (statusEl) statusEl.textContent = "✅ Último envío OK";
+      toast("✅ Correo de prueba enviado a " + toEmail, "success");
+    } else {
+      const msg = data.message || data.error || res.status;
+      if (result) {
+        result.style.display = "inline";
+        result.style.color   = "var(--bad)";
+        result.textContent   = "❌ Error: " + msg;
+      }
+      if (statusEl) statusEl.textContent = "❌ Error en último envío";
+      toast("❌ Error al enviar: " + msg, "error");
+    }
+  } catch(e) {
+    if (result) {
+      result.style.display = "inline";
+      result.style.color   = "var(--bad)";
+      result.textContent   = "❌ Error de red: " + e.message;
+    }
+    toast("❌ Error de red: " + e.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "🚀 Enviar correo de prueba"; }
+  }
+}
+
 function saveBrevoConfig() {
   const key   = $("#brevoApiKey")?.value.trim()   || "";
   const name  = $("#brevoSenderName")?.value.trim() || "";

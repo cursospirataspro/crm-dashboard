@@ -413,6 +413,40 @@
         </div>
       </article>
 
+      <!-- ── Email de prueba ── -->
+      <article class="panel" style="margin-bottom:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Diagnóstico</p><h2>✉ Enviar correo de prueba</h2></div>
+          <span id="testEmailStatus" style="font-size:12px;color:var(--muted)">Sin enviar</span>
+        </div>
+        <div class="email-compose" style="gap:10px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label class="sf-label" style="flex:1;min-width:200px">Tu nombre
+              <input id="testEmailName" type="text" class="sf-input" placeholder="Ej: Juan Pérez">
+            </label>
+            <label class="sf-label" style="flex:1;min-width:200px">Email destinatario
+              <input id="testEmailTo" type="email" class="sf-input" placeholder="tucorreo@gmail.com">
+            </label>
+          </div>
+          <label class="sf-label">Asunto
+            <input id="testEmailSubject" type="text" class="sf-input" value="✅ Test de conexión — CRM Dashboard">
+          </label>
+          <label class="sf-label">Mensaje
+            <textarea id="testEmailBody" class="sf-input" rows="4">Hola,
+
+Este es un correo de prueba enviado desde el CRM Dashboard para verificar que la integración con Brevo funciona correctamente.
+
+Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
+          </label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button id="testEmailSendBtn" class="btn" style="background:linear-gradient(135deg,#22c55e,#16a34a);font-weight:700">
+              🚀 Enviar correo de prueba
+            </button>
+            <span id="testEmailResult" style="font-size:13px;display:none"></span>
+          </div>
+        </div>
+      </article>
+
       <!-- ── KPIs de oportunidades ── -->
       <div id="emKpis" class="opo-kpis" style="margin-bottom:14px"></div>
 
@@ -1153,6 +1187,6 @@
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=31"></script>
+<script src="assets/app.js?v=32"></script>
 </body>
 </html>
