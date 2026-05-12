@@ -1,15 +1,22 @@
 ﻿// =============================================================
-// CONFIG — Cambiar mode:"api" y completar datos para producción
+// CONFIG — Se carga automáticamente desde localStorage al inicio
 // =============================================================
 let _pushLastOrderIds = new Set();
 let _pushEnabled = false;
 
-const CONFIG = {
-  mode:       "demo",   // "demo" | "api" — se activa al guardar en sección Conexión
-  apiBaseUrl: "",
-  apiToken:   "",
-  currency:   "USD"
-};
+const CONFIG = (function() {
+  const base = { mode: "demo", apiBaseUrl: "", apiToken: "", currency: "USD" };
+  try {
+    const stored = JSON.parse(localStorage.getItem("cpp_crm_config") || "null");
+    if (stored?.url && stored?.token) {
+      base.mode       = "api";
+      base.apiBaseUrl = stored.url;
+      base.apiToken   = stored.token;
+      base.currency   = stored.currency || "USD";
+    }
+  } catch(e) {}
+  return base;
+})();
 
 // Tasas de cambio base vs USD (actualización manual o via API gratuita)
 const FX_RATES = { USD:1, EUR:0.92, PEN:3.77, COP:4020, MXN:17.2, ARS:870 };
