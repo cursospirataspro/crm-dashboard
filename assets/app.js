@@ -2667,6 +2667,623 @@ function bind() {
 }
 
 // =============================================================
+// VIP PANEL — segmentacion visual elite en CRM
+// =============================================================
+function renderVIPPanel() {
+  const grid    = document.getElementById("vipGrid");
+  const badge   = document.getElementById("vipCountBadge");
+  if (!grid) return;
+
+  const allC = Object.values(customerMap(state.filtered));
+  allC.sort((a, b) => b.revenue - a.revenue);
+  const top10pct = Math.max(1, Math.ceil(allC.length * 0.1));
+  const vips = allC.slice(0, top10pct);
+
+  if (badge) badge.textContent = vips.length + " clientes";
+
+  if (!vips.length) {
+    grid.innerHTML = `<p style="color:var(--muted);font-size:13px">Sin datos de clientes VIP en el periodo.</p>`;
+    return;
+  }
+
+  grid.innerHTML = vips.slice(0, 10).map((c, i) => {
+    const initials = c.name.slice(0, 2).toUpperCase();
+    const rfm = rfmScore(c, allC);
+    return `<div class="vip-card" style="cursor:pointer" data-email="${esc(c.email || c.name)}">
+      <div class="vip-rank">#${i + 1}</div>
+      <div class="vip-avatar" style="background:hsl(${(i * 47) % 360},55%,32%)">${esc(initials)}</div>
+      <div class="vip-info">
+        <strong class="vip-name">${esc(c.name)}</strong>
+        <span class="vip-email">${esc(c.email)}</span>
+        <span class="rfm-badge ${rfm.cls}">${rfm.label}</span>
+      </div>
+      <div class="vip-revenue">
+        <strong>${fmtMoney(c.revenue)}</strong>
+        <span>${c.orders} pedido${c.orders !== 1 ? "s" : ""}</span>
+      </div>
+    </div>`;
+  }).join("");
+
+  grid.querySelectorAll(".vip-card").forEach(el => {
+    el.addEventListener("click", () => openCustomerModal(el.dataset.email));
+  });
+}
+
+// =============================================================
+// STRIPE VIEW — panel con pedidos via Stripe
+// =============================================================
+function renderStripeView() {
+  const search = ($("#stripeSearch")?.value || "").trim().toLowerCase();
+  const stripeOrders = state.filtered.filter(o => {
+    const pm = (o.payment_method || "").toLowerCase();
+    return pm.includes("stripe") || pm.includes("card") || pm === "wc_stripe";
+  });
+
+  const filtered = search
+    ? stripeOrders.filter(o =>
+        (o.customer || "").toLowerCase().includes(search) ||
+        (o.customer_email || "").toLowerCase().includes(search) ||
+        (o.products || []).some(p => (p.name || "").toLowerCase().includes(search))
+      )
+    : stripeOrders;
+
+  // KPIs
+  const total  = filtered.reduce((s, o) => s + Number(o.total || 0), 0);
+  const fees   = filtered.reduce((s, o) => s + (Number(o.total || 0) * 0.029 + 0.30), 0);
+  const net    = total - fees;
+  const count  = filtered.length;
+  const avg    = count ? total / count : 0;
+
+  const kpisEl = document.getElementById("stripeKpis");
+  if (kpisEl) kpisEl.innerHTML = [
+    { label: "Ingresos brutos", val: fmtMoney(total), cls: "" },
+    { label: "Comisiones est. (2.9%+0.30)", val: fmtMoney(fees), cls: "style=\"color:var(--bad)\"" },
+    { label: "Ingresos netos est.", val: fmtMoney(net), cls: "style=\"color:var(--good)\"" },
+    { label: "Transacciones", val: count, cls: "" },
+    { label: "Ticket promedio", val: fmtMoney(avg), cls: "" }
+  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
+
+  // Transacciones individuales con curso (ordenadas por fecha desc)
+  const dayBarsEl = document.getElementById("stripeDayBars");
+  if (dayBarsEl) {
+    const txns = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
+    const maxTxn = Math.max(...txns.map(o => Number(o.total || 0)), 1);
+    dayBarsEl.innerHTML = txns.map(o => {
+      const day  = new Date(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
+      const course = (o.products || [])[0]?.name || o.products?.[0] || "Producto";
+      const val  = Number(o.total || 0);
+      const pct  = (val / maxTxn * 100).toFixed(1);
+      return `<div class="stripe-txn-row">
+        <div class="stripe-txn-meta">
+          <span class="stripe-txn-date">${day}</span>
+          <span class="stripe-txn-course">${esc(course)}</span>
+        </div>
+        <div class="pb-track" style="flex:1;min-width:60px"><div class="pb-fill" style="width:${pct}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
+        <span class="pb-val">${fmtMoney(val)}</span>
+      </div>`;
+    }).join("") || `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ventas v&#xED;a Stripe en el periodo.</p>`;
+  }
+
+  // Top productos
+  const byProduct = {};
+  filtered.forEach(o => {
+    (o.products || []).forEach(p => {
+      const name = p.name || "Producto";
+      byProduct[name] = (byProduct[name] || 0) + Number(p.total || p.subtotal || 0);
+    });
+  });
+  const productEntries = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxProd = Math.max(...productEntries.map(e => e[1]), 1);
+  const prodBadge = document.getElementById("stripeProductsBadge");
+  if (prodBadge) prodBadge.textContent = productEntries.length + " cursos";
+  const prodEl = document.getElementById("stripeProductBars");
+  if (prodEl) {
+    prodEl.innerHTML = productEntries.map(([name, v]) =>
+      `<div class="pb-row pb-wide">
+        <span class="pb-label">${esc(name)}</span>
+        <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(v/maxProd*100).toFixed(1)}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
+        <span class="pb-val">${fmtMoney(v)}</span>
+      </div>`
+    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin productos.</p>`;
+  }
+
+  // Tabla transacciones
+  const txnCount = document.getElementById("stripeTxnCount");
+  if (txnCount) txnCount.textContent = filtered.length + " transacciones";
+  const tbody = document.getElementById("stripeTxnBody");
+  if (tbody) {
+    const rows = filtered.slice(0, 200);
+    tbody.innerHTML = rows.map(o => {
+      const gross = Number(o.total || 0);
+      const fee   = gross * 0.029 + 0.30;
+      const net_  = gross - fee;
+      const prod  = (o.products || [])[0]?.name || "—";
+      return `<tr>
+        <td>${fmtDate(o.date)}</td>
+        <td>#${esc(String(o.number || o.id))}</td>
+        <td>${esc(o.customer || "—")}</td>
+        <td>${esc(o.country || o.country_code || "—")}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prod)}</td>
+        <td class="text-right">${fmtMoney(gross)}</td>
+        <td class="text-right" style="color:var(--bad)">-${fmtMoney(fee)}</td>
+        <td class="text-right" style="color:var(--good)">${fmtMoney(net_)}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Sin transacciones Stripe en el periodo.</td></tr>`;
+  }
+}
+
+// =============================================================
+// SUSCRIPCIONES — clientes recurrentes WooCommerce
+// =============================================================
+function buildRecurringCustomers() {
+  const customers = customerMap(state.orders);
+  const now = new Date();
+  return Object.values(customers)
+    .filter(c => c.orders >= 2)
+    .map(c => {
+      const lastDate = new Date(c.last);
+      const daysSince = Math.floor((now - lastDate) / 86400000);
+      const avgInterval = c.orders > 1 ? Math.floor(daysSince / (c.orders - 1)) : 0;
+      let status = "active";
+      if (daysSince > 180) status = "churned";
+      else if (daysSince > 60) status = "atrisk";
+      return { ...c, daysSince, avgInterval, status };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+}
+
+function renderSuscripciones() {
+  const search    = ($("#subSearch")?.value || "").trim().toLowerCase();
+  const filterVal = $("#subFilter")?.value || "all";
+
+  let recurring = buildRecurringCustomers();
+  if (filterVal !== "all") recurring = recurring.filter(c => c.status === filterVal);
+  if (search) recurring = recurring.filter(c =>
+    c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search)
+  );
+
+  const all = buildRecurringCustomers();
+  const active  = all.filter(c => c.status === "active").length;
+  const atrisk  = all.filter(c => c.status === "atrisk").length;
+  const churned = all.filter(c => c.status === "churned").length;
+  const totalMrr = all.filter(c => c.status === "active")
+    .reduce((s, c) => s + (c.revenue / Math.max(c.orders, 1)), 0);
+
+  const badge = document.getElementById("subCountBadge");
+  if (badge) badge.textContent = recurring.length + " clientes";
+
+  const kpisEl = document.getElementById("subKpis");
+  if (kpisEl) kpisEl.innerHTML = [
+    { label: "MRR estimado", val: fmtMoney(totalMrr), cls: "style=\"color:var(--good)\"" },
+    { label: "Activos (&#xFA;lt. 60d)", val: active, cls: "" },
+    { label: "En riesgo (61&#x2013;180d)", val: atrisk, cls: "style=\"color:#f59e0b\"" },
+    { label: "Perdidos (+180d)", val: churned, cls: "style=\"color:var(--bad)\"" },
+    { label: "Total recurrentes", val: all.length, cls: "" }
+  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
+
+  const mrrBadge = document.getElementById("subMrrBadge");
+  if (mrrBadge) mrrBadge.textContent = fmtMoney(totalMrr) + "/mes";
+
+  const mrrByMonth = {};
+  all.filter(c => c.status === "active").forEach(c => {
+    const m = new Date(c.last).toLocaleDateString("es-PE", { month: "short", year: "2-digit" });
+    mrrByMonth[m] = (mrrByMonth[m] || 0) + c.revenue / Math.max(c.orders, 1);
+  });
+  const mrrEntries = Object.entries(mrrByMonth).slice(-12);
+  const maxMrr = Math.max(...mrrEntries.map(e => e[1]), 1);
+  const mrrEl = document.getElementById("subMrrBars");
+  if (mrrEl) {
+    mrrEl.innerHTML = mrrEntries.map(([m, v]) =>
+      `<div class="pb-row">
+        <span class="pb-label">${m}</span>
+        <div class="pb-track"><div class="pb-fill" style="width:${(v/maxMrr*100).toFixed(1)}%;background:linear-gradient(90deg,#22c55e,#4ade80)"></div></div>
+        <span class="pb-val">${fmtMoney(v)}</span>
+      </div>`
+    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos MRR.</p>`;
+  }
+
+  const listEl = document.getElementById("subList");
+  if (listEl) {
+    const statusColor = { active: "var(--good)", atrisk: "#f59e0b", churned: "var(--bad)" };
+    const statusLabel = { active: "Activo", atrisk: "En riesgo", churned: "Perdido" };
+    listEl.innerHTML = recurring.slice(0, 100).map((c, i) => {
+      const initials = c.name.slice(0, 2).toUpperCase();
+      return `<div class="customer" data-email="${esc(c.email || c.name)}" style="cursor:pointer">
+        <div class="avatar" style="min-width:36px;font-size:13px;background:hsl(${(i*47)%360},50%,32%)">${esc(initials)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <h3 style="margin:0">${esc(c.name)}</h3>
+            <span class="badge" style="background:${statusColor[c.status]}20;color:${statusColor[c.status]};border:1px solid ${statusColor[c.status]}40">${statusLabel[c.status]}</span>
+          </div>
+          <p style="margin:2px 0;font-size:12px;color:var(--muted)">${esc(c.email)} &middot; ${c.orders} pedidos &middot; intervalo ~${c.avgInterval}d</p>
+          <p style="margin:2px 0;font-size:12px;color:var(--muted)">&#xDA;ltima compra: ${c.daysSince}d atr&#xE1;s</p>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <strong style="display:block;font-size:15px">${fmtMoney(c.revenue)}</strong>
+          <span style="font-size:11px;color:var(--muted)">~${fmtMoney(c.revenue/Math.max(c.orders,1))}/compra</span>
+        </div>
+      </div>`;
+    }).join("") || `<p style="color:var(--muted);font-size:13px;padding:12px 0">Sin clientes recurrentes en el filtro seleccionado.</p>`;
+
+    listEl.querySelectorAll(".customer").forEach(el => {
+      el.addEventListener("click", () => openCustomerModal(el.dataset.email));
+    });
+  }
+
+  const byCourse = {};
+  all.forEach(c => {
+    c.courses.forEach(course => {
+      byCourse[course] = (byCourse[course] || 0) + 1;
+    });
+  });
+  const courseEntries = Object.entries(byCourse).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxCourse = Math.max(...courseEntries.map(e => e[1]), 1);
+  const courseEl = document.getElementById("subCourseBars");
+  if (courseEl) {
+    courseEl.innerHTML = courseEntries.map(([name, v]) =>
+      `<div class="pb-row pb-wide">
+        <span class="pb-label">${esc(name)}</span>
+        <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(v/maxCourse*100).toFixed(1)}%;background:linear-gradient(90deg,#22c55e,#4ade80)"></div></div>
+        <span class="pb-val">${v} clientes</span>
+      </div>`
+    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos.</p>`;
+  }
+}
+
+function exportSuscripcionesCSV() {
+  const rows = buildRecurringCustomers();
+  const header = ["Nombre", "Email", "Pedidos", "Revenue Total", "Ultima Compra", "Dias desde ultima compra", "Estado"].join(",");
+  const body = rows.map(c => [
+    `"${c.name}"`, `"${c.email}"`, c.orders, c.revenue.toFixed(2),
+    new Date(c.last).toLocaleDateString("es-PE"), c.daysSince,
+    c.status === "active" ? "Activo" : c.status === "atrisk" ? "En riesgo" : "Perdido"
+  ].join(","));
+  const csv = [header, ...body].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "suscripciones_crm.csv" });
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// =============================================================
+// CONVERSION POR PAIS
+// =============================================================
+function renderConversionByCountry() {
+  const el = document.getElementById("conversionByCountry");
+  const badge = document.getElementById("conversionBadge");
+  if (!el) return;
+
+  const byCountry = {};
+  state.filtered.forEach(o => {
+    const country = o.country || o.country_code || "Desconocido";
+    if (!byCountry[country]) byCountry[country] = { total: 0, completed: 0 };
+    byCountry[country].total++;
+    if (["completed", "processing"].includes(statusNorm(o.status))) {
+      byCountry[country].completed++;
+    }
+  });
+
+  const entries = Object.entries(byCountry)
+    .filter(([, v]) => v.total >= 2)
+    .map(([country, v]) => ({
+      country,
+      total: v.total,
+      completed: v.completed,
+      rate: v.total > 0 ? (v.completed / v.total) * 100 : 0
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 20);
+
+  if (badge) badge.textContent = entries.length + " paises";
+
+  if (!entries.length) {
+    el.innerHTML = `<p style="color:var(--muted);font-size:13px">Sin datos suficientes.</p>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="conv-table">
+    <div class="conv-header">
+      <span>Pais</span><span style="text-align:right">Pedidos</span>
+      <span style="text-align:right">Completados</span><span>Conversion</span>
+    </div>
+    ${entries.map(e => {
+      const color = e.rate >= 75 ? "var(--good)" : e.rate >= 50 ? "#f59e0b" : "var(--bad)";
+      return `<div class="conv-row">
+        <span class="conv-country">${esc(e.country)}</span>
+        <span class="conv-num">${e.total}</span>
+        <span class="conv-num">${e.completed}</span>
+        <div class="conv-rate-cell">
+          <div class="conv-bar-track">
+            <div class="conv-bar-fill" style="width:${e.rate.toFixed(1)}%;background:${color}"></div>
+          </div>
+          <span class="conv-pct" style="color:${color}">${e.rate.toFixed(1)}%</span>
+        </div>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+// =============================================================
+// META MENSUAL — barra de progreso en sidebar
+// =============================================================
+function loadMonthlyGoal() {
+  try { return parseFloat(localStorage.getItem("crm_monthly_goal") || "0") || 0; } catch(e) { return 0; }
+}
+function saveMonthlyGoal(val) {
+  try { localStorage.setItem("crm_monthly_goal", String(val)); } catch(e) {}
+}
+function updateGoalBar() {
+  const goal = loadMonthlyGoal();
+  const now  = new Date();
+  const thisMonthOrders = state.orders.filter(o => {
+    const d = new Date(o.date);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  });
+  const current = thisMonthOrders
+    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
+    .reduce((s, o) => s + Number(o.total || 0), 0);
+  const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
+
+  const goalBar     = document.getElementById("goalBar");
+  const goalPct     = document.getElementById("goalPct");
+  const goalCurrent = document.getElementById("goalCurrent");
+  const goalTarget  = document.getElementById("goalTarget");
+  const goalInput   = document.getElementById("goalInput");
+
+  if (goalBar)     goalBar.style.width = pct.toFixed(1) + "%";
+  if (goalPct)     goalPct.textContent = pct.toFixed(0) + "%";
+  if (goalCurrent) goalCurrent.textContent = fmtMoney(current);
+  if (goalTarget)  goalTarget.textContent  = goal > 0 ? "de " + fmtMoney(goal) : "Sin meta";
+  if (goalInput && goal > 0) goalInput.value = goal;
+  if (goalBar) {
+    goalBar.style.background = pct >= 100 ? "var(--good)" : pct >= 70 ? "#f59e0b" : "var(--accent)";
+  }
+}
+
+// =============================================================
+// MODAL DETALLE DE PEDIDO
+// =============================================================
+function openOrderModal(orderId) {
+  const o = state.filtered.find(x => String(x.id) === String(orderId));
+  if (!o) return;
+  const modal = document.getElementById("orderModal");
+  if (!modal) return;
+
+  const titleEl = document.getElementById("orderModalTitle");
+  const contentEl = document.getElementById("orderModalContent");
+  if (titleEl) titleEl.textContent = "#" + (o.number || o.id);
+
+  const products = (o.products || []).map(p =>
+    `<div class="om-product">
+      <span class="om-product-name">${esc(p.name || "Producto")}</span>
+      <span class="om-product-qty">x${p.quantity || 1}</span>
+      <strong class="om-product-price">${fmtMoney(p.total || p.subtotal || 0)}</strong>
+    </div>`
+  ).join("") || `<p style="color:var(--muted);font-size:13px">Sin detalle de productos.</p>`;
+
+  if (contentEl) contentEl.innerHTML = `
+    <div class="om-grid">
+      <div class="om-field"><span>Fecha</span><strong>${fmtDate(o.date)}</strong></div>
+      <div class="om-field"><span>Estado</span><strong><span class="status ${statusNorm(o.status)}">${esc(statusNorm(o.status))}</span></strong></div>
+      <div class="om-field"><span>Cliente</span><strong>${esc(o.customer || "Sin nombre")}</strong></div>
+      <div class="om-field"><span>Email</span><strong>${esc(o.customer_email || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Pais</span><strong>${esc(o.country || o.country_code || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Ciudad</span><strong>${esc(o.city || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Pago</span><strong>${esc(o.payment_method || "&#x2014;")}</strong></div>
+      <div class="om-field"><span>Numero</span><strong>#${esc(String(o.number || o.id))}</strong></div>
+    </div>
+    <h4 style="margin:16px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-size:11px">Productos</h4>
+    ${products}
+    <div class="om-total">
+      <span>Total del pedido</span>
+      <strong>${fmtMoney(o.total)}</strong>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="chip" onclick="openCustomerModal('${esc(o.customer_email || o.customer || "")}');closeOrderModal()">
+        Ver perfil del cliente
+      </button>
+    </div>`;
+
+  modal.classList.remove("hidden");
+  logActivity("Pedido #" + (o.number || o.id) + " abierto — " + esc(o.customer || "cliente"));
+
+  const noteKey = "crm_order_note_" + o.id;
+  const notesEl = document.getElementById("orderModalNotes");
+  if (notesEl) {
+    notesEl.value = "";
+    try { notesEl.value = localStorage.getItem(noteKey) || ""; } catch(e) {}
+    notesEl.dataset.noteKey = noteKey;
+  }
+  const savedEl = document.getElementById("orderModalNoteSaved");
+  if (savedEl) savedEl.style.display = "none";
+}
+
+function closeOrderModal() {
+  document.getElementById("orderModal")?.classList.add("hidden");
+}
+
+// =============================================================
+// LOG DE ACTIVIDAD
+// =============================================================
+function logActivity(msg) {
+  try {
+    const log = JSON.parse(localStorage.getItem("crm_activity_log") || "[]");
+    log.unshift({ msg: String(msg), time: new Date().toISOString() });
+    localStorage.setItem("crm_activity_log", JSON.stringify(log.slice(0, 100)));
+  } catch(e) {}
+}
+
+function renderActivityLog() {
+  const box = document.getElementById("activityLog");
+  if (!box) return;
+  try {
+    const log = JSON.parse(localStorage.getItem("crm_activity_log") || "[]");
+    if (!log.length) {
+      box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin actividad registrada aun.</p>`;
+      return;
+    }
+    box.innerHTML = log.slice(0, 30).map(e => {
+      const d = new Date(e.time);
+      const time = d.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) +
+                   " " + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+      return `<div class="activity-item">
+        <span class="activity-time">${esc(time)}</span>
+        <span class="activity-msg">${esc(e.msg)}</span>
+      </div>`;
+    }).join("");
+  } catch(e) {
+    box.innerHTML = `<p style="color:var(--muted);font-size:13px">Error leyendo log.</p>`;
+  }
+}
+
+// =============================================================
+// PREDICCION DE INGRESOS — mes actual (proyeccion lineal)
+// =============================================================
+function renderRevenuePrediction() {
+  const el = document.getElementById("revenuePrediction");
+  if (!el) return;
+  const now        = new Date();
+  const month      = now.getMonth();
+  const year       = now.getFullYear();
+  const dayOfMonth = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const thisMonthOrders = state.orders.filter(o => {
+    const d = new Date(o.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+  const current = thisMonthOrders
+    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
+    .reduce((s, o) => s + Number(o.total || 0), 0);
+
+  const dailyRate = dayOfMonth > 0 ? current / dayOfMonth : 0;
+  const projected = dailyRate * daysInMonth;
+  const remaining = Math.max(0, projected - current);
+  const pctMonth  = Math.round(dayOfMonth / daysInMonth * 100);
+
+  const goal    = loadMonthlyGoal();
+  const goalPct = goal > 0 ? Math.min(100, (projected / goal) * 100) : 0;
+  const goalMsg = goal > 0
+    ? `<div class="pred-card" style="--pred-accent:${goalPct >= 100 ? "var(--good)" : goalPct >= 70 ? "#f59e0b" : "var(--accent)"}">
+        <small>Proyeccion vs meta</small>
+        <strong style="color:var(--pred-accent)">${goalPct.toFixed(0)}% de la meta</strong>
+      </div>`
+    : "";
+
+  el.innerHTML = `
+    <div class="pred-grid">
+      <div class="pred-card">
+        <small>Acumulado este mes</small>
+        <strong>${fmtMoney(current)}</strong>
+        <span class="pred-sub">Dias ${dayOfMonth} de ${daysInMonth} (${pctMonth}%)</span>
+      </div>
+      <div class="pred-card" style="--pred-accent:var(--good)">
+        <small>Proyeccion al cierre</small>
+        <strong style="color:var(--pred-accent)">${fmtMoney(projected)}</strong>
+        <span class="pred-sub">Ritmo: ${fmtMoney(dailyRate)}/dia</span>
+      </div>
+      <div class="pred-card">
+        <small>Pendiente por generar</small>
+        <strong style="color:#f59e0b">${fmtMoney(remaining)}</strong>
+        <span class="pred-sub">En los ${daysInMonth - dayOfMonth} dias restantes</span>
+      </div>
+      ${goalMsg}
+    </div>`;
+}
+
+// =============================================================
+// CALENDARIO HEATMAP DE VENTAS — ultimas 12 semanas
+// =============================================================
+function renderSalesHeatmap() {
+  const el = document.getElementById("salesHeatmapCalendar");
+  if (!el) return;
+
+  const byDay = {};
+  state.filtered.forEach(o => {
+    const d = String(o.date).slice(0, 10);
+    byDay[d] = (byDay[d] || 0) + Number(o.total || 0);
+  });
+
+  const today = new Date();
+  const days  = [];
+  for (let i = 83; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    days.push({ key, val: byDay[key] || 0, dow: d.getDay(), label: d.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) });
+  }
+
+  const maxVal = Math.max(...days.map(d => d.val), 1);
+  const colorFor = v => {
+    if (!v) return "rgba(255,255,255,.06)";
+    const t = Math.sqrt(v / maxVal);
+    const r = Math.round(80  + t * 159);
+    const g = Math.round(0   + t * 35);
+    const b = Math.round(20  + t * 10);
+    return `rgba(${r},${g},${b},${(0.35 + t * 0.65).toFixed(2)})`;
+  };
+
+  const weeks = [];
+  let week    = [];
+  days.forEach((d, i) => {
+    if (i === 0 && d.dow !== 0) {
+      for (let j = 0; j < d.dow; j++) week.push(null);
+    }
+    week.push(d);
+    if (week.length === 7) { weeks.push(week); week = []; }
+  });
+  if (week.length) weeks.push(week);
+
+  const DOW = ["D", "L", "M", "X", "J", "V", "S"];
+  const dowLabels = DOW.map(l => `<div class="hm-dow">${l}</div>`).join("");
+  const cols = weeks.map(w => {
+    const cells = w.map(d => d
+      ? `<div class="hm-cell" style="background:${colorFor(d.val)}" title="${d.key}: ${d.val > 0 ? fmtMoney(d.val) : "Sin ventas"}"></div>`
+      : `<div class="hm-cell hm-empty"></div>`
+    ).join("");
+    return `<div class="hm-col">${cells}</div>`;
+  }).join("");
+
+  const legendStops = [0.1, 0.3, 0.5, 0.7, 1].map(t => {
+    const r = Math.round(80 + t * 159), g = Math.round(t * 35), b = Math.round(20 + t * 10);
+    return `<div style="width:14px;height:14px;border-radius:3px;background:rgba(${r},${g},${b},${(0.35 + t * 0.65).toFixed(2)});flex-shrink:0"></div>`;
+  }).join("");
+
+  el.innerHTML = `
+    <div class="hm-wrap">
+      <div class="hm-days">${dowLabels}</div>
+      <div class="hm-grid">${cols}</div>
+    </div>
+    <div class="hm-legend">
+      <span style="color:var(--muted);font-size:11px">Menos</span>
+      ${legendStops}
+      <span style="color:var(--muted);font-size:11px">Mas ventas</span>
+    </div>`;
+}
+
+// =============================================================
+// MODO MIDNIGHT — tema azul profundo
+// =============================================================
+function toggleMidnightMode() {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  const on = app.classList.toggle("midnight-mode");
+  try { localStorage.setItem("crm_midnight", on ? "1" : "0"); } catch(e) {}
+  const btn = document.getElementById("midnightToggle");
+  if (btn) btn.textContent = on ? "🌙 Midnight ON" : "🌌 Midnight";
+}
+
+// Restaurar modo midnight al cargar
+(function restoreMidnight() {
+  try {
+    if (localStorage.getItem("crm_midnight") === "1") {
+      document.querySelector(".app")?.classList.add("midnight-mode");
+      const btn = document.getElementById("midnightToggle");
+      if (btn) btn.textContent = "🌙 Midnight ON";
+    }
+  } catch(e) {}
+})();
+
+// =============================================================
 // BREVO EMAIL MARKETING
 // =============================================================
 function saveBrevoConfig() {
