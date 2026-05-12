@@ -369,7 +369,7 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 }
 .panel h2     { font-size: 19px; letter-spacing: -.035em; margin: 0; }
 .globe-panel  { grid-column: span 2; min-height: 650px; }
-.country-panel{ min-height: 650px; }
+.country-panel{ grid-column: span 2; min-height: auto; }
 .panel-wide   { grid-column: span 2; }
 
 /* ============================================================
