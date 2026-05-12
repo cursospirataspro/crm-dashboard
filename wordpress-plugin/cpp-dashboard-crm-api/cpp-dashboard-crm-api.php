@@ -401,6 +401,16 @@ add_action( 'rest_api_init', function () {
         'callback'            => 'cpp_brevo_send',
         'permission_callback' => 'cpp_crm_dashboard_check_token',
     ] );
+    register_rest_route( 'cpp-crm-dashboard/v1', '/brevo/events', [
+        'methods'             => 'GET',
+        'callback'            => 'cpp_brevo_events',
+        'permission_callback' => 'cpp_crm_dashboard_check_token',
+    ] );
+    register_rest_route( 'cpp-crm-dashboard/v1', '/brevo/senders', [
+        'methods'             => 'GET',
+        'callback'            => 'cpp_brevo_senders',
+        'permission_callback' => 'cpp_crm_dashboard_check_token',
+    ] );
 } );
 
 function cpp_brevo_get_config() {
@@ -480,3 +490,42 @@ function cpp_brevo_send( WP_REST_Request $request ) {
     return rest_ensure_response( [ 'success' => true, 'messageId' => $body['messageId'] ?? '' ] );
 }
 
+function cpp_brevo_events( WP_REST_Request $request ) {
+    $cfg = cpp_brevo_get_config();
+    if ( empty($cfg['api_key']) ) {
+        return new WP_Error( 'brevo_no_key', 'CPP_BREVO_API_KEY no definida', [ 'status' => 500 ] );
+    }
+    $response = wp_remote_get( 'https://api.brevo.com/v3/smtp/statistics/events?limit=20&sort=desc', [
+        'headers' => [ 'api-key' => $cfg['api_key'], 'Accept' => 'application/json' ],
+        'timeout' => 15,
+    ] );
+    if ( is_wp_error($response) ) {
+        return new WP_Error( 'brevo_error', $response->get_error_message(), [ 'status' => 502 ] );
+    }
+    $body = json_decode( wp_remote_retrieve_body($response), true );
+    $code = wp_remote_retrieve_response_code($response);
+    if ( $code >= 400 ) {
+        return new WP_Error( 'brevo_error', $body['message'] ?? 'Error', [ 'status' => $code ] );
+    }
+    return rest_ensure_response( $body );
+}
+
+function cpp_brevo_senders( WP_REST_Request $request ) {
+    $cfg = cpp_brevo_get_config();
+    if ( empty($cfg['api_key']) ) {
+        return new WP_Error( 'brevo_no_key', 'CPP_BREVO_API_KEY no definida', [ 'status' => 500 ] );
+    }
+    $response = wp_remote_get( 'https://api.brevo.com/v3/senders', [
+        'headers' => [ 'api-key' => $cfg['api_key'], 'Accept' => 'application/json' ],
+        'timeout' => 15,
+    ] );
+    if ( is_wp_error($response) ) {
+        return new WP_Error( 'brevo_error', $response->get_error_message(), [ 'status' => 502 ] );
+    }
+    $body = json_decode( wp_remote_retrieve_body($response), true );
+    $code = wp_remote_retrieve_response_code($response);
+    if ( $code >= 400 ) {
+        return new WP_Error( 'brevo_error', $body['message'] ?? 'Error', [ 'status' => $code ] );
+    }
+    return rest_ensure_response( $body );
+}
