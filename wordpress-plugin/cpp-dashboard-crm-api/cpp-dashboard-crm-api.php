@@ -374,3 +374,144 @@ function cpp_paypal_summary( WP_REST_Request $request ) {
         'period'        => [ 'from' => $from, 'to' => $to ],
     ] );
 }
+
+// =============================================================
+// BREVO EMAIL PROXY
+// Envía emails transaccionales a través de Brevo sin exponer
+// la API Key en el frontend.
+//
+// Define en wp-config.php:
+//   define('CPP_BREVO_API_KEY',     'xkeysib-xxxxxxxxxxxxxxxx');
+//   define('CPP_BREVO_SENDER_NAME',  'Tu Nombre');
+//   define('CPP_BREVO_SENDER_EMAIL', 'tucorreo@dominio.com');
+//
+// Ruta: POST /wp-json/cpp-crm-dashboard/v1/brevo/send
+// Headers requeridos: X-CPP-CRM-Dashboard-Token
+// Body JSON: { "to": [{"email":"...","name":"..."}], "subject":"...", "htmlContent":"...", "textContent":"..." }
+// =============================================================
+add_action( 'rest_api_init', function () {
+    // Registro de configuración Brevo (guardar clave vía admin)
+    register_rest_route( 'cpp-crm-dashboard/v1', '/brevo/send', [
+        'methods'             => 'POST',
+        'callback'            => 'cpp_brevo_send',
+        'permission_callback' => 'cpp_crm_dashboard_check_token',
+    ] );
+
+    register_rest_route( 'cpp-crm-dashboard/v1', '/brevo/test', [
+        'methods'             => 'GET',
+        'callback'            => 'cpp_brevo_test',
+        'permission_callback' => 'cpp_crm_dashboard_check_token',
+    ] );
+} );
+
+function cpp_brevo_get_config() {
+    if ( ! defined('CPP_BREVO_API_KEY') || ! CPP_BREVO_API_KEY ) {
+        return new WP_Error(
+            'brevo_no_config',
+            'Define CPP_BREVO_API_KEY, CPP_BREVO_SENDER_NAME y CPP_BREVO_SENDER_EMAIL en wp-config.php.',
+            [ 'status' => 500 ]
+        );
+    }
+    return [
+        'key'   => CPP_BREVO_API_KEY,
+        'name'  => defined('CPP_BREVO_SENDER_NAME')  ? CPP_BREVO_SENDER_NAME  : 'Dashboard CRM',
+        'email' => defined('CPP_BREVO_SENDER_EMAIL') ? CPP_BREVO_SENDER_EMAIL : '',
+    ];
+}
+
+function cpp_brevo_test( WP_REST_Request $request ) {
+    $cfg = cpp_brevo_get_config();
+    if ( is_wp_error($cfg) ) return $cfg;
+
+    $response = wp_remote_get( 'https://api.brevo.com/v3/account', [
+        'headers'   => [ 'api-key' => $cfg['key'], 'Accept' => 'application/json' ],
+        'timeout'   => 15,
+        'sslverify' => true,
+    ] );
+
+    if ( is_wp_error($response) ) {
+        return new WP_Error( 'brevo_network', $response->get_error_message(), [ 'status' => 502 ] );
+    }
+
+    $code = wp_remote_retrieve_response_code($response);
+    $body = json_decode( wp_remote_retrieve_body($response), true );
+
+    if ( $code !== 200 ) {
+        return new WP_Error( 'brevo_error', $body['message'] ?? 'Error desconocido', [ 'status' => $code ] );
+    }
+
+    return rest_ensure_response( [
+        'ok'            => true,
+        'brevo_account' => $body['email'] ?? '',
+        'sender_name'   => $cfg['name'],
+        'sender_email'  => $cfg['email'],
+    ] );
+}
+
+function cpp_brevo_send( WP_REST_Request $request ) {
+    $cfg = cpp_brevo_get_config();
+    if ( is_wp_error($cfg) ) return $cfg;
+
+    $body = $request->get_json_params();
+
+    // Validar campos requeridos
+    $to          = isset($body['to']) && is_array($body['to']) ? $body['to'] : [];
+    $subject     = isset($body['subject'])     ? sanitize_text_field($body['subject'])     : '';
+    $html        = isset($body['htmlContent']) ? wp_kses_post($body['htmlContent'])        : '';
+    $text        = isset($body['textContent']) ? sanitize_textarea_field($body['textContent']) : '';
+
+    if ( empty($to) )      return new WP_Error( 'missing_to',      'Falta el destinatario.',  [ 'status' => 400 ] );
+    if ( empty($subject) ) return new WP_Error( 'missing_subject', 'Falta el asunto.',        [ 'status' => 400 ] );
+    if ( empty($html) && empty($text) ) {
+        return new WP_Error( 'missing_content', 'Falta el contenido del email.', [ 'status' => 400 ] );
+    }
+
+    // Sanitizar destinatario
+    $recipient = $to[0];
+    $to_email  = isset($recipient['email']) ? sanitize_email($recipient['email']) : '';
+    $to_name   = isset($recipient['name'])  ? sanitize_text_field($recipient['name']) : $to_email;
+
+    if ( ! is_email($to_email) ) {
+        return new WP_Error( 'invalid_email', "Email inválido: $to_email", [ 'status' => 400 ] );
+    }
+
+    $payload = [
+        'sender'      => [ 'name' => $cfg['name'], 'email' => $cfg['email'] ],
+        'to'          => [ [ 'email' => $to_email, 'name' => $to_name ] ],
+        'subject'     => $subject,
+        'htmlContent' => $html,
+    ];
+    if ( $text ) $payload['textContent'] = $text;
+
+    $response = wp_remote_post( 'https://api.brevo.com/v3/smtp/email', [
+        'headers'   => [
+            'api-key'      => $cfg['key'],
+            'Content-Type' => 'application/json',
+            'Accept'       => 'application/json',
+        ],
+        'body'      => wp_json_encode($payload),
+        'timeout'   => 20,
+        'sslverify' => true,
+    ] );
+
+    if ( is_wp_error($response) ) {
+        return new WP_Error( 'brevo_network', $response->get_error_message(), [ 'status' => 502 ] );
+    }
+
+    $code     = wp_remote_retrieve_response_code($response);
+    $res_body = json_decode( wp_remote_retrieve_body($response), true );
+
+    if ( $code !== 201 && $code !== 200 ) {
+        return new WP_Error(
+            'brevo_rejected',
+            $res_body['message'] ?? "Brevo devolvió HTTP $code",
+            [ 'status' => $code ]
+        );
+    }
+
+    return rest_ensure_response( [
+        'ok'        => true,
+        'messageId' => $res_body['messageId'] ?? '',
+        'to'        => $to_email,
+    ] );
+}

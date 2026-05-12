@@ -5,9 +5,9 @@ let _pushLastOrderIds = new Set();
 let _pushEnabled = false;
 
 const CONFIG = {
-  mode:       "demo",   // "demo" | "api"
-  apiBaseUrl: "https://tudominio.com/wp-json/cpp-crm-dashboard/v1",
-  apiToken:   "TOKEN_LARGO_Y_SEGURO",
+  mode:       "demo",   // "demo" | "api" — se activa al guardar en sección Conexión
+  apiBaseUrl: "",
+  apiToken:   "",
   currency:   "USD"
 };
 
@@ -322,13 +322,11 @@ async function load() {
     console.error("Error al cargar datos:", e);
     state.orders = demoOrders();
     $("#modeLabel").textContent = "Modo demo (respaldo)";
-    toast("Sin conexion a la API — se cargaron datos demo.", "error");
+    toast("Sin conexión a la API — se cargaron datos demo.", "error");
   } finally {
     setLoading(false);
   }
-  const syncTime = new Date().toLocaleString("es-PE");
-  $("#lastSync").textContent = "Actualizado: " + syncTime;
-  logActivity("Datos sincronizados — " + state.orders.length + " pedidos cargados");
+  $("#lastSync").textContent = "Actualizado: " + new Date().toLocaleString("es-PE");
   populateCountries();
   applyFilters();
 }
@@ -453,14 +451,6 @@ function renderAll() {
   detectDuplicates();
   renderEmailMarketing();
   renderWidgetCustomizer();
-  renderSalesHeatmap();
-  renderRevenuePrediction();
-  updateGoalBar();
-  renderActivityLog();
-  renderVIPPanel();
-  renderStripeView();
-  renderSuscripciones();
-  renderConversionByCountry();
 }
 
 function renderKPIs() {
@@ -586,24 +576,16 @@ function renderAlerts() {
   const now       = Date.now();
   const pending   = state.filtered.filter(o => statusNorm(o.status) === "pending").length;
   const cancelled = state.filtered.filter(o => statusNorm(o.status) === "cancelled").length;
-  const failed    = state.filtered.filter(o => statusNorm(o.status) === "failed").length;
-  const onHold    = state.filtered.filter(o => statusNorm(o.status) === "on-hold").length;
   const cm        = Object.values(customerMap(state.filtered));
   const inactiveCt = cm.filter(c => (now - new Date(c.last)) / 864e5 > ALERT_CONFIG.daysInactive).length;
   const alerts    = [];
 
   if (pending > ALERT_CONFIG.maxPending)
     alerts.push(["⚠ Pedidos pendientes",
-      `${pending} pedido${pending > 1 ? "s" : ""} requieren revision. Umbral configurado: ${ALERT_CONFIG.maxPending}.`]);
+      `${pending} pedido${pending > 1 ? "s" : ""} requieren revisión. Umbral configurado: ${ALERT_CONFIG.maxPending}.`]);
   else if (pending)
-    alerts.push(["&#x2139; Pagos pendientes",
+    alerts.push(["ℹ Pagos pendientes",
       `${pending} pedido${pending > 1 ? "s" : ""} pendientes de pago.`]);
-  if (failed > 0)
-    alerts.push(["❌ Pagos fallidos",
-      `${failed} pedido${failed > 1 ? "s" : ""} con pago fallido. Contactar al cliente.`]);
-  if (onHold > 0)
-    alerts.push(["⏸ Pedidos en espera",
-      `${onHold} pedido${onHold > 1 ? "s" : ""} en estado on-hold. Requieren revision manual.`]);
   if (m.refundRate > ALERT_CONFIG.maxRefund)
     alerts.push(["⚠ Reembolsos elevados",
       `Tasa de reembolso en ${m.refundRate.toFixed(1)}%. Umbral: ${ALERT_CONFIG.maxRefund}%.`]);
@@ -611,14 +593,14 @@ function renderAlerts() {
     alerts.push(["⚠ Pedidos cancelados",
       `${cancelled} venta${cancelled > 1 ? "s" : ""} no llegaron a concretarse.`]);
   if (m.repeat < Math.max(1, m.customers * ALERT_CONFIG.minRepeatPct / 100))
-    alerts.push(["&#x2139; Baja recompra",
+    alerts.push(["ℹ Baja recompra",
       `Pocos clientes recurrentes. Meta: ${ALERT_CONFIG.minRepeatPct}% del total.`]);
   if (inactiveCt > 0)
-    alerts.push(["&#x1F634; Clientes inactivos",
-      `${inactiveCt} cliente${inactiveCt !== 1 ? "s" : ""} sin comprar en mas de ${ALERT_CONFIG.daysInactive} dias.`]);
+    alerts.push(["😴 Clientes inactivos",
+      `${inactiveCt} cliente${inactiveCt !== 1 ? "s" : ""} sin comprar en más de ${ALERT_CONFIG.daysInactive} días.`]);
   if (!alerts.length)
-    alerts.push(["✓ Operacion saludable",
-      "No hay alertas criticas en el periodo seleccionado."]);
+    alerts.push(["✓ Operación saludable",
+      "No hay alertas críticas en el periodo seleccionado."]);
 
   $("#alertsList").innerHTML = alerts.map(([title, body]) =>
     `<div class="alert"><strong>${title}</strong><p>${body}</p></div>`
@@ -657,36 +639,24 @@ function renderCountryDetail() {
     .map(([name, arr]) => ({ name, revenue: sum(validRevenueOrders(arr), netRev), orders: arr.length }))
     .sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
-  const truncate = (s, n) => s && s.length > n ? s.slice(0, n) + '…' : (s || '—');
-
   $("#countryDetail").innerHTML = `
-    <div class="cd-row">
-      <div class="cd-section cd-summary">
-        <p class="cd-section-title">Resumen</p>
-        <div class="cd-kpi-v"><span>Ingresos</span><strong>${fmtMoney(m.revenue)}</strong></div>
-        <div class="cd-kpi-v"><span>Pedidos</span><strong>${m.orders}</strong></div>
-        <div class="cd-kpi-v"><span>Clientes</span><strong>${m.customers}</strong></div>
-        <div class="cd-kpi-v"><span>Ticket prom.</span><strong>${fmtMoney(m.avg)}</strong></div>
-        <div class="cd-kpi-v"><span>Recompra</span><strong>${m.repeat}</strong></div>
-      </div>
-      <div class="cd-divider"></div>
-      <div class="cd-section cd-flex1">
-        <p class="cd-section-title">Top cursos</p>
-        ${top.map(x => `
-          <div class="cd-list-row">
-            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 34))}</span>
-            <strong>${fmtMoney(x.revenue)}</strong>
-          </div>`).join('') || `<p style="color:var(--muted);font-size:12px">Sin cursos.</p>`}
-      </div>
-      <div class="cd-divider"></div>
-      <div class="cd-section cd-flex1">
-        <p class="cd-section-title">Top ciudades</p>
-        ${cities.map(x => `
-          <div class="cd-list-row">
-            <span class="cd-list-name" title="${esc(x.name)}">${esc(truncate(x.name, 26))} <em>${x.orders}p</em></span>
-            <strong>${fmtMoney(x.revenue)}</strong>
-          </div>`).join('') || `<p style="color:var(--muted);font-size:12px">Sin ciudades.</p>`}
-      </div>
+    <div class="detail-card">
+      <h3>Resumen</h3>
+      <div class="detail-row"><span>Ingresos</span>      <strong>${fmtMoney(m.revenue)}</strong></div>
+      <div class="detail-row"><span>Pedidos</span>       <strong>${m.orders}</strong></div>
+      <div class="detail-row"><span>Clientes</span>      <strong>${m.customers}</strong></div>
+      <div class="detail-row"><span>Ticket promedio</span><strong>${fmtMoney(m.avg)}</strong></div>
+      <div class="detail-row"><span>Recompra</span>      <strong>${m.repeat} clientes</strong></div>
+    </div>
+    <div class="detail-card">
+      <h3>Top cursos</h3>
+      ${top.map(x => `<div class="detail-row"><span>${esc(x.name)}</span><strong>${fmtMoney(x.revenue)}</strong></div>`).join("")
+        || `<p style="color:var(--muted)">Sin cursos en el periodo.</p>`}
+    </div>
+    <div class="detail-card">
+      <h3>Top ciudades</h3>
+      ${cities.map(x => `<div class="detail-row"><span>${esc(x.name)} · ${x.orders} pedidos</span><strong>${fmtMoney(x.revenue)}</strong></div>`).join("")
+        || `<p style="color:var(--muted)">Sin ciudades.</p>`}
     </div>`;
 }
 
@@ -1417,7 +1387,7 @@ function renderOrders() {
     : `${total} pedido${total !== 1 ? "s" : ""}`;
 
   $("#ordersTable").innerHTML = state.filtered.slice(0, 150).map(o =>
-    `<tr data-id="${esc(String(o.id))}" style="cursor:pointer" title="Ver detalle del pedido">
+    `<tr>
        <td><strong>${esc(o.number || o.id)}</strong></td>
        <td>${fmtDate(o.date)}</td>
        <td>${esc(o.customer || "Cliente")}<br><small style="color:var(--muted)">${esc(o.customer_email || "")}</small></td>
@@ -1427,10 +1397,6 @@ function renderOrders() {
        <td><strong>${fmtMoney(o.total)}</strong></td>
      </tr>`
   ).join("") || `<tr><td colspan="7">${empty("Sin pedidos en el periodo.")}</td></tr>`;
-
-  $$("#ordersTable tr[data-id]").forEach(row => {
-    row.addEventListener("click", () => openOrderModal(row.dataset.id));
-  });
 }
 
 function renderCourses() {
@@ -2265,60 +2231,26 @@ function renderHeatmap() {
   const el = $("#salesHeatmap");
   if (!el) return;
 
-  const DAYS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const HOURS = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23];
+  const days  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   const grid  = Array.from({ length: 7 }, () => new Array(24).fill(0));
-
   validRevenueOrders(state.filtered).forEach(o => {
     const d = new Date(o.date);
     if (!isNaN(d)) grid[d.getDay()][d.getHours()]++;
   });
   const max = Math.max(...grid.flat(), 1);
 
-  const colorFor = (v) => {
-    if (!v) return 'rgba(255,255,255,.04)';
-    const t = v / max;
-    if (t < 0.25) return `rgba(239,35,60,${(0.15 + t * 1.2).toFixed(2)})`;
-    if (t < 0.50) return `rgba(239,35,60,${(0.35 + t * 0.9).toFixed(2)})`;
-    if (t < 0.75) return `rgba(239,35,60,${(0.55 + t * 0.6).toFixed(2)})`;
-    return `rgba(239,35,60,${(0.75 + t * 0.25).toFixed(2)})`;
-  };
-
-  // Header de horas — cada 3h para no saturar
-  let html = `<div class="hmg-wrap">`;
-  html += `<div class="hmg-grid">`;
-
-  // Fila de etiquetas de horas
-  html += `<div class="hmg-row hmg-header">`;
-  html += `<div class="hmg-day-label"></div>`;
-  HOURS.forEach(h => {
-    html += `<div class="hmg-hour-label">${h % 3 === 0 ? h + 'h' : ''}</div>`;
-  });
-  html += `</div>`;
-
-  // Filas por día
-  DAYS.forEach((day, di) => {
-    const total = grid[di].reduce((s, v) => s + v, 0);
-    html += `<div class="hmg-row">`;
-    html += `<div class="hmg-day-label"><span>${day}</span></div>`;
-    HOURS.forEach(h => {
+  let html = '<div class="heatmap-grid"><div class="hm-corner"></div>';
+  for (let h = 0; h < 24; h++) html += `<div class="hm-hour">${h}h</div>`;
+  days.forEach((day, di) => {
+    html += `<div class="hm-day">${day}</div>`;
+    for (let h = 0; h < 24; h++) {
       const v   = grid[di][h];
-      const bg  = colorFor(v);
-      const tip = `${day} ${h}:00 — ${v} pedido${v !== 1 ? 's' : ''}`;
-      html += `<div class="hmg-cell" style="background:${bg}" title="${tip}">${v > 0 ? `<span>${v}</span>` : ''}</div>`;
-    });
-    html += `</div>`;
+      const a   = v ? (0.08 + (v / max) * 0.92).toFixed(2) : '0.04';
+      const bg  = v ? `rgba(239,35,60,${a})` : 'rgba(255,255,255,.03)';
+      html += `<div class="hm-cell" style="background:${bg}" title="${day} ${h}:00 — ${v} pedido${v!==1?'s':''}"></div>`;
+    }
   });
-  html += `</div>`; // hmg-grid
-
-  // Leyenda
-  html += `<div class="hmg-legend">
-    <span class="hmg-legend-label">Menos</span>
-    <div class="hmg-legend-scale"></div>
-    <span class="hmg-legend-label">M&#xE1;s ventas</span>
-  </div>`;
-  html += `</div>`; // hmg-wrap
-
+  html += '</div><div class="hm-legend"><span>Menos</span><div class="hm-scale"></div><span>Más ventas</span></div>';
   el.innerHTML = html;
 }
 
@@ -2604,22 +2536,17 @@ function bind() {
   });
 
   // Restaurar config guardada
-  const DEFAULT_CFG = {
-    url:      "https://cursospirataspro.com/wp-json/cpp-crm-dashboard/v1",
-    token:    "cursospirataspro2024secret",
-    currency: "USD"
-  };
   try {
     const stored = JSON.parse(localStorage.getItem("cpp_crm_config") || "null");
-    const saved  = (stored?.url && stored?.token) ? stored : DEFAULT_CFG;
-    if (!stored?.url) localStorage.setItem("cpp_crm_config", JSON.stringify(DEFAULT_CFG));
-    $("#cfgUrl").value      = saved.url;
-    $("#cfgToken").value    = saved.token;
-    $("#cfgCurrency").value = saved.currency || "USD";
-    CONFIG.mode       = "api";
-    CONFIG.apiBaseUrl = saved.url;
-    CONFIG.apiToken   = saved.token;
-    CONFIG.currency   = saved.currency || "USD";
+    if (stored?.url && stored?.token) {
+      $("#cfgUrl").value      = stored.url;
+      $("#cfgToken").value    = stored.token;
+      $("#cfgCurrency").value = stored.currency || "USD";
+      CONFIG.mode       = "api";
+      CONFIG.apiBaseUrl = stored.url;
+      CONFIG.apiToken   = stored.token;
+      CONFIG.currency   = stored.currency || "USD";
+    }
   } catch(e){}
 
   // ── Multi-moneda ──
@@ -2708,678 +2635,7 @@ function bind() {
   $("#emailPreviewBtn")?.addEventListener("click", previewEmail);
   $("#emailExportBtn")?.addEventListener("click", exportEmailList);
   $("#emailSendBtn")?.addEventListener("click", sendEmailMailto);
-
-  // ── Meta mensual ──
-  $("#goalSave")?.addEventListener("click", () => {
-    const val = parseFloat($("#goalInput")?.value || "0");
-    if (!val || val <= 0) { toast("Ingresa una meta mayor a 0", "error"); return; }
-    saveMonthlyGoal(val);
-    updateGoalBar();
-    toast("Meta mensual guardada: " + fmtMoney(val), "success");
-    logActivity("Meta mensual actualizada a " + fmtMoney(val));
-  });
-
-  // ── Modal de pedido ──
-  $("#orderModalClose")?.addEventListener("click", closeOrderModal);
-  $("#orderModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeOrderModal(); });
-
-  // ── Notas por pedido ──
-  $("#orderModalSaveNote")?.addEventListener("click", () => {
-    const notesEl = $("#orderModalNotes");
-    if (!notesEl) return;
-    try {
-      localStorage.setItem(notesEl.dataset.noteKey, notesEl.value);
-      const saved = $("#orderModalNoteSaved");
-      if (saved) { saved.style.display = "inline"; setTimeout(() => saved.style.display = "none", 2000); }
-      toast("Nota del pedido guardada", "success");
-    } catch(e) { toast("No se pudo guardar", "error"); }
-  });
-
-  // ── Log de actividad ──
-  $("#clearActivityLogBtn")?.addEventListener("click", () => {
-    try { localStorage.removeItem("crm_activity_log"); } catch(e) {}
-    renderActivityLog();
-    toast("Log de actividad limpiado", "success");
-  });
-
-  // ── Modo midnight ──
-  $("#midnightToggle")?.addEventListener("click", toggleMidnightMode);
-
-  // ── Stripe view ──
-  $("#stripeRefreshBtn")?.addEventListener("click", () => { renderStripeView(); toast("Datos Stripe actualizados", "success"); });
-  $("#stripeSearch")?.addEventListener("input", debounce(() => renderStripeView(), 220));
-
-  // ── Suscripciones ──
-  $("#subSearch")?.addEventListener("input", debounce(() => renderSuscripciones(), 220));
-  $("#subFilter")?.addEventListener("change", () => renderSuscripciones());
-  $("#subExportBtn")?.addEventListener("click", exportSuscripcionesCSV);
 }
-
-// =============================================================
-// VIP PANEL — segmentacion visual elite en CRM
-// =============================================================
-function renderVIPPanel() {
-  const grid    = document.getElementById("vipGrid");
-  const badge   = document.getElementById("vipCountBadge");
-  if (!grid) return;
-
-  const allC = Object.values(customerMap(state.filtered));
-  allC.sort((a, b) => b.revenue - a.revenue);
-  const top10pct = Math.max(1, Math.ceil(allC.length * 0.1));
-  const vips = allC.slice(0, top10pct);
-
-  if (badge) badge.textContent = vips.length + " clientes";
-
-  if (!vips.length) {
-    grid.innerHTML = `<p style="color:var(--muted);font-size:13px">Sin datos de clientes VIP en el periodo.</p>`;
-    return;
-  }
-
-  grid.innerHTML = vips.slice(0, 10).map((c, i) => {
-    const initials = c.name.slice(0, 2).toUpperCase();
-    const rfm = rfmScore(c, allC);
-    return `<div class="vip-card" style="cursor:pointer" data-email="${esc(c.email || c.name)}">
-      <div class="vip-rank">#${i + 1}</div>
-      <div class="vip-avatar" style="background:hsl(${(i * 47) % 360},55%,32%)">${esc(initials)}</div>
-      <div class="vip-info">
-        <strong class="vip-name">${esc(c.name)}</strong>
-        <span class="vip-email">${esc(c.email)}</span>
-        <span class="rfm-badge ${rfm.cls}">${rfm.label}</span>
-      </div>
-      <div class="vip-revenue">
-        <strong>${fmtMoney(c.revenue)}</strong>
-        <span>${c.orders} pedido${c.orders !== 1 ? "s" : ""}</span>
-      </div>
-    </div>`;
-  }).join("");
-
-  grid.querySelectorAll(".vip-card").forEach(el => {
-    el.addEventListener("click", () => openCustomerModal(el.dataset.email));
-  });
-}
-
-// =============================================================
-// STRIPE VIEW — panel con pedidos via Stripe
-// =============================================================
-function renderStripeView() {
-  const search = ($("#stripeSearch")?.value || "").trim().toLowerCase();
-  const stripeOrders = state.filtered.filter(o => {
-    const pm = (o.payment_method || "").toLowerCase();
-    return pm.includes("stripe") || pm.includes("card") || pm === "wc_stripe";
-  });
-
-  const filtered = search
-    ? stripeOrders.filter(o =>
-        (o.customer || "").toLowerCase().includes(search) ||
-        (o.customer_email || "").toLowerCase().includes(search) ||
-        (o.products || []).some(p => (p.name || "").toLowerCase().includes(search))
-      )
-    : stripeOrders;
-
-  // KPIs
-  const total  = filtered.reduce((s, o) => s + Number(o.total || 0), 0);
-  const fees   = filtered.reduce((s, o) => s + (Number(o.total || 0) * 0.029 + 0.30), 0);
-  const net    = total - fees;
-  const count  = filtered.length;
-  const avg    = count ? total / count : 0;
-
-  const kpisEl = document.getElementById("stripeKpis");
-  if (kpisEl) kpisEl.innerHTML = [
-    { label: "Ingresos brutos", val: fmtMoney(total), cls: "" },
-    { label: "Comisiones est. (2.9%+0.30)", val: fmtMoney(fees), cls: "style=\"color:var(--bad)\"" },
-    { label: "Ingresos netos est.", val: fmtMoney(net), cls: "style=\"color:var(--good)\"" },
-    { label: "Transacciones", val: count, cls: "" },
-    { label: "Ticket promedio", val: fmtMoney(avg), cls: "" }
-  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
-
-  // Transacciones individuales con curso (ordenadas por fecha desc)
-  const dayBarsEl = document.getElementById("stripeDayBars");
-  if (dayBarsEl) {
-    const txns = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
-    const maxTxn = Math.max(...txns.map(o => Number(o.total || 0)), 1);
-    dayBarsEl.innerHTML = txns.map(o => {
-      const day  = new Date(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
-      const course = (o.products || [])[0]?.name || o.products?.[0] || "Producto";
-      const val  = Number(o.total || 0);
-      const pct  = (val / maxTxn * 100).toFixed(1);
-      return `<div class="stripe-txn-row">
-        <div class="stripe-txn-meta">
-          <span class="stripe-txn-date">${day}</span>
-          <span class="stripe-txn-course">${esc(course)}</span>
-        </div>
-        <div class="pb-track" style="flex:1;min-width:60px"><div class="pb-fill" style="width:${pct}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
-        <span class="pb-val">${fmtMoney(val)}</span>
-      </div>`;
-    }).join("") || `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ventas v&#xED;a Stripe en el periodo.</p>`;
-  }
-
-  // Top productos
-  const byProduct = {};
-  filtered.forEach(o => {
-    (o.products || []).forEach(p => {
-      const name = p.name || "Producto";
-      byProduct[name] = (byProduct[name] || 0) + Number(p.total || p.subtotal || 0);
-    });
-  });
-  const productEntries = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const maxProd = Math.max(...productEntries.map(e => e[1]), 1);
-  const prodBadge = document.getElementById("stripeProductsBadge");
-  if (prodBadge) prodBadge.textContent = productEntries.length + " cursos";
-  const prodEl = document.getElementById("stripeProductBars");
-  if (prodEl) {
-    prodEl.innerHTML = productEntries.map(([name, v]) =>
-      `<div class="pb-row pb-wide">
-        <span class="pb-label">${esc(name)}</span>
-        <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(v/maxProd*100).toFixed(1)}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
-        <span class="pb-val">${fmtMoney(v)}</span>
-      </div>`
-    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin productos.</p>`;
-  }
-
-  // Tabla transacciones
-  const txnCount = document.getElementById("stripeTxnCount");
-  if (txnCount) txnCount.textContent = filtered.length + " transacciones";
-  const tbody = document.getElementById("stripeTxnBody");
-  if (tbody) {
-    const rows = filtered.slice(0, 200);
-    tbody.innerHTML = rows.map(o => {
-      const gross = Number(o.total || 0);
-      const fee   = gross * 0.029 + 0.30;
-      const net_  = gross - fee;
-      const prod  = (o.products || [])[0]?.name || "—";
-      return `<tr>
-        <td>${fmtDate(o.date)}</td>
-        <td>#${esc(String(o.number || o.id))}</td>
-        <td>${esc(o.customer || "—")}</td>
-        <td>${esc(o.country || o.country_code || "—")}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prod)}</td>
-        <td class="text-right">${fmtMoney(gross)}</td>
-        <td class="text-right" style="color:var(--bad)">-${fmtMoney(fee)}</td>
-        <td class="text-right" style="color:var(--good)">${fmtMoney(net_)}</td>
-      </tr>`;
-    }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Sin transacciones Stripe en el periodo.</td></tr>`;
-  }
-}
-
-// =============================================================
-// SUSCRIPCIONES — clientes recurrentes WooCommerce
-// =============================================================
-function buildRecurringCustomers() {
-  // Considera "recurrente" a quien tiene 2+ pedidos completados
-  const customers = customerMap(state.orders);
-  const now = new Date();
-  return Object.values(customers)
-    .filter(c => c.orders >= 2)
-    .map(c => {
-      const lastDate = new Date(c.last);
-      const daysSince = Math.floor((now - lastDate) / 86400000);
-      const avgInterval = c.orders > 1 ? Math.floor(daysSince / (c.orders - 1)) : 0;
-      let status = "active";
-      if (daysSince > 180) status = "churned";
-      else if (daysSince > 60) status = "atrisk";
-      return { ...c, daysSince, avgInterval, status };
-    })
-    .sort((a, b) => b.revenue - a.revenue);
-}
-
-function renderSuscripciones() {
-  const search    = ($("#subSearch")?.value || "").trim().toLowerCase();
-  const filterVal = $("#subFilter")?.value || "all";
-
-  let recurring = buildRecurringCustomers();
-  if (filterVal !== "all") recurring = recurring.filter(c => c.status === filterVal);
-  if (search) recurring = recurring.filter(c =>
-    c.name.toLowerCase().includes(search) || c.email.toLowerCase().includes(search)
-  );
-
-  // KPIs
-  const all = buildRecurringCustomers();
-  const active  = all.filter(c => c.status === "active").length;
-  const atrisk  = all.filter(c => c.status === "atrisk").length;
-  const churned = all.filter(c => c.status === "churned").length;
-  const totalMrr = all.filter(c => c.status === "active")
-    .reduce((s, c) => s + (c.revenue / Math.max(c.orders, 1)), 0);
-
-  const badge = document.getElementById("subCountBadge");
-  if (badge) badge.textContent = recurring.length + " clientes";
-
-  const kpisEl = document.getElementById("subKpis");
-  if (kpisEl) kpisEl.innerHTML = [
-    { label: "MRR estimado", val: fmtMoney(totalMrr), cls: "style=\"color:var(--good)\"" },
-    { label: "Activos (&#xFA;lt. 60d)", val: active, cls: "" },
-    { label: "En riesgo (61&#x2013;180d)", val: atrisk, cls: "style=\"color:#f59e0b\"" },
-    { label: "Perdidos (+180d)", val: churned, cls: "style=\"color:var(--bad)\"" },
-    { label: "Total recurrentes", val: all.length, cls: "" }
-  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
-
-  const mrrBadge = document.getElementById("subMrrBadge");
-  if (mrrBadge) mrrBadge.textContent = fmtMoney(totalMrr) + "/mes";
-
-  // MRR por mes (bar chart con ingresos de activos por mes)
-  const mrrByMonth = {};
-  all.filter(c => c.status === "active").forEach(c => {
-    const m = new Date(c.last).toLocaleDateString("es-PE", { month: "short", year: "2-digit" });
-    mrrByMonth[m] = (mrrByMonth[m] || 0) + c.revenue / Math.max(c.orders, 1);
-  });
-  const mrrEntries = Object.entries(mrrByMonth).slice(-12);
-  const maxMrr = Math.max(...mrrEntries.map(e => e[1]), 1);
-  const mrrEl = document.getElementById("subMrrBars");
-  if (mrrEl) {
-    mrrEl.innerHTML = mrrEntries.map(([m, v]) =>
-      `<div class="pb-row">
-        <span class="pb-label">${m}</span>
-        <div class="pb-track"><div class="pb-fill" style="width:${(v/maxMrr*100).toFixed(1)}%;background:linear-gradient(90deg,#22c55e,#4ade80)"></div></div>
-        <span class="pb-val">${fmtMoney(v)}</span>
-      </div>`
-    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos MRR.</p>`;
-  }
-
-  // Lista de clientes recurrentes
-  const listEl = document.getElementById("subList");
-  if (listEl) {
-    const statusColor = { active: "var(--good)", atrisk: "#f59e0b", churned: "var(--bad)" };
-    const statusLabel = { active: "Activo", atrisk: "En riesgo", churned: "Perdido" };
-    listEl.innerHTML = recurring.slice(0, 100).map((c, i) => {
-      const initials = c.name.slice(0, 2).toUpperCase();
-      return `<div class="customer" data-email="${esc(c.email || c.name)}" style="cursor:pointer">
-        <div class="avatar" style="min-width:36px;font-size:13px;background:hsl(${(i*47)%360},50%,32%)">${esc(initials)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <h3 style="margin:0">${esc(c.name)}</h3>
-            <span class="badge" style="background:${statusColor[c.status]}20;color:${statusColor[c.status]};border:1px solid ${statusColor[c.status]}40">${statusLabel[c.status]}</span>
-          </div>
-          <p style="margin:2px 0;font-size:12px;color:var(--muted)">${esc(c.email)} &middot; ${c.orders} pedidos &middot; intervalo ~${c.avgInterval}d</p>
-          <p style="margin:2px 0;font-size:12px;color:var(--muted)">&#xDA;ltima compra: ${c.daysSince}d atr&#xE1;s</p>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <strong style="display:block;font-size:15px">${fmtMoney(c.revenue)}</strong>
-          <span style="font-size:11px;color:var(--muted)">~${fmtMoney(c.revenue/Math.max(c.orders,1))}/compra</span>
-        </div>
-      </div>`;
-    }).join("") || `<p style="color:var(--muted);font-size:13px;padding:12px 0">Sin clientes recurrentes en el filtro seleccionado.</p>`;
-
-    listEl.querySelectorAll(".customer").forEach(el => {
-      el.addEventListener("click", () => openCustomerModal(el.dataset.email));
-    });
-  }
-
-  // Cursos con mas suscriptores
-  const byCourse = {};
-  all.forEach(c => {
-    c.courses.forEach(course => {
-      byCourse[course] = (byCourse[course] || 0) + 1;
-    });
-  });
-  const courseEntries = Object.entries(byCourse).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const maxCourse = Math.max(...courseEntries.map(e => e[1]), 1);
-  const courseEl = document.getElementById("subCourseBars");
-  if (courseEl) {
-    courseEl.innerHTML = courseEntries.map(([name, v]) =>
-      `<div class="pb-row pb-wide">
-        <span class="pb-label">${esc(name)}</span>
-        <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(v/maxCourse*100).toFixed(1)}%;background:linear-gradient(90deg,#22c55e,#4ade80)"></div></div>
-        <span class="pb-val">${v} clientes</span>
-      </div>`
-    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin datos.</p>`;
-  }
-}
-
-function exportSuscripcionesCSV() {
-  const rows = buildRecurringCustomers();
-  const header = ["Nombre", "Email", "Pedidos", "Revenue Total", "Ultima Compra", "Dias desde ultima compra", "Estado"].join(",");
-  const body = rows.map(c => [
-    `"${c.name}"`, `"${c.email}"`, c.orders, c.revenue.toFixed(2),
-    new Date(c.last).toLocaleDateString("es-PE"), c.daysSince,
-    c.status === "active" ? "Activo" : c.status === "atrisk" ? "En riesgo" : "Perdido"
-  ].join(","));
-  const csv = [header, ...body].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "suscripciones_crm.csv" });
-  a.click(); URL.revokeObjectURL(a.href);
-}
-
-// =============================================================
-// CONVERSION POR PAIS
-// =============================================================
-function renderConversionByCountry() {
-  const el = document.getElementById("conversionByCountry");
-  const badge = document.getElementById("conversionBadge");
-  if (!el) return;
-
-  // Agrupar por pais
-  const byCountry = {};
-  state.filtered.forEach(o => {
-    const country = o.country || o.country_code || "Desconocido";
-    if (!byCountry[country]) byCountry[country] = { total: 0, completed: 0 };
-    byCountry[country].total++;
-    if (["completed", "processing"].includes(statusNorm(o.status))) {
-      byCountry[country].completed++;
-    }
-  });
-
-  const entries = Object.entries(byCountry)
-    .filter(([, v]) => v.total >= 2)
-    .map(([country, v]) => ({
-      country,
-      total: v.total,
-      completed: v.completed,
-      rate: v.total > 0 ? (v.completed / v.total) * 100 : 0
-    }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 20);
-
-  if (badge) badge.textContent = entries.length + " paises";
-
-  if (!entries.length) {
-    el.innerHTML = `<p style="color:var(--muted);font-size:13px">Sin datos suficientes.</p>`;
-    return;
-  }
-
-  el.innerHTML = `<div class="conv-table">
-    <div class="conv-header">
-      <span>Pais</span><span style="text-align:right">Pedidos</span>
-      <span style="text-align:right">Completados</span><span>Conversion</span>
-    </div>
-    ${entries.map(e => {
-      const color = e.rate >= 75 ? "var(--good)" : e.rate >= 50 ? "#f59e0b" : "var(--bad)";
-      return `<div class="conv-row">
-        <span class="conv-country">${esc(e.country)}</span>
-        <span class="conv-num">${e.total}</span>
-        <span class="conv-num">${e.completed}</span>
-        <div class="conv-rate-cell">
-          <div class="conv-bar-track">
-            <div class="conv-bar-fill" style="width:${e.rate.toFixed(1)}%;background:${color}"></div>
-          </div>
-          <span class="conv-pct" style="color:${color}">${e.rate.toFixed(1)}%</span>
-        </div>
-      </div>`;
-    }).join("")}
-  </div>`;
-}
-
-// =============================================================
-// META MENSUAL — barra de progreso en sidebar
-// =============================================================
-function loadMonthlyGoal() {
-  try { return parseFloat(localStorage.getItem("crm_monthly_goal") || "0") || 0; } catch(e) { return 0; }
-}
-function saveMonthlyGoal(val) {
-  try { localStorage.setItem("crm_monthly_goal", String(val)); } catch(e) {}
-}
-function updateGoalBar() {
-  const goal = loadMonthlyGoal();
-  const now  = new Date();
-  const thisMonthOrders = state.orders.filter(o => {
-    const d = new Date(o.date);
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  });
-  const current = thisMonthOrders
-    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
-    .reduce((s, o) => s + Number(o.total || 0), 0);
-  const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
-
-  const goalBar     = document.getElementById("goalBar");
-  const goalPct     = document.getElementById("goalPct");
-  const goalCurrent = document.getElementById("goalCurrent");
-  const goalTarget  = document.getElementById("goalTarget");
-  const goalInput   = document.getElementById("goalInput");
-
-  if (goalBar)     goalBar.style.width = pct.toFixed(1) + "%";
-  if (goalPct)     goalPct.textContent = pct.toFixed(0) + "%";
-  if (goalCurrent) goalCurrent.textContent = fmtMoney(current);
-  if (goalTarget)  goalTarget.textContent  = goal > 0 ? "de " + fmtMoney(goal) : "Sin meta";
-  if (goalInput && goal > 0) goalInput.value = goal;
-  if (goalBar) {
-    goalBar.style.background = pct >= 100 ? "var(--good)" : pct >= 70 ? "#f59e0b" : "var(--accent)";
-  }
-}
-
-// =============================================================
-// MODAL DETALLE DE PEDIDO
-// =============================================================
-function openOrderModal(orderId) {
-  const o = state.filtered.find(x => String(x.id) === String(orderId));
-  if (!o) return;
-  const modal = document.getElementById("orderModal");
-  if (!modal) return;
-
-  const titleEl = document.getElementById("orderModalTitle");
-  const contentEl = document.getElementById("orderModalContent");
-  if (titleEl) titleEl.textContent = "#" + (o.number || o.id);
-
-  const products = (o.products || []).map(p =>
-    `<div class="om-product">
-      <span class="om-product-name">${esc(p.name || "Producto")}</span>
-      <span class="om-product-qty">x${p.quantity || 1}</span>
-      <strong class="om-product-price">${fmtMoney(p.total || p.subtotal || 0)}</strong>
-    </div>`
-  ).join("") || `<p style="color:var(--muted);font-size:13px">Sin detalle de productos.</p>`;
-
-  if (contentEl) contentEl.innerHTML = `
-    <div class="om-grid">
-      <div class="om-field"><span>Fecha</span><strong>${fmtDate(o.date)}</strong></div>
-      <div class="om-field"><span>Estado</span><strong><span class="status ${statusNorm(o.status)}">${esc(statusNorm(o.status))}</span></strong></div>
-      <div class="om-field"><span>Cliente</span><strong>${esc(o.customer || "Sin nombre")}</strong></div>
-      <div class="om-field"><span>Email</span><strong>${esc(o.customer_email || "&#x2014;")}</strong></div>
-      <div class="om-field"><span>Pais</span><strong>${esc(o.country || o.country_code || "&#x2014;")}</strong></div>
-      <div class="om-field"><span>Ciudad</span><strong>${esc(o.city || "&#x2014;")}</strong></div>
-      <div class="om-field"><span>Pago</span><strong>${esc(o.payment_method || "&#x2014;")}</strong></div>
-      <div class="om-field"><span>Numero</span><strong>#${esc(String(o.number || o.id))}</strong></div>
-    </div>
-    <h4 style="margin:16px 0 8px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-size:11px">Productos</h4>
-    ${products}
-    <div class="om-total">
-      <span>Total del pedido</span>
-      <strong>${fmtMoney(o.total)}</strong>
-    </div>
-    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="chip" onclick="openCustomerModal('${esc(o.customer_email || o.customer || "")}');closeOrderModal()">
-        Ver perfil del cliente
-      </button>
-    </div>`;
-
-  modal.classList.remove("hidden");
-  logActivity("Pedido #" + (o.number || o.id) + " abierto — " + esc(o.customer || "cliente"));
-
-  // Cargar nota guardada para este pedido
-  const noteKey = "crm_order_note_" + o.id;
-  const notesEl = document.getElementById("orderModalNotes");
-  if (notesEl) {
-    notesEl.value = "";
-    try { notesEl.value = localStorage.getItem(noteKey) || ""; } catch(e) {}
-    notesEl.dataset.noteKey = noteKey;
-  }
-  const savedEl = document.getElementById("orderModalNoteSaved");
-  if (savedEl) savedEl.style.display = "none";
-}
-
-function closeOrderModal() {
-  document.getElementById("orderModal")?.classList.add("hidden");
-}
-
-// =============================================================
-// LOG DE ACTIVIDAD
-// =============================================================
-function logActivity(msg) {
-  try {
-    const log = JSON.parse(localStorage.getItem("crm_activity_log") || "[]");
-    log.unshift({ msg: String(msg), time: new Date().toISOString() });
-    localStorage.setItem("crm_activity_log", JSON.stringify(log.slice(0, 100)));
-  } catch(e) {}
-}
-
-function renderActivityLog() {
-  const box = document.getElementById("activityLog");
-  if (!box) return;
-  try {
-    const log = JSON.parse(localStorage.getItem("crm_activity_log") || "[]");
-    if (!log.length) {
-      box.innerHTML = `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin actividad registrada aun.</p>`;
-      return;
-    }
-    box.innerHTML = log.slice(0, 30).map(e => {
-      const d = new Date(e.time);
-      const time = d.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) +
-                   " " + d.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
-      return `<div class="activity-item">
-        <span class="activity-time">${esc(time)}</span>
-        <span class="activity-msg">${esc(e.msg)}</span>
-      </div>`;
-    }).join("");
-  } catch(e) {
-    box.innerHTML = `<p style="color:var(--muted);font-size:13px">Error leyendo log.</p>`;
-  }
-}
-
-// =============================================================
-// PREDICCION DE INGRESOS — mes actual (proyeccion lineal)
-// =============================================================
-function renderRevenuePrediction() {
-  const el = document.getElementById("revenuePrediction");
-  if (!el) return;
-  const now        = new Date();
-  const month      = now.getMonth();
-  const year       = now.getFullYear();
-  const dayOfMonth = now.getDate();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  const thisMonthOrders = state.orders.filter(o => {
-    const d = new Date(o.date);
-    return d.getFullYear() === year && d.getMonth() === month;
-  });
-  const current = thisMonthOrders
-    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
-    .reduce((s, o) => s + Number(o.total || 0), 0);
-
-  const dailyRate = dayOfMonth > 0 ? current / dayOfMonth : 0;
-  const projected = dailyRate * daysInMonth;
-  const remaining = Math.max(0, projected - current);
-  const pctMonth  = Math.round(dayOfMonth / daysInMonth * 100);
-
-  const goal    = loadMonthlyGoal();
-  const goalPct = goal > 0 ? Math.min(100, (projected / goal) * 100) : 0;
-  const goalMsg = goal > 0
-    ? `<div class="pred-card" style="--pred-accent:${goalPct >= 100 ? "var(--good)" : goalPct >= 70 ? "#f59e0b" : "var(--accent)"}">
-        <small>Proyeccion vs meta</small>
-        <strong style="color:var(--pred-accent)">${goalPct.toFixed(0)}% de la meta</strong>
-      </div>`
-    : "";
-
-  el.innerHTML = `
-    <div class="pred-grid">
-      <div class="pred-card">
-        <small>Acumulado este mes</small>
-        <strong>${fmtMoney(current)}</strong>
-        <span class="pred-sub">Dias ${dayOfMonth} de ${daysInMonth} (${pctMonth}%)</span>
-      </div>
-      <div class="pred-card" style="--pred-accent:var(--good)">
-        <small>Proyeccion al cierre</small>
-        <strong style="color:var(--pred-accent)">${fmtMoney(projected)}</strong>
-        <span class="pred-sub">Ritmo: ${fmtMoney(dailyRate)}/dia</span>
-      </div>
-      <div class="pred-card">
-        <small>Pendiente por generar</small>
-        <strong style="color:#f59e0b">${fmtMoney(remaining)}</strong>
-        <span class="pred-sub">En los ${daysInMonth - dayOfMonth} dias restantes</span>
-      </div>
-      ${goalMsg}
-    </div>`;
-}
-
-// =============================================================
-// CALENDARIO HEATMAP DE VENTAS — ultimas 12 semanas
-// =============================================================
-function renderSalesHeatmap() {
-  const el = document.getElementById("salesHeatmapCalendar");
-  if (!el) return;
-
-  const byDay = {};
-  state.filtered.forEach(o => {
-    const d = String(o.date).slice(0, 10);
-    byDay[d] = (byDay[d] || 0) + Number(o.total || 0);
-  });
-
-  // Construir 84 dias (12 semanas)
-  const today = new Date();
-  const days  = [];
-  for (let i = 83; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    days.push({ key, val: byDay[key] || 0, dow: d.getDay(), label: d.toLocaleDateString("es-PE", { day: "2-digit", month: "short" }) });
-  }
-
-  const maxVal = Math.max(...days.map(d => d.val), 1);
-  const colorFor = v => {
-    if (!v) return "rgba(255,255,255,.06)";
-    const t = Math.sqrt(v / maxVal);
-    const r = Math.round(80  + t * 159);
-    const g = Math.round(0   + t * 35);
-    const b = Math.round(20  + t * 10);
-    return `rgba(${r},${g},${b},${(0.35 + t * 0.65).toFixed(2)})`;
-  };
-
-  // Agrupar en semanas (columnas)
-  const weeks = [];
-  let week    = [];
-  days.forEach((d, i) => {
-    if (i === 0 && d.dow !== 0) {
-      for (let j = 0; j < d.dow; j++) week.push(null);
-    }
-    week.push(d);
-    if (week.length === 7) { weeks.push(week); week = []; }
-  });
-  if (week.length) weeks.push(week);
-
-  const DOW = ["D", "L", "M", "X", "J", "V", "S"];
-  const dowLabels = DOW.map(l => `<div class="hm-dow">${l}</div>`).join("");
-  const cols = weeks.map(w => {
-    const cells = w.map(d => d
-      ? `<div class="hm-cell" style="background:${colorFor(d.val)}" title="${d.key}: ${d.val > 0 ? fmtMoney(d.val) : "Sin ventas"}"></div>`
-      : `<div class="hm-cell hm-empty"></div>`
-    ).join("");
-    return `<div class="hm-col">${cells}</div>`;
-  }).join("");
-
-  const legendStops = [0.1, 0.3, 0.5, 0.7, 1].map(t => {
-    const r = Math.round(80 + t * 159), g = Math.round(t * 35), b = Math.round(20 + t * 10);
-    return `<div style="width:14px;height:14px;border-radius:3px;background:rgba(${r},${g},${b},${(0.35 + t * 0.65).toFixed(2)});flex-shrink:0"></div>`;
-  }).join("");
-
-  el.innerHTML = `
-    <div class="hm-wrap">
-      <div class="hm-days">${dowLabels}</div>
-      <div class="hm-grid">${cols}</div>
-    </div>
-    <div class="hm-legend">
-      <span style="color:var(--muted);font-size:11px">Menos</span>
-      ${legendStops}
-      <span style="color:var(--muted);font-size:11px">Mas ventas</span>
-    </div>`;
-}
-
-// =============================================================
-// MODO MIDNIGHT — tema azul profundo
-// =============================================================
-function toggleMidnightMode() {
-  const app = document.querySelector(".app");
-  if (!app) return;
-  const on = app.classList.toggle("midnight-mode");
-  try { localStorage.setItem("crm_midnight", on ? "1" : "0"); } catch(e) {}
-  const btn = document.getElementById("midnightToggle");
-  if (btn) btn.textContent = on ? "🌙 Midnight ON" : "🌌 Midnight";
-}
-
-// Restaurar modo midnight al cargar
-(function restoreMidnight() {
-  try {
-    if (localStorage.getItem("crm_midnight") === "1") {
-      document.querySelector(".app")?.classList.add("midnight-mode");
-      const btn = document.getElementById("midnightToggle");
-      if (btn) btn.textContent = "🌙 Midnight ON";
-    }
-  } catch(e) {}
-})();
 
 // =============================================================
 // SIDEBAR TOGGLE
