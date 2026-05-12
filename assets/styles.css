@@ -449,8 +449,8 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 /* ============================================================
    DETALLE DE PAÍS
    ============================================================ */
-.country-detail { display: flex; flex-direction: column; gap: 0; }
-.detail-card    { border: 1px solid var(--line); background: rgba(255,255,255,.04); border-radius: 18px; padding: 14px; min-width: 0; }
+.country-detail { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.detail-card    { border: 1px solid var(--line); background: rgba(255,255,255,.04); border-radius: 18px; padding: 14px; min-width: 0; flex: 1 1 200px; }
 .detail-card h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
 
 /* Fila horizontal completa */
