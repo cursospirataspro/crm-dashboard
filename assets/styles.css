@@ -449,9 +449,10 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 /* ============================================================
    DETALLE DE PAÍS
    ============================================================ */
-.country-detail { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
-.detail-card    { border: 1px solid var(--line); background: rgba(255,255,255,.04); border-radius: 18px; padding: 14px; min-width: 0; flex: 1 1 200px; }
-.detail-card h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
+.country-detail { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; flex-wrap: nowrap; }
+.detail-card    { border: 1px solid var(--line); background: rgba(255,255,255,.04); border-radius: 18px; padding: 16px 18px; flex: 1 1 0; min-width: 0; }
+.detail-card h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; white-space: nowrap; }
+@media (max-width: 700px) { .country-detail { flex-wrap: wrap; } .detail-card { flex: 1 1 100%; } }
 
 /* Fila horizontal completa */
 .cd-row { display: flex; gap: 0; align-items: stretch; min-height: 120px; }
@@ -484,14 +485,16 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 .detail-row {
   display:         flex;
   justify-content: space-between;
-  gap:             14px;
+  align-items:     baseline;
+  gap:             12px;
   color:           var(--muted);
   font-size:       13px;
   padding:         7px 0;
   border-bottom:   1px solid rgba(255,255,255,.055);
 }
+.detail-row span   { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-row:last-child { border-bottom: 0; }
-.detail-row strong     { color: #fff; }
+.detail-row strong { color: #fff; white-space: nowrap; flex-shrink: 0; }
 
 /* ============================================================
    EMBUDO
