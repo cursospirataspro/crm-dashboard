@@ -458,6 +458,13 @@ function renderAll() {
   detectDuplicates();
   renderEmailMarketing();
   renderWidgetCustomizer();
+  renderStripeView();
+  renderSuscripciones();
+  renderRevenuePrediction();
+  renderSalesHeatmap();
+  renderConversionByCountry();
+  renderVIPPanel();
+  updateGoalBar();
 }
 
 function renderKPIs() {
@@ -2664,6 +2671,15 @@ function bind() {
   $("#brevoTestBtn")?.addEventListener("click", testBrevoConnection);
   $("#emailSendBrevoBtn")?.addEventListener("click", sendViaBrevo);
   $("#clearCampaignHistoryBtn")?.addEventListener("click", clearCampaignHistory);
+
+  // ── Stripe ──
+  $("#stripeRefreshBtn")?.addEventListener("click", renderStripeView);
+  $("#stripeSearch")?.addEventListener("input", renderStripeView);
+
+  // ── Suscripciones ──
+  $("#subExportBtn")?.addEventListener("click", exportSuscripcionesCSV);
+  $("#subSearch")?.addEventListener("input", renderSuscripciones);
+  $("#subFilter")?.addEventListener("change", renderSuscripciones);
 }
 
 // =============================================================
@@ -3704,11 +3720,12 @@ function switchView(id) {
       _paypalInited = true;
       initPaypalView();
     } else {
-      // Ya fue init: solo recargar datos si no hay datos cargados
       const gross = document.getElementById("ppGross");
       if (!gross || gross.textContent === "—") loadPaypalData();
     }
   }
+  if (id === "stripe")        renderStripeView();
+  if (id === "suscripciones") renderSuscripciones();
 }
 
 // =============================================================
