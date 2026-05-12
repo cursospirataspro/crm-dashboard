@@ -3732,17 +3732,30 @@ async function sendViaBrevo() {
   renderCampaignHistory();
 }
 
+// ── Función global para botones del banner ────────────────────────
+window.smartSelectAll = function(select) {
+  if (select) {
+    _smartState.allRows.forEach(r => _smartState.selectedEmails.add(r.email));
+  } else {
+    _smartState.selectedEmails.clear();
+  }
+  renderSmartCourseResults();
+};
+
 // ── Segmentación avanzada ─────────────────────────────────────────
 function getEmailRecipients(segment, excludeConverted = false) {
-  // ── Segmento Smart Course: usa el estado del panel de recomendaciones ──
+  // ── Segmento Smart Course: usa emails marcados con checkbox ──
   if (segment === "smart_course") {
-    const mode = document.querySelector('input[name="smartMode"]:checked')?.value || "similar";
-    const { buyers, similar } = _smartState;
-    let list = [];
-    if (mode === "buyers")  list = buyers;
-    if (mode === "similar") list = similar;
-    if (mode === "both")    list = [...buyers, ...similar.filter(s => !buyers.some(b => b.email === s.email))];
-    return list.filter(c => c.email).map(c => ({ email: c.email, name: c.name || c.email }));
+    const sel = _smartState.selectedEmails;
+    if (!sel.size) {
+      // fallback: todos los rows
+      return _smartState.allRows
+        .filter(r => r.email)
+        .map(r => ({ email: r.email, name: r.name || r.email }));
+    }
+    return _smartState.allRows
+      .filter(r => sel.has(r.email))
+      .map(r => ({ email: r.email, name: r.name || r.email }));
   }
 
   const cm  = Object.values(customerMap(state.filtered));
@@ -3872,9 +3885,11 @@ function populateAdvancedFilters() {
 // Estado del panel smart
 const _smartState = {
   selectedCourse: "",
-  buyers: [],       // clientes que ya compraron el curso
-  similar: [],      // clientes similares que no lo compraron
-  relatedCourses: [], // cursos frecuentemente co-comprados
+  buyers: [],
+  similar: [],
+  relatedCourses: [],
+  selectedEmails: new Set(), // emails marcados con checkbox
+  allRows: [],               // todos los rows actuales para select-all
 };
 
 // Poblar el select de cursos del panel smart
@@ -3947,6 +3962,8 @@ function runSmartCourseAnalysis(courseName) {
   _smartState.buyers = buyers.filter(c => c.email);
   _smartState.similar = similar;
   _smartState.relatedCourses = relatedCourses;
+  _smartState.selectedEmails = new Set(); // resetear para nuevo análisis
+  _smartState.allRows = [];
 }
 
 // Renderizar el panel de resultados
@@ -3959,21 +3976,49 @@ function renderSmartCourseResults() {
   if (!resultsDiv || !kpisDiv || !tbody) return;
 
   const mode = document.querySelector('input[name="smartMode"]:checked')?.value || "similar";
-  const { buyers, similar, relatedCourses, selectedCourse } = _smartState;
+  const { buyers, similar, relatedCourses } = _smartState;
 
-  const showBuyers = mode === "buyers" || mode === "both";
+  const showBuyers  = mode === "buyers"  || mode === "both";
   const showSimilar = mode === "similar" || mode === "both";
 
-  const recipientsBuyers  = showBuyers  ? buyers  : [];
-  const recipientsSimilar = showSimilar ? similar : [];
-  const total = [...new Set([...recipientsBuyers.map(r => r.email), ...recipientsSimilar.map(r => r.email)])].length;
+  // Construir lista de filas
+  const rows = [];
+  if (showBuyers) {
+    buyers.forEach(c => rows.push({
+      name: c.name, email: c.email,
+      shared: "— ya compró este curso —",
+      score: "✅",
+      typeLabel: '<span style="background:#16a34a22;color:#16a34a;padding:2px 8px;border-radius:10px;font-size:11px">Comprador</span>'
+    }));
+  }
+  if (showSimilar) {
+    similar.forEach(c => rows.push({
+      name: c.name, email: c.email,
+      shared: c.sharedCourses.slice(0, 3).map(n => n.length > 28 ? n.slice(0,28)+"…" : n).join(", "),
+      score: `${Math.round(c.score * 100)}%`,
+      typeLabel: '<span style="background:#0092ff22;color:#0092ff;padding:2px 8px;border-radius:10px;font-size:11px">Similar</span>'
+    }));
+  }
+
+  // Guardar en estado + seleccionar todos por defecto en el primer análisis
+  _smartState.allRows = rows;
+  if (_smartState.selectedEmails.size === 0) {
+    rows.forEach(r => _smartState.selectedEmails.add(r.email));
+  } else {
+    // Mantener solo los que siguen en la lista actual
+    const currentEmails = new Set(rows.map(r => r.email));
+    [..._smartState.selectedEmails].forEach(e => { if (!currentEmails.has(e)) _smartState.selectedEmails.delete(e); });
+  }
+
+  const total = [...new Set([...buyers.filter(()=>showBuyers).map(r=>r.email), ...similar.filter(()=>showSimilar).map(r=>r.email)])].length;
+  const selCount = _smartState.selectedEmails.size;
 
   // KPIs
   kpisDiv.innerHTML = [
-    { label: "Compradores del curso", value: buyers.length, icon: "🛒", color: "var(--good)" },
-    { label: "Clientes similares", value: similar.length, icon: "💡", color: "var(--accent)" },
-    { label: "Cursos relacionados", value: relatedCourses.length, icon: "🔗", color: "var(--warn)" },
-    { label: "A enviar ahora", value: total, icon: "📬", color: "var(--good)" },
+    { label: "Compradores del curso", value: buyers.length,         icon: "🛒", color: "var(--good)"   },
+    { label: "Clientes similares",    value: similar.length,        icon: "💡", color: "var(--accent)" },
+    { label: "Cursos relacionados",   value: relatedCourses.length, icon: "🔗", color: "var(--warn)"   },
+    { label: "Seleccionados",         value: selCount,              icon: "☑️", color: "var(--good)"   },
   ].map(k => `<div style="background:var(--bg);border-radius:8px;padding:10px 14px;flex:1;min-width:120px;border:1px solid var(--line)">
     <div style="font-size:20px;font-weight:800;color:${k.color}">${k.icon} ${k.value}</div>
     <div style="font-size:11px;color:var(--muted)">${k.label}</div>
@@ -3994,50 +4039,129 @@ function renderSmartCourseResults() {
     }
   }
 
-  // Tabla de destinatarios
-  const rows = [];
-  if (showBuyers) {
-    buyers.forEach(c => rows.push({
-      name: c.name, email: c.email, revenue: c.revenue,
-      shared: "— ya compró este curso —",
-      score: "✅",
-      type: "buyer",
-      typeLabel: '<span style="background:#16a34a22;color:#16a34a;padding:2px 8px;border-radius:10px;font-size:11px">Comprador</span>'
-    }));
-  }
-  if (showSimilar) {
-    similar.forEach(c => rows.push({
-      name: c.name, email: c.email, revenue: c.revenue,
-      shared: c.sharedCourses.slice(0, 3).map(n => n.length > 28 ? n.slice(0,28)+"…" : n).join(", "),
-      score: `${Math.round(c.score * 100)}%`,
-      type: "similar",
-      typeLabel: '<span style="background:#0092ff22;color:#0092ff;padding:2px 8px;border-radius:10px;font-size:11px">Similar</span>'
-    }));
+  // ── Barra de selección masiva ──
+  const allChecked  = rows.length > 0 && rows.every(r => _smartState.selectedEmails.has(r.email));
+  const someChecked = rows.some(r => _smartState.selectedEmails.has(r.email));
+
+  // Construir thead con checkbox select-all
+  const tableEl = tbody.closest("table");
+  if (tableEl) {
+    let thead = tableEl.querySelector("thead");
+    if (!thead) { thead = document.createElement("thead"); tableEl.prepend(thead); }
+    thead.innerHTML = `<tr style="background:var(--card2);position:sticky;top:0">
+      <th style="padding:8px 10px;text-align:center;width:40px">
+        <input type="checkbox" id="smartSelectAll" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer"
+          ${allChecked ? "checked" : ""} ${someChecked && !allChecked ? 'style="opacity:.6"' : ""}>
+      </th>
+      <th style="padding:8px 10px;text-align:left;font-weight:700">Cliente</th>
+      <th style="padding:8px 10px;text-align:left;font-weight:700">Cursos en común</th>
+      <th style="padding:8px 10px;text-align:right;font-weight:700">Score</th>
+      <th style="padding:8px 10px;text-align:center;font-weight:700">Tipo</th>
+    </tr>`;
+
+    const selectAllChk = thead.querySelector("#smartSelectAll");
+    if (selectAllChk) {
+      selectAllChk.indeterminate = someChecked && !allChecked;
+      selectAllChk.addEventListener("change", () => {
+        if (selectAllChk.checked) {
+          rows.forEach(r => _smartState.selectedEmails.add(r.email));
+        } else {
+          rows.forEach(r => _smartState.selectedEmails.delete(r.email));
+        }
+        renderSmartCourseResults();
+      });
+    }
   }
 
-  tbody.innerHTML = rows.slice(0, 150).map(r => `
-    <tr style="border-bottom:1px solid var(--line)">
+  // Filas con checkbox individual
+  tbody.innerHTML = rows.slice(0, 150).map(r => {
+    const checked = _smartState.selectedEmails.has(r.email);
+    const hasRealName = r.name && r.name !== r.email && r.name !== "Cliente";
+    return `<tr style="border-bottom:1px solid var(--line);${checked ? "" : "opacity:.45"}">
+      <td style="padding:8px 10px;text-align:center">
+        <input type="checkbox" class="smart-row-chk" data-email="${esc(r.email)}"
+          style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer"
+          ${checked ? "checked" : ""}>
+      </td>
       <td style="padding:8px 10px">
         <div style="font-weight:600;font-size:12px">${esc(r.name)}</div>
         <div style="color:var(--muted);font-size:11px">${esc(r.email)}</div>
+        ${hasRealName ? '' : '<div style="font-size:10px;color:var(--warn)">⚠ Sin nombre en CRM</div>'}
       </td>
       <td style="padding:8px 10px;font-size:11px;color:var(--muted);max-width:200px">${esc(r.shared)}</td>
       <td style="padding:8px 10px;text-align:right;font-weight:700;color:var(--accent)">${r.score}</td>
       <td style="padding:8px 10px;text-align:center">${r.typeLabel}</td>
-    </tr>`).join("");
+    </tr>`;
+  }).join("");
+
+  // Listeners de checkboxes individuales
+  tbody.querySelectorAll(".smart-row-chk").forEach(chk => {
+    chk.addEventListener("change", () => {
+      const email = chk.dataset.email;
+      if (chk.checked) _smartState.selectedEmails.add(email);
+      else             _smartState.selectedEmails.delete(email);
+      // Re-render solo kpis y badge (sin re-render completo para no perder scroll)
+      _smartUpdateCounters();
+    });
+  });
 
   resultsDiv.style.display = "block";
 
-  // ── Banner de confirmación: destinatarios seleccionados + nombres CRM ──
-  const namePreview = rows.slice(0, 4).map(r => {
+  // ── Banner de confirmación ──
+  _smartRenderBanner(rows);
+
+  // Actualizar badge header
+  _smartUpdateCounters();
+}
+
+// Actualizar solo los contadores sin re-renderizar la tabla
+function _smartUpdateCounters() {
+  const selCount = _smartState.selectedEmails.size;
+  const badge = $("#emailCountBadge");
+  if (badge) badge.textContent = `${selCount} seleccionados`;
+
+  // Actualizar KPI "Seleccionados"
+  const kpisDiv = $("#smartCourseKpis");
+  if (kpisDiv) {
+    const kpiCards = kpisDiv.querySelectorAll("div > div:first-child");
+    if (kpiCards[3]) kpiCards[3].textContent = `☑️ ${selCount}`;
+  }
+
+  // Actualizar banner
+  const banner = $("#smartSelectedBanner");
+  if (banner) {
+    const countEl = banner.querySelector(".smart-banner-count");
+    if (countEl) countEl.textContent = `${selCount} destinatarios seleccionados`;
+  }
+
+  // Actualizar select-all checkbox state
+  const selectAll = $("#smartSelectAll");
+  if (selectAll && _smartState.allRows.length > 0) {
+    const allChecked  = _smartState.allRows.every(r => _smartState.selectedEmails.has(r.email));
+    const someChecked = _smartState.allRows.some(r => _smartState.selectedEmails.has(r.email));
+    selectAll.checked       = allChecked;
+    selectAll.indeterminate = someChecked && !allChecked;
+  }
+}
+
+// Renderizar solo el banner de confirmación
+function _smartRenderBanner(rows) {
+  const resultsDiv = $("#smartCourseResults");
+  if (!resultsDiv) return;
+  const selCount = _smartState.selectedEmails.size;
+  const selRows  = rows.filter(r => _smartState.selectedEmails.has(r.email));
+
+  const namePreview = selRows.slice(0, 4).map(r => {
     const hasRealName = r.name && r.name !== r.email && r.name !== "Cliente";
     return `<span style="background:rgba(255,255,255,.08);border-radius:6px;padding:3px 8px;font-size:12px;white-space:nowrap">
-      ${hasRealName ? `<strong>${esc(r.name)}</strong> <span style="opacity:.6">&lt;${esc(r.email)}&gt;</span>` : `<span style="opacity:.8">${esc(r.email)}</span>`}
+      ${hasRealName
+        ? `<strong>${esc(r.name)}</strong> <span style="opacity:.6">&lt;${esc(r.email)}&gt;</span>`
+        : `<span style="opacity:.8">${esc(r.email)}</span>`}
     </span>`;
   }).join("");
-  const moreCount = rows.length > 4 ? `<span style="font-size:12px;opacity:.7">+${rows.length - 4} más</span>` : "";
+  const moreCount = selRows.length > 4
+    ? `<span style="font-size:12px;opacity:.7">+${selRows.length - 4} más</span>` : "";
 
-  // Insertar/actualizar el banner de confirmación
   let banner = $("#smartSelectedBanner");
   if (!banner) {
     banner = document.createElement("div");
@@ -4048,24 +4172,27 @@ function renderSmartCourseResults() {
     <div style="margin-top:16px;padding:14px 16px;background:linear-gradient(135deg,rgba(0,146,255,.15),rgba(22,163,74,.12));border:1px solid #16a34a55;border-radius:10px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <span style="font-size:18px">✅</span>
-        <span style="font-weight:700;font-size:14px;color:#4ade80">${total} destinatarios seleccionados automáticamente</span>
-        <span style="font-size:12px;color:var(--muted)">— nombres capturados del CRM para personalización</span>
+        <span class="smart-banner-count" style="font-weight:700;font-size:14px;color:#4ade80">${selCount} destinatarios seleccionados</span>
+        <span style="font-size:12px;color:var(--muted)">— nombres del CRM para personalización con <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:3px">{nombre}</code></span>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
         ${namePreview}${moreCount}
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">
-        💡 Cada correo se enviará con el nombre real del cliente — usa <code style="background:rgba(255,255,255,.1);padding:1px 6px;border-radius:4px">{nombre}</code> en el asunto y cuerpo del mensaje.
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="smartSelectAll(true)"
+          style="background:rgba(0,146,255,.2);color:#0092ff;border:1px solid #0092ff55;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">
+          ☑ Seleccionar todos (${_smartState.allRows.length})
+        </button>
+        <button onclick="smartSelectAll(false)"
+          style="background:rgba(255,80,80,.12);color:#f87171;border:1px solid #f8717155;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">
+          ☐ Deseleccionar todos
+        </button>
+        <button onclick="document.getElementById('emailSubject')?.scrollIntoView({behavior:'smooth',block:'center'})"
+          style="background:linear-gradient(135deg,#0092ff,#16a34a);color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">
+          ✏️ Componer y enviar →
+        </button>
       </div>
-      <button onclick="document.getElementById('emailSubject')?.scrollIntoView({behavior:'smooth',block:'center'})"
-        style="background:linear-gradient(135deg,#0092ff,#16a34a);color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer">
-        ✏️ Ir a componer el email →
-      </button>
     </div>`;
-
-  // Actualizar badge de destinatarios
-  const badge = $("#emailCountBadge");
-  if (badge) badge.textContent = `${total} destinatarios`;
 }
 
 // ── Preview HTML real en iframe ───────────────────────────────────
