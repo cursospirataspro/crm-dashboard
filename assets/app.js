@@ -921,11 +921,12 @@ function renderOportunidades() {
     + cancelledLeads.reduce((s,l) => s+l.value, 0)
     + (inactiveLeads.length + upsellLeads.length) * avgTicket;
 
+  // ── KPIs de oportunidades ──
   const kpisHtml = [
-    ['🔥', pendingLeads.length, 'Pagos pendientes', fmtMoney(pendingLeads.reduce((s,l)=>s+l.value,0))],
-    ['🛒', cancelledLeads.length, 'Carritos perdidos', fmtMoney(cancelledLeads.reduce((s,l)=>s+l.value,0))],
-    ['😴', inactiveLeads.length, 'Inactivos a reactivar', fmtMoney(inactiveLeads.length * avgTicket)],
-    ['🚀', upsellLeads.length, 'Potencial upsell', fmtMoney(upsellLeads.length * avgTicket)],
+    ['🔥', pendingLeads.length,  'Pagos pendientes',     fmtMoney(pendingLeads.reduce((s,l)=>s+l.value,0))],
+    ['🛒', cancelledLeads.length,'Carritos perdidos',     fmtMoney(cancelledLeads.reduce((s,l)=>s+l.value,0))],
+    ['😴', inactiveLeads.length, 'Inactivos a reactivar',fmtMoney(inactiveLeads.length * avgTicket)],
+    ['🚀', upsellLeads.length,   'Potencial upsell',     fmtMoney(upsellLeads.length * avgTicket)],
     ['💰', pendingLeads.length + cancelledLeads.length + inactiveLeads.length, 'Total leads', fmtMoney(totalPotential)]
   ].map(([icon, n, label, val]) =>
     `<div class="opo-kpi">
@@ -938,32 +939,63 @@ function renderOportunidades() {
      </div>`
   ).join('');
 
-  // Soporta HTML nuevo (#emKpis) y HTML viejo (#opoKpis)
   const emKpisEl = $('#emKpis');
-  const opoKpisEl = $('#opoKpis');
+  if (emKpisEl) emKpisEl.innerHTML = kpisHtml;
 
-  if (emKpisEl) {
-    // HTML nuevo — Email Marketing
-    emKpisEl.innerHTML = kpisHtml;
-    restoreBrevoConfig();
-    renderCampaignHistory();
-  } else if (opoKpisEl) {
-    // HTML viejo — fallback con tabs
-    opoKpisEl.innerHTML = kpisHtml;
-    if (!$('#view-oportunidades').dataset.tabsInit) {
-      $('#view-oportunidades').dataset.tabsInit = '1';
-      $('#view-oportunidades').querySelectorAll('.opo-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-          $('#view-oportunidades').querySelectorAll('.opo-tab').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          OPO_STATE.tab = btn.dataset.opotab;
-          opoRenderList();
-        });
-      });
-      $('#opoExportBtn')?.addEventListener('click', opoExportCSV);
-    }
-    opoRenderList();
+  // ── Segment cards con conteo de destinatarios ──
+  const cm = Object.values(customerMap(state.filtered));
+  const now = Date.now();
+  const allWithEmail = cm.filter(c => c.email);
+  const vipEmails = cm.sort((a,b)=>b.revenue-a.revenue).slice(0, Math.ceil(cm.length*0.1)).map(c=>c.email);
+  const segments = [
+    { key:'all',      icon:'👥', label:'Todos los clientes',        count: allWithEmail.length,                                                              color:'var(--accent)' },
+    { key:'inactive', icon:'😴', label:'Inactivos (+90 días)',       count: allWithEmail.filter(c=>new Date(c.last)<new Date(now-90*864e5)).length,           color:'#f59e0b' },
+    { key:'vip',      icon:'⭐', label:'VIP (top 10%)',              count: allWithEmail.filter(c=>vipEmails.includes(c.email)).length,                      color:'#a78bfa' },
+    { key:'risk',     icon:'⚠', label:'En riesgo (1 compra)',        count: allWithEmail.filter(c=>c.orders===1).length,                                     color:'#f87171' },
+    { key:'upsell',   icon:'🚀', label:'Upsell (ticket bajo)',        count: allWithEmail.filter(c=>c.orders===1&&c.revenue<100).length,                     color:'#34d399' },
+  ];
+  const segCardsEl = $('#emSegmentCards');
+  if (segCardsEl) {
+    segCardsEl.innerHTML = segments.map(s =>
+      `<div class="kpi-card" style="cursor:pointer;border:2px solid transparent;transition:.2s" data-seg="${s.key}"
+            onmouseenter="this.style.borderColor='${s.color}'" onmouseleave="this.style.borderColor='transparent'"
+            onclick="document.getElementById('emailSegment').value='${s.key}';updateEmailCountBadge()">
+        <p class="kpi-label">${s.icon} ${s.label}</p>
+        <p class="kpi-val" style="color:${s.color}">${s.count}</p>
+        <p style="font-size:11px;color:var(--muted);margin:0">destinatarios</p>
+      </div>`
+    ).join('');
   }
+  const totalBadge = $('#emTotalBadge');
+  if (totalBadge) totalBadge.textContent = allWithEmail.length + ' con email';
+
+  // ── Brevo & historial ──
+  restoreBrevoConfig();
+  renderCampaignHistory();
+
+  // ── Inicializar tabs de oportunidades (solo la primera vez) ──
+  const view = $('#view-oportunidades');
+  if (view && !view.dataset.tabsInit) {
+    view.dataset.tabsInit = '1';
+    view.querySelectorAll('.opo-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        view.querySelectorAll('.opo-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        OPO_STATE.tab = btn.dataset.opotab;
+        opoRenderList();
+      });
+    });
+    $('#opoExportBtn')?.addEventListener('click', opoExportCSV);
+  }
+  opoRenderList();
+  updateEmailCountBadge();
+}
+
+function updateEmailCountBadge() {
+  const seg = $('#emailSegment')?.value || 'all';
+  const count = getEmailRecipients(seg).length;
+  const badge = $('#emailCountBadge');
+  if (badge) badge.textContent = count + ' destinatarios';
 }
 
 function opoRenderList() {
@@ -2680,6 +2712,9 @@ function bind() {
   $("#subExportBtn")?.addEventListener("click", exportSuscripcionesCSV);
   $("#subSearch")?.addEventListener("input", renderSuscripciones);
   $("#subFilter")?.addEventListener("change", renderSuscripciones);
+
+  // ── Email Marketing: actualizar badge al cambiar segmento ──
+  $("#emailSegment")?.addEventListener("change", updateEmailCountBadge);
 }
 
 // =============================================================

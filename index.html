@@ -42,7 +42,7 @@
     <nav class="nav">
       <button class="nav-btn active" data-view="command">🌐 Centro de mando</button>
       <button class="nav-btn" data-view="crm">👥 CRM clientes</button>
-      <button class="nav-btn" data-view="oportunidades">🎯 Oportunidades</button>
+      <button class="nav-btn" data-view="oportunidades">📧 Email Marketing</button>
       <button class="nav-btn" data-view="kanban">📌 Kanban leads</button>
       <button class="nav-btn" data-view="analytics">📈 Análisis</button>
       <button class="nav-btn" data-view="sales">💳 Ventas</button>
@@ -373,57 +373,137 @@
 
     </section>
 
-    <!-- VISTA: OPORTUNIDADES DE VENTA -->
+    <!-- VISTA: EMAIL MARKETING -->
     <section id="view-oportunidades" class="view">
 
-      <!-- KPIs resumen -->
-      <div id="opoKpis" class="opo-kpis"></div>
+      <!-- ── Barra de estado Brevo (siempre visible) ── -->
+      <article class="panel" style="margin-bottom:14px;padding:12px 20px">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+            <span style="font-size:18px">📨</span>
+            <div>
+              <p class="eyebrow" style="margin:0 0 2px">Integración</p>
+              <span id="brevoStatusLabel" style="font-size:13px;color:var(--muted)">No configurado — haz clic en ⚙ Configurar</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <button id="brevoTestBtn" class="btn ghost" style="font-size:12px;padding:6px 12px">🔌 Probar conexión</button>
+            <button id="brevoConfigToggle" class="btn ghost" style="font-size:12px;padding:6px 12px">⚙ Configurar Brevo</button>
+          </div>
+        </div>
+        <!-- Panel de config (oculto por defecto) -->
+        <div id="brevoConfigPanel" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+          <div class="email-compose" style="gap:10px">
+            <label class="sf-label" style="max-width:480px">API Key de Brevo
+              <input id="brevoApiKey" type="password" class="sf-input" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxx...">
+            </label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <label class="sf-label" style="flex:1;min-width:180px">Nombre del remitente
+                <input id="brevoSenderName" type="text" class="sf-input" placeholder="Tu nombre o empresa">
+              </label>
+              <label class="sf-label" style="flex:1;min-width:180px">Email del remitente
+                <input id="brevoSenderEmail" type="email" class="sf-input" placeholder="tucorreo@dominio.com">
+              </label>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button id="brevoSaveBtn" class="btn">💾 Guardar configuración</button>
+              <span id="brevoSavedMsg" style="display:none;color:var(--good);font-size:13px">✅ Guardado</span>
+            </div>
+          </div>
+        </div>
+      </article>
 
-      <!-- Tabs de categoría -->
-      <div class="opo-tabs">
-        <button class="opo-tab active" data-opotab="pending">🔥 Pendientes sin pagar</button>
-        <button class="opo-tab" data-opotab="cancelled">🛒 Carritos perdidos</button>
-        <button class="opo-tab" data-opotab="inactive">😴 Clientes inactivos</button>
-        <button class="opo-tab" data-opotab="upsell">🚀 Potencial upsell</button>
-      </div>
+      <!-- ── KPIs de oportunidades ── -->
+      <div id="emKpis" class="opo-kpis" style="margin-bottom:14px"></div>
 
-      <!-- Exportar lista -->
-      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-        <button id="opoExportBtn" class="chip">⬇ Exportar CSV email marketing</button>
-      </div>
-
-      <!-- Lista activa -->
-      <div id="opoList" class="opo-list"></div>
-
-      <!-- Email marketing -->
-      <article class="panel" style="margin-top:14px">
+      <!-- ── Segmentos de destinatarios ── -->
+      <article class="panel" style="margin-bottom:14px">
         <div class="panel-head">
-          <div><p class="eyebrow">Acción directa</p><h2>📧 Campaña de email</h2></div>
+          <div><p class="eyebrow">Audiencia</p><h2>Segmentos de destinatarios</h2></div>
+          <span id="emTotalBadge" class="badge">0 con email</span>
+        </div>
+        <div id="emSegmentCards" class="kpi-grid" style="margin-top:6px"></div>
+      </article>
+
+      <!-- ── Compositor de campaña ── -->
+      <article class="panel" style="margin-bottom:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Nueva campaña</p><h2>📧 Compositor de email</h2></div>
           <span id="emailCountBadge" class="badge">0 destinatarios</span>
         </div>
         <div class="email-compose">
+
+          <!-- Segmento -->
           <label class="sf-label">Segmento destinatario
             <select id="emailSegment" class="sf-input">
-              <option value="all">Todos los clientes</option>
-              <option value="inactive">Inactivos (sin compra +90 días)</option>
-              <option value="vip">Clientes VIP (top 10%)</option>
-              <option value="risk">En riesgo (compra única)</option>
-              <option value="upsell">Potencial upsell (1 curso)</option>
+              <option value="all">👥 Todos los clientes</option>
+              <option value="inactive">😴 Inactivos (sin compra +90 días)</option>
+              <option value="vip">⭐ Clientes VIP (top 10% ingresos)</option>
+              <option value="risk">⚠ En riesgo (solo 1 compra)</option>
+              <option value="upsell">🚀 Potencial upsell (1 curso, ticket bajo)</option>
             </select>
           </label>
+
+          <!-- Asunto -->
           <label class="sf-label">Asunto del email
-            <input id="emailSubject" type="text" class="sf-input" placeholder="Ej: Te tenemos una oferta especial...">
+            <input id="emailSubject" type="text" class="sf-input" placeholder="Ej: 🎓 Tenemos algo especial para ti, {nombre}">
           </label>
-          <label class="sf-label">Cuerpo del mensaje
-            <textarea id="emailBody" class="sf-input" rows="5" placeholder="Hola {nombre}, queremos contarte que..."></textarea>
+
+          <!-- Cuerpo -->
+          <label class="sf-label">
+            Cuerpo del mensaje
+            <small style="color:var(--muted);font-weight:400;margin-left:6px">Usa <code style="background:var(--card2);padding:1px 5px;border-radius:3px">{nombre}</code> para personalizar</small>
+            <textarea id="emailBody" class="sf-input" rows="8" placeholder="Hola {nombre},&#10;&#10;Queremos contarte que tenemos algo especial preparado para ti...&#10;&#10;[Tu mensaje aquí]&#10;&#10;Saludos,&#10;El equipo de Cursos Piratas Pro"></textarea>
           </label>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+
+          <!-- Botones de acción -->
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
             <button id="emailPreviewBtn" class="btn ghost">👁 Vista previa</button>
-            <button id="emailExportBtn" class="btn ghost">⬇ Exportar lista</button>
-            <button id="emailSendBtn" class="btn">📧 Preparar envío (mailto)</button>
+            <button id="emailExportBtn" class="btn ghost">⬇ Exportar CSV</button>
+            <button id="emailSendBtn" class="btn ghost" style="font-size:12px;opacity:.8">📩 Abrir cliente de correo</button>
+            <button id="emailSendBrevoBtn" class="btn" style="background:linear-gradient(135deg,#0092ff,#005fcb);font-weight:700;padding:10px 20px">🚀 Enviar con Brevo</button>
           </div>
-          <div id="emailPreviewBox" class="email-preview hidden"></div>
+
+          <!-- Barra de progreso de envío Brevo -->
+          <div id="brevoProgressWrap" style="display:none;margin-top:16px;padding:16px;background:var(--card2);border-radius:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span id="brevoProgressLabel" style="font-size:13px;font-weight:600">Enviando...</span>
+              <span id="brevoProgressPct" style="font-size:13px;font-weight:700;color:var(--accent)">0%</span>
+            </div>
+            <div style="background:var(--border);border-radius:6px;height:10px;overflow:hidden;margin-bottom:10px">
+              <div id="brevoProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#0092ff,#005fcb);transition:width .3s ease;border-radius:6px"></div>
+            </div>
+            <div id="brevoProgressLog" style="font-size:12px;color:var(--muted);max-height:140px;overflow-y:auto;line-height:2"></div>
+          </div>
+
+          <!-- Vista previa del email -->
+          <div id="emailPreviewBox" class="email-preview hidden" style="margin-top:14px"></div>
+
         </div>
+      </article>
+
+      <!-- ── Leads de oportunidad ── -->
+      <article class="panel" style="margin-bottom:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Oportunidades de venta</p><h2>Leads priorizados por score</h2></div>
+          <button id="opoExportBtn" class="chip">⬇ Exportar CSV</button>
+        </div>
+        <div class="opo-tabs" style="margin-bottom:10px">
+          <button class="opo-tab active" data-opotab="pending">🔥 Pendientes sin pagar</button>
+          <button class="opo-tab" data-opotab="cancelled">🛒 Carritos perdidos</button>
+          <button class="opo-tab" data-opotab="inactive">😴 Inactivos a reactivar</button>
+          <button class="opo-tab" data-opotab="upsell">🚀 Potencial upsell</button>
+        </div>
+        <div id="opoList" class="opo-list"></div>
+      </article>
+
+      <!-- ── Historial de campañas ── -->
+      <article class="panel">
+        <div class="panel-head">
+          <div><p class="eyebrow">Registro</p><h2>📋 Historial de campañas</h2></div>
+          <button id="clearCampaignHistoryBtn" class="chip">🗑 Limpiar</button>
+        </div>
+        <div id="campaignHistory" style="font-size:13px;min-height:40px"></div>
       </article>
 
     </section>
@@ -1073,6 +1153,6 @@
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=30"></script>
+<script src="assets/app.js?v=31"></script>
 </body>
 </html>
