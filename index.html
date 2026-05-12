@@ -9,13 +9,10 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="description" content="Dashboard ejecutivo CRM global para WooCommerce. Visualiza ventas, clientes, geografía y métricas de cursos digitales.">
   <title>CRM Global Dashboard | WooCommerce Cursos</title>
-  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-  <link rel="icon" type="image/svg+xml" sizes="any" href="assets/favicon.svg">
-  <link rel="apple-touch-icon" href="assets/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=10">
+  <link rel="stylesheet" href="assets/styles.css?v=2">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
@@ -36,7 +33,7 @@
   <!-- BARRA LATERAL -->
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-logo"><img src="assets/favicon.svg" alt="CRM" style="width:28px;height:28px;display:block"></div>
+      <div class="brand-logo">CP</div>
       <div>
         <strong>CRM Global</strong>
         <span>Cursos Digitales + WooCommerce</span>
@@ -45,23 +42,20 @@
     <nav class="nav">
       <button class="nav-btn active" data-view="command">🌐 Centro de mando</button>
       <button class="nav-btn" data-view="crm">👥 CRM clientes</button>
-      <button class="nav-btn" data-view="oportunidades">📧 Email Marketing</button>
+      <button class="nav-btn" data-view="oportunidades">🎯 Oportunidades</button>
       <button class="nav-btn" data-view="kanban">📌 Kanban leads</button>
       <button class="nav-btn" data-view="analytics">📈 Análisis</button>
       <button class="nav-btn" data-view="sales">💳 Ventas</button>
       <button class="nav-btn" data-view="courses">🎓 Cursos</button>
       <button class="nav-btn" data-view="geo">📍 Geografía</button>
       <button class="nav-btn" data-view="paypal">💰 PayPal</button>
-      <button class="nav-btn" data-view="stripe">💳 Stripe</button>
-      <button class="nav-btn" data-view="suscripciones">🔄 Suscripciones</button>
       <button class="nav-btn" data-view="settings">⚙️ Conexión</button>
     </nav>
     <div class="sidebar-tools">
       <button id="themeToggle" class="chip">☀ Modo claro</button>
       <button id="pollingToggle" class="chip">🔔 Live OFF</button>
-      <button id="pushNotifBtn" class="chip">&#x1F514; Alertas push</button>
-      <button id="midnightToggle" class="chip">&#x1F30C; Midnight</button>
-      <button id="globalSearchBtn" class="chip">&#x1F50D; Buscar (Ctrl+K)</button>
+      <button id="pushNotifBtn" class="chip">🔔 Alertas push</button>
+      <button id="globalSearchBtn" class="chip">🔍 Buscar (Ctrl+K)</button>
       <label class="currency-row">
         <span>💱 Moneda</span>
         <select id="globalCurrency" class="currency-select">
@@ -74,28 +68,10 @@
         </select>
       </label>
     </div>
-    <!-- META MENSUAL -->
-    <section class="sidebar-goal">
-      <div class="goal-header">
-        <small>&#x1F3AF; Meta mensual</small>
-        <span id="goalPct" class="goal-pct">0%</span>
-      </div>
-      <div class="goal-bar-track">
-        <div id="goalBar" class="goal-bar-fill" style="width:0%"></div>
-      </div>
-      <div class="goal-amounts">
-        <span id="goalCurrent">&#x2014;</span>
-        <span id="goalTarget">Sin meta</span>
-      </div>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <input id="goalInput" type="number" class="sf-input" placeholder="Meta en USD" style="flex:1;min-width:0;padding:6px 8px;font-size:12px">
-        <button id="goalSave" class="chip">Guardar</button>
-      </div>
-    </section>
     <section class="mini-status">
       <small>Estado del dashboard</small>
       <strong id="modeLabel">Modo demo</strong>
-      <p id="lastSync">Esperando actualizaci&#xF3;n...</p>
+      <p id="lastSync">Esperando actualización...</p>
     </section>
   </aside>
 
@@ -196,7 +172,7 @@
           <div class="globe-hint">Arrastra para girar · Rueda para zoom · Clic en un punto para filtrar el país</div>
         </article>
 
-        <article class="panel country-panel" style="grid-column:1/-1">
+        <article class="panel country-panel">
           <div class="panel-head">
             <div>
               <p class="eyebrow">Detalle geográfico</p>
@@ -254,15 +230,6 @@
 
     <!-- VISTA: CRM -->
     <section id="view-crm" class="view">
-
-      <!-- Panel VIP -->
-      <article class="panel vip-panel" style="margin-bottom:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Elite</p><h2>&#x1F451; Clientes VIP</h2></div>
-          <span id="vipCountBadge" class="badge">&#x2014;</span>
-        </div>
-        <div id="vipGrid" class="vip-grid"></div>
-      </article>
 
       <!-- Ranking de cursos -->
       <article class="panel" style="margin-bottom:14px">
@@ -404,45 +371,30 @@
 
     </section>
 
-    <!-- VISTA: EMAIL MARKETING -->
+    <!-- VISTA: OPORTUNIDADES DE VENTA -->
     <section id="view-oportunidades" class="view">
 
-      <!-- Panel Configuración Brevo -->
-      <article class="panel" style="margin-bottom:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Integración</p><h2>🔑 Brevo API</h2></div>
-          <button id="brevoConfigToggle" class="chip">⚙ Configurar</button>
-        </div>
-        <div id="brevoConnectionStatus" style="padding:4px 0 8px;font-size:13px">
-          Estado: <span id="brevoStatusLabel" style="color:var(--muted)">No configurado — haz clic en ⚙ Configurar</span>
-        </div>
-        <div id="brevoConfigPanel" style="display:none">
-          <div class="email-compose" style="padding-top:10px">
-            <label class="sf-label">API Key de Brevo
-              <input id="brevoApiKey" type="password" class="sf-input" placeholder="xkeysib-xxxxxxxxxxxxxxxx...">
-            </label>
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-              <label class="sf-label" style="flex:1;min-width:180px">Nombre del remitente
-                <input id="brevoSenderName" type="text" class="sf-input" placeholder="Tu nombre o empresa">
-              </label>
-              <label class="sf-label" style="flex:1;min-width:180px">Email del remitente
-                <input id="brevoSenderEmail" type="email" class="sf-input" placeholder="tucorreo@dominio.com">
-              </label>
-            </div>
-            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
-              <button id="brevoSaveBtn" class="btn">💾 Guardar</button>
-              <button id="brevoTestBtn" class="btn ghost">🧪 Probar conexión</button>
-              <span id="brevoSavedMsg" style="display:none;color:var(--good);font-size:13px">✓ Guardado</span>
-            </div>
-          </div>
-        </div>
-      </article>
+      <!-- KPIs resumen -->
+      <div id="opoKpis" class="opo-kpis"></div>
 
-      <!-- KPIs de la lista de contactos -->
-      <div id="emKpis" class="opo-kpis" style="margin-bottom:14px"></div>
+      <!-- Tabs de categoría -->
+      <div class="opo-tabs">
+        <button class="opo-tab active" data-opotab="pending">🔥 Pendientes sin pagar</button>
+        <button class="opo-tab" data-opotab="cancelled">🛒 Carritos perdidos</button>
+        <button class="opo-tab" data-opotab="inactive">😴 Clientes inactivos</button>
+        <button class="opo-tab" data-opotab="upsell">🚀 Potencial upsell</button>
+      </div>
 
-      <!-- Crear campaña -->
-      <article class="panel">
+      <!-- Exportar lista -->
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button id="opoExportBtn" class="chip">⬇ Exportar CSV email marketing</button>
+      </div>
+
+      <!-- Lista activa -->
+      <div id="opoList" class="opo-list"></div>
+
+      <!-- Email marketing -->
+      <article class="panel" style="margin-top:14px">
         <div class="panel-head">
           <div><p class="eyebrow">Acción directa</p><h2>📧 Campaña de email</h2></div>
           <span id="emailCountBadge" class="badge">0 destinatarios</span>
@@ -458,39 +410,18 @@
             </select>
           </label>
           <label class="sf-label">Asunto del email
-            <input id="emailSubject" type="text" class="sf-input" placeholder="Ej: 🎓 Nuevo curso disponible para ti">
+            <input id="emailSubject" type="text" class="sf-input" placeholder="Ej: Te tenemos una oferta especial...">
           </label>
-          <label class="sf-label">Cuerpo del mensaje <small style="color:var(--muted);font-weight:400">(usa {nombre} para personalizar)</small>
-            <textarea id="emailBody" class="sf-input" rows="7" placeholder="Hola {nombre},&#10;&#10;Queremos avisarte que tenemos algo especial para ti...&#10;&#10;Saludos"></textarea>
+          <label class="sf-label">Cuerpo del mensaje
+            <textarea id="emailBody" class="sf-input" rows="5" placeholder="Hola {nombre}, queremos contarte que..."></textarea>
           </label>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
             <button id="emailPreviewBtn" class="btn ghost">👁 Vista previa</button>
-            <button id="emailExportBtn" class="btn ghost">⬇ Exportar CSV</button>
-            <button id="emailSendBrevoBtn" class="btn" style="background:linear-gradient(135deg,#0092ff,#005fcb)">🚀 Enviar con Brevo</button>
-            <button id="emailSendBtn" class="btn ghost" style="font-size:12px;opacity:.7">📨 Cliente de correo</button>
-          </div>
-          <!-- Barra de progreso de envío -->
-          <div id="brevoProgressWrap" style="display:none;margin-top:14px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <span id="brevoProgressLabel" style="font-size:13px;color:var(--muted)">Enviando...</span>
-              <span id="brevoProgressPct" style="font-size:13px;font-weight:600">0%</span>
-            </div>
-            <div style="background:var(--card2);border-radius:6px;height:8px;overflow:hidden">
-              <div id="brevoProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#0092ff,#005fcb);transition:width .3s ease"></div>
-            </div>
-            <div id="brevoProgressLog" style="margin-top:8px;font-size:12px;color:var(--muted);max-height:120px;overflow-y:auto;line-height:1.8"></div>
+            <button id="emailExportBtn" class="btn ghost">⬇ Exportar lista</button>
+            <button id="emailSendBtn" class="btn">📧 Preparar envío (mailto)</button>
           </div>
           <div id="emailPreviewBox" class="email-preview hidden"></div>
         </div>
-      </article>
-
-      <!-- Historial de campañas -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Registro</p><h2>📋 Historial de campañas</h2></div>
-          <button id="clearCampaignHistoryBtn" class="chip">🗑 Limpiar historial</button>
-        </div>
-        <div id="campaignHistory" style="font-size:13px"></div>
       </article>
 
     </section>
@@ -523,14 +454,6 @@
 
     <!-- VISTA: ANÁLISIS AVANZADO -->
     <section id="view-analytics" class="view">
-
-      <!-- Prediccion de ingresos del mes -->
-      <article class="panel" style="margin-bottom:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Proyecci&#xF3;n</p><h2>Predicci&#xF3;n de ingresos &#x2014; mes actual</h2></div>
-        </div>
-        <div id="revenuePrediction"></div>
-      </article>
 
       <!-- Forecasting -->
       <article class="panel">
@@ -608,19 +531,11 @@
       <!-- Hora óptima de envío -->
       <article class="panel" style="margin-top:14px">
         <div class="panel-head">
-          <div><p class="eyebrow">Email marketing</p><h2>Hora &#xF3;ptima de env&#xED;o</h2></div>
-          <span id="optimalTimeBadge" class="badge">&#x2014;</span>
+          <div><p class="eyebrow">Email marketing</p><h2>Hora óptima de envío</h2></div>
+          <span id="optimalTimeBadge" class="badge">—</span>
         </div>
         <div id="optimalTimeChart" class="payment-bars"></div>
         <p id="optimalTimeRecommend" style="margin-top:12px;font-size:13px;color:var(--muted)"></p>
-      </article>
-
-      <!-- Calendario heatmap de ventas -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Actividad de ventas</p><h2>Calendario de ventas &#x2014; &#xFA;ltimas 12 semanas</h2></div>
-        </div>
-        <div id="salesHeatmapCalendar" style="overflow-x:auto"></div>
       </article>
 
     </section>
@@ -710,17 +625,6 @@
           <div id="cityRanking" class="ranking"></div>
         </article>
       </section>
-
-      <!-- Tasa de conversion por pais -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Efectividad</p><h2>&#x1F4CA; Tasa de conversi&#xF3;n por pa&#xED;s</h2></div>
-          <span id="conversionBadge" class="badge">&#x2014;</span>
-        </div>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Pedidos completados vs total de pedidos por pa&#xED;s.</p>
-        <div id="conversionByCountry"></div>
-      </article>
-
     </section>
 
     <!-- VISTA: CONFIGURACIÓN -->
@@ -817,105 +721,6 @@
             <tbody id="paypalTxnBody"></tbody>
           </table>
         </div>
-      </article>
-
-    </section>
-
-    <!-- VISTA: STRIPE -->
-    <section id="view-stripe" class="view">
-
-      <!-- Barra de control Stripe -->
-      <article class="panel" style="margin-bottom:14px;padding:14px 20px">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <p class="eyebrow" style="margin:0">&#x1F4B3; Stripe</p>
-          <span id="stripeStatus" style="font-size:12px;color:var(--muted)">Datos desde WooCommerce filtrados por m&#xE9;todo de pago</span>
-          <button id="stripeRefreshBtn" class="btn btn-primary" style="font-weight:700;margin-left:auto">&#x1F504; Actualizar</button>
-        </div>
-        <div style="margin-top:10px">
-          <input id="stripeSearch" type="search" class="sf-input" placeholder="&#x1F50D; Buscar cliente, producto..." style="width:100%;max-width:400px;font-size:13px">
-        </div>
-      </article>
-
-      <!-- KPIs Stripe -->
-      <div id="stripeKpis" class="kpi-grid" style="margin-top:0"></div>
-
-      <!-- Ingresos diarios + Top productos lado a lado -->
-      <section class="two-col" style="margin-top:14px">
-        <article class="panel">
-          <div class="panel-head">
-            <div><p class="eyebrow">Tendencia</p><h2>Transacciones v&#xED;a Stripe</h2></div>
-          </div>
-          <div id="stripeDayBars" class="payment-bars"></div>
-        </article>
-
-        <article class="panel">
-          <div class="panel-head">
-            <div><p class="eyebrow">Productos</p><h2>Cursos m&#xE1;s vendidos por Stripe</h2></div>
-            <span id="stripeProductsBadge" class="badge">&#x2014;</span>
-          </div>
-          <div id="stripeProductBars" class="payment-bars"></div>
-        </article>
-      </section>
-
-      <!-- Tabla transacciones -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Detalle</p><h2>Transacciones Stripe</h2></div>
-          <span id="stripeTxnCount" class="badge">&#x2014;</span>
-        </div>
-        <div class="table-wrap">
-          <table class="crm-table">
-            <thead><tr>
-              <th>Fecha</th><th>Pedido</th><th>Cliente</th><th>Pa&#xED;s</th>
-              <th>Producto</th><th class="text-right">Bruto</th><th class="text-right">Comisi&#xF3;n est.</th><th class="text-right">Neto est.</th>
-            </tr></thead>
-            <tbody id="stripeTxnBody"></tbody>
-          </table>
-        </div>
-      </article>
-
-    </section>
-
-    <!-- VISTA: SUSCRIPCIONES -->
-    <section id="view-suscripciones" class="view">
-
-      <!-- KPIs suscripciones -->
-      <div id="subKpis" class="kpi-grid" style="margin-bottom:14px"></div>
-
-      <!-- Panel MRR -->
-      <article class="panel" style="margin-bottom:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Ingresos recurrentes</p><h2>MRR &#x2014; Ingresos mensuales recurrentes</h2></div>
-          <span id="subMrrBadge" class="badge">&#x2014;</span>
-        </div>
-        <div id="subMrrBars" class="payment-bars"></div>
-      </article>
-
-      <!-- Clientes recurrentes -->
-      <article class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Base de suscriptores</p><h2>Clientes con compras recurrentes</h2></div>
-          <span id="subCountBadge" class="badge">&#x2014;</span>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <input id="subSearch" type="search" class="sf-input" placeholder="&#x1F50D; Buscar..." style="flex:1;min-width:160px">
-          <select id="subFilter" class="sf-input" style="min-width:160px;font-size:13px">
-            <option value="all">Todos los recurrentes</option>
-            <option value="active">Activos (&#xFA;lt. 60 d&#xED;as)</option>
-            <option value="atrisk">En riesgo (61&#x2013;180 d&#xED;as)</option>
-            <option value="churned">Perdidos (+180 d&#xED;as)</option>
-          </select>
-          <button id="subExportBtn" class="chip">&#x2B07; CSV</button>
-        </div>
-        <div id="subList" class="customer-list"></div>
-      </article>
-
-      <!-- Cursos con suscriptores -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Retenci&#xF3;n por producto</p><h2>Cursos con m&#xE1;s compras recurrentes</h2></div>
-        </div>
-        <div id="subCourseBars" class="payment-bars"></div>
       </article>
 
     </section>
@@ -1057,18 +862,9 @@
         <p style="margin-top:10px;font-size:12px;color:var(--muted)">Con GA4 configurado podrás correlacionar sesiones de usuarios con ventas reales del WooCommerce.</p>
       </article>
 
-      <!-- Log de actividad -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Registro</p><h2>Log de actividad</h2></div>
-          <button id="clearActivityLogBtn" class="chip">Limpiar</button>
-        </div>
-        <div id="activityLog" class="activity-log"></div>
-      </article>
-
       <!-- Intervalo de polling -->
       <article class="panel" style="margin-top:14px">
-        <div class="panel-head"><div><p class="eyebrow">Tiempo real</p><h2>Actualizaci&#xF3;n autom&#xE1;tica</h2></div></div>
+        <div class="panel-head"><div><p class="eyebrow">Tiempo real</p><h2>Actualización automática</h2></div></div>
         <div class="alert-config" style="grid-template-columns:1fr">
           <label class="sf-label">Intervalo de actualización (minutos — 0 = desactivado)
             <input id="cfgPollingInterval" type="number" class="sf-input" value="0" min="0" max="60" style="max-width:120px">
@@ -1083,31 +879,6 @@
     </section>
 
   </main>
-
-  <!-- MODAL: Detalle de pedido -->
-  <div id="orderModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-    <div class="modal-box">
-      <div class="modal-head">
-        <div>
-          <p class="eyebrow">Detalle del pedido</p>
-          <h2 id="orderModalTitle">&#x2014;</h2>
-        </div>
-        <button class="modal-close" id="orderModalClose">&#x2715;</button>
-      </div>
-      <div class="modal-body">
-        <div id="orderModalContent"></div>
-        <div class="om-notes-section" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
-          <label class="sf-label" style="margin-bottom:6px">&#x1F4DD; Notas internas del pedido
-            <textarea id="orderModalNotes" class="sf-input" rows="3" placeholder="A&#xF1;ade notas privadas sobre este pedido..."></textarea>
-          </label>
-          <div style="display:flex;align-items:center;gap:10px">
-            <button class="btn" id="orderModalSaveNote">Guardar nota</button>
-            <span id="orderModalNoteSaved" style="display:none;font-size:12px;color:var(--good)">&#x2713; Guardada</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- MODAL: Timeline de cliente -->
   <div id="customerModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
@@ -1201,6 +972,6 @@
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=26"></script>
+<script src="assets/app.js?v=27"></script>
 </body>
 </html>

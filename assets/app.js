@@ -910,12 +910,15 @@ function renderOportunidades() {
   const { pendingLeads, cancelledLeads, inactiveLeads, upsellLeads } = opoLeads();
   const avgTicket = metrics(state.filtered).avg || 40;
 
-  // KPIs
+  // KPIs — usa #emKpis (nuevo HTML Email Marketing)
+  const emKpisEl = $('#emKpis');
+  if (!emKpisEl) return;
+
   const totalPotential = pendingLeads.reduce((s,l) => s+l.value, 0)
     + cancelledLeads.reduce((s,l) => s+l.value, 0)
     + (inactiveLeads.length + upsellLeads.length) * avgTicket;
 
-  $('#opoKpis').innerHTML = [
+  emKpisEl.innerHTML = [
     ['🔥', pendingLeads.length, 'Pagos pendientes', fmtMoney(pendingLeads.reduce((s,l)=>s+l.value,0))],
     ['🛒', cancelledLeads.length, 'Carritos perdidos', fmtMoney(cancelledLeads.reduce((s,l)=>s+l.value,0))],
     ['😴', inactiveLeads.length, 'Inactivos a reactivar', fmtMoney(inactiveLeads.length * avgTicket)],
@@ -932,21 +935,8 @@ function renderOportunidades() {
      </div>`
   ).join('');
 
-  // Attach tab events (once)
-  if (!$('#view-oportunidades').dataset.tabsInit) {
-    $('#view-oportunidades').dataset.tabsInit = '1';
-    $('#view-oportunidades').querySelectorAll('.opo-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        $('#view-oportunidades').querySelectorAll('.opo-tab').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        OPO_STATE.tab = btn.dataset.opotab;
-        opoRenderList();
-      });
-    });
-    $('#opoExportBtn').addEventListener('click', opoExportCSV);
-  }
-
-  opoRenderList();
+  restoreBrevoConfig();
+  renderCampaignHistory();
 }
 
 function opoRenderList() {
@@ -2642,6 +2632,198 @@ function bind() {
   $("#emailPreviewBtn")?.addEventListener("click", previewEmail);
   $("#emailExportBtn")?.addEventListener("click", exportEmailList);
   $("#emailSendBtn")?.addEventListener("click", sendEmailMailto);
+
+  // ── Brevo ──
+  $("#brevoConfigToggle")?.addEventListener("click", () => {
+    const panel = $("#brevoConfigPanel");
+    if (!panel) return;
+    const isOpen = panel.style.display !== "none";
+    panel.style.display = isOpen ? "none" : "block";
+  });
+  $("#brevoSaveBtn")?.addEventListener("click", saveBrevoConfig);
+  $("#brevoTestBtn")?.addEventListener("click", testBrevoConnection);
+  $("#emailSendBrevoBtn")?.addEventListener("click", sendViaBrevo);
+  $("#clearCampaignHistoryBtn")?.addEventListener("click", clearCampaignHistory);
+}
+
+// =============================================================
+// BREVO EMAIL MARKETING
+// =============================================================
+function saveBrevoConfig() {
+  const key   = $("#brevoApiKey")?.value.trim()   || "";
+  const name  = $("#brevoSenderName")?.value.trim() || "";
+  const email = $("#brevoSenderEmail")?.value.trim() || "";
+  localStorage.setItem("crm_brevo", JSON.stringify({ key, name, email }));
+  const msg = $("#brevoSavedMsg");
+  if (msg) { msg.style.display = "inline"; setTimeout(() => msg.style.display = "none", 2000); }
+  updateBrevoStatus();
+  toast("Configuración de Brevo guardada", "success");
+}
+
+function restoreBrevoConfig() {
+  try {
+    const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
+    if (!b) { updateBrevoStatus(); return; }
+    if ($("#brevoApiKey"))    $("#brevoApiKey").value    = b.key   || "";
+    if ($("#brevoSenderName")) $("#brevoSenderName").value = b.name  || "";
+    if ($("#brevoSenderEmail")) $("#brevoSenderEmail").value = b.email || "";
+    updateBrevoStatus();
+  } catch(e) {}
+}
+
+function updateBrevoStatus() {
+  const lbl = $("#brevoStatusLabel");
+  if (!lbl) return;
+  if (CONFIG.mode === "api") {
+    lbl.style.color = "var(--good)";
+    lbl.textContent = "✅ Usando proxy seguro de WordPress (clave en servidor)";
+  } else {
+    try {
+      const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
+      if (b?.key) {
+        lbl.style.color = "var(--good)";
+        lbl.textContent = "✅ API Key configurada (modo demo)";
+      } else {
+        lbl.style.color = "var(--muted)";
+        lbl.textContent = "No configurado — haz clic en ⚙ Configurar";
+      }
+    } catch(e) {}
+  }
+}
+
+async function testBrevoConnection() {
+  const btn = $("#brevoTestBtn");
+  if (btn) btn.disabled = true;
+  try {
+    if (CONFIG.mode === "api") {
+      const res = await fetch(`${CONFIG.apiBaseUrl}/brevo/test`, {
+        headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) toast(`✅ Brevo OK — ${data.account || "conectado"}`, "success");
+      else toast(`❌ Error: ${data.message || res.status}`, "error");
+    } else {
+      const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
+      if (!b?.key) { toast("⚠ Configura tu API Key primero", "warning"); return; }
+      const res = await fetch("https://api.brevo.com/v3/account", {
+        headers: { "api-key": b.key }
+      });
+      const data = await res.json();
+      if (res.ok) toast(`✅ Brevo OK — ${data.email || "cuenta verificada"}`, "success");
+      else toast(`❌ Error Brevo: ${data.message || res.status}`, "error");
+    }
+  } catch(e) {
+    toast(`❌ Error de conexión: ${e.message}`, "error");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function sendViaBrevo() {
+  const segment = $("#emailSegment")?.value || "all";
+  const subject = $("#emailSubject")?.value.trim();
+  const body    = $("#emailBody")?.value.trim();
+  if (!subject || !body) { toast("⚠ Escribe el asunto y el cuerpo del mensaje", "warning"); return; }
+
+  const recipients = getEmailRecipients(segment);
+  if (!recipients.length) { toast("⚠ No hay destinatarios para este segmento", "warning"); return; }
+
+  const progressWrap = $("#brevoProgressWrap");
+  const progressBar  = $("#brevoProgressBar");
+  const progressPct  = $("#brevoProgressPct");
+  const progressLog  = $("#brevoProgressLog");
+  const progressLbl  = $("#brevoProgressLabel");
+  if (progressWrap) progressWrap.style.display = "block";
+  if (progressLog)  progressLog.innerHTML = "";
+
+  let sent = 0, failed = 0;
+  const total = recipients.length;
+
+  for (const r of recipients) {
+    const personalSubject = subject.replace(/\{nombre\}/gi, r.name).replace(/\{name\}/gi, r.name);
+    const personalBody    = body.replace(/\{nombre\}/gi, r.name).replace(/\{name\}/gi, r.name);
+    try {
+      let res, data;
+      if (CONFIG.mode === "api") {
+        res  = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
+          body: JSON.stringify({ to_email: r.email, to_name: r.name, subject: personalSubject, html_content: personalBody.replace(/\n/g,"<br>") })
+        });
+        data = await res.json();
+      } else {
+        const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
+        if (!b?.key) { toast("⚠ Configura tu API Key de Brevo primero", "warning"); break; }
+        res  = await fetch("https://api.brevo.com/v3/smtp/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "api-key": b.key },
+          body: JSON.stringify({ sender: { name: b.name, email: b.email }, to: [{ email: r.email, name: r.name }], subject: personalSubject, htmlContent: personalBody.replace(/\n/g,"<br>") })
+        });
+        data = await res.json();
+      }
+      if (res.ok) { sent++; if (progressLog) progressLog.innerHTML += `<div>✅ ${esc(r.email)}</div>`; }
+      else        { failed++; if (progressLog) progressLog.innerHTML += `<div style="color:var(--danger)">❌ ${esc(r.email)} — ${esc(data.message||res.status)}</div>`; }
+    } catch(e) {
+      failed++;
+      if (progressLog) progressLog.innerHTML += `<div style="color:var(--danger)">❌ ${esc(r.email)} — ${e.message}</div>`;
+    }
+    const pct = Math.round(((sent + failed) / total) * 100);
+    if (progressBar) progressBar.style.width = pct + "%";
+    if (progressPct) progressPct.textContent  = pct + "%";
+    if (progressLbl) progressLbl.textContent  = `Enviando ${sent + failed} de ${total}...`;
+  }
+
+  saveCampaignToHistory({ segment, subject, total, sent, failed, date: new Date().toISOString() });
+  toast(`📧 Campaña enviada: ${sent} OK, ${failed} fallidos`, sent > 0 ? "success" : "error");
+  if (progressLbl) progressLbl.textContent = `✅ Completado: ${sent} enviados, ${failed} fallidos`;
+  renderCampaignHistory();
+}
+
+function getEmailRecipients(segment) {
+  const cm = Object.values(customerMap(state.filtered));
+  const now = Date.now();
+  const vipThreshold = cm.sort((a,b)=>b.revenue-a.revenue).slice(0, Math.ceil(cm.length*0.1)).map(c=>c.email||c.name);
+  let list = cm;
+  if (segment === "inactive") list = cm.filter(c => new Date(c.last) < new Date(now - 90*864e5));
+  else if (segment === "vip")  list = cm.filter(c => vipThreshold.includes(c.email||c.name));
+  else if (segment === "risk") list = cm.filter(c => c.orders === 1);
+  else if (segment === "upsell") list = cm.filter(c => c.orders === 1 && c.revenue < 100);
+  return list.filter(c => c.email).map(c => ({ email: c.email, name: c.name || c.email }));
+}
+
+function saveCampaignToHistory(campaign) {
+  try {
+    const history = JSON.parse(localStorage.getItem("crm_campaign_history") || "[]");
+    history.unshift(campaign);
+    localStorage.setItem("crm_campaign_history", JSON.stringify(history.slice(0, 50)));
+  } catch(e) {}
+}
+
+function renderCampaignHistory() {
+  const el = $("#campaignHistory");
+  if (!el) return;
+  try {
+    const history = JSON.parse(localStorage.getItem("crm_campaign_history") || "[]");
+    if (!history.length) { el.innerHTML = '<p style="color:var(--muted);font-size:13px">No hay campañas enviadas aún.</p>'; return; }
+    el.innerHTML = history.map(c => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div>
+          <strong>${esc(c.subject)}</strong>
+          <span style="color:var(--muted);margin-left:8px">${new Date(c.date).toLocaleString()}</span>
+        </div>
+        <div style="font-size:12px">
+          <span style="color:var(--good)">✅ ${c.sent} enviados</span>
+          ${c.failed ? `<span style="color:var(--danger);margin-left:8px">❌ ${c.failed} fallidos</span>` : ""}
+          <span style="color:var(--muted);margin-left:8px">Segmento: ${esc(c.segment)}</span>
+        </div>
+      </div>`).join("");
+  } catch(e) {}
+}
+
+function clearCampaignHistory() {
+  localStorage.removeItem("crm_campaign_history");
+  renderCampaignHistory();
+  toast("Historial limpiado", "success");
 }
 
 // =============================================================
