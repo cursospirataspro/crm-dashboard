@@ -446,6 +446,65 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
 .globe-tooltip strong { display: block; margin-bottom: 5px; color: #07101e; font-size: 14px; }
 .globe-hint           { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
 
+/* Toolbar avanzada del globo */
+.globe-toolbar {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  padding: 8px 2px 4px;
+  border-top: 1px solid rgba(255,255,255,.07);
+  margin-top: 6px;
+}
+.globe-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Panel lateral de país (overlay sobre el globo) */
+.globe-country-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  background: rgba(10,16,30,.94);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-width: 200px;
+  max-width: 240px;
+  backdrop-filter: blur(12px);
+  color: #f1f5f9;
+  font-size: 13px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+.globe-cp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.globe-cp-stats {
+  display: flex;
+  gap: 10px;
+}
+.globe-cp-stat {
+  flex: 1;
+  text-align: center;
+  background: rgba(255,255,255,.06);
+  border-radius: 8px;
+  padding: 8px 4px;
+}
+.globe-cp-stat span {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #4ade80;
+}
+
 /* ============================================================
    DETALLE DE PAÍS
    ============================================================ */

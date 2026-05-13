@@ -159,19 +159,48 @@
             <div class="globe-controls">
               <button id="autoRotateBtn" class="chip active">Auto giro</button>
               <button id="resetGlobeBtn" class="chip">Centrar</button>
+              <button id="globeNightBtn" class="chip">🌙 Noche</button>
+              <button id="globeCloudsBtn" class="chip">☁️ Nubes</button>
               <div class="globe-mode-pills" id="globeModePills">
                 <button class="globe-mode-btn active" data-mode="default" title="Vista estándar">🌍 Estándar</button>
                 <button class="globe-mode-btn" data-mode="choropleth" title="Color por ingresos">💰 Ingresos</button>
-                <button class="globe-mode-btn" data-mode="pulse" title="Marcadores pulsantes">📡 Pulso</button>
-                <button class="globe-mode-btn" data-mode="arcs" title="Arcos de conexión">✈ Arcos</button>
+                <button class="globe-mode-btn" data-mode="pulse" title="Anillos de onda pulsantes">📡 Pulso</button>
+                <button class="globe-mode-btn" data-mode="arcs" title="Arcos de conexión con estela">✈ Arcos</button>
+                <button class="globe-mode-btn" data-mode="top5" title="Resaltar top 5 países">🏆 Top 5</button>
+                <button class="globe-mode-btn" data-mode="heatmap" title="Mapa de calor por ingresos">🔥 Heatmap</button>
                 <button class="globe-mode-btn" data-mode="all" title="Todo activado">✨ Todo</button>
               </div>
             </div>
           </div>
+
+          <!-- Barra de herramientas avanzada del globo -->
+          <div class="globe-toolbar">
+            <div class="globe-tool-group">
+              <label for="globeSearchInput" style="font-size:11px;color:#94a3b8">🔍 País</label>
+              <input id="globeSearchInput" type="text" placeholder="Buscar país…" autocomplete="off"
+                style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);
+                  border-radius:6px;color:#f1f5f9;padding:4px 8px;font-size:12px;width:130px;outline:none">
+            </div>
+            <div class="globe-tool-group">
+              <label for="globeRevenueSlider" style="font-size:11px;color:#94a3b8">💵 Min. ingresos: <span id="globeRevenueLabel">Todos</span></label>
+              <input id="globeRevenueSlider" type="range" min="0" max="10000" step="100" value="0"
+                style="width:120px;accent-color:#4ade80">
+            </div>
+            <div class="globe-tool-group" style="align-items:center;gap:6px">
+              <label style="font-size:11px;color:#94a3b8">⏱ Timeline</label>
+              <button id="globeTimelinePlay" class="chip" style="padding:2px 10px;font-size:12px">▶</button>
+              <input id="globeTimelineSlider" type="range" min="0" max="11" step="1" value="0"
+                style="width:110px;accent-color:#818cf8">
+              <span id="globeTimelineLabel" style="font-size:11px;color:#818cf8;min-width:52px"></span>
+            </div>
+          </div>
+
           <div class="globe-wrap">
             <div id="globeCanvas"></div>
+            <!-- Panel lateral país -->
+            <div id="globeCountryPanel" class="globe-country-panel" style="display:none"></div>
           </div>
-          <div class="globe-hint">Arrastra para girar · Rueda para zoom · Clic en un punto para filtrar el país</div>
+          <div class="globe-hint">Arrastra para girar · Rueda para zoom · Clic en un punto para filtrar y ver detalle</div>
         </article>
 
         <article class="panel country-panel">
@@ -1455,6 +1484,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=40"></script>
+<script src="assets/app.js?v=41"></script>
 </body>
 </html>

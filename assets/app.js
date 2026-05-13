@@ -1522,11 +1522,21 @@ function renderGeoRankings() {
 // =============================================================
 
 let _globe = null;   // instancia globe.gl
+let _globeMode    = 'default'; // modo actual del globo
+let _globeNight   = false;     // modo noche/día
+let _globeMinRev  = 0;         // filtro slider mínimo revenue
+let _globeTimeline= false;     // modo timeline activo
+let _globeTimelineIdx = -1;    // índice del mes actual en timeline
+let _globeTimelineTimer = null;// intervalo del timeline
+let _globeRings   = [];        // anillos actuales
+let _globeRingTimer = null;    // timer de anillos de onda
 
-// Texturas alojadas en unpkg (no dependen de servidores externos propios)
-const GLOBE_IMG   = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
-const GLOBE_BUMP  = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
-const GLOBE_NIGHT = 'https://unpkg.com/three-globe/example/img/night-sky.png';
+// Texturas
+const GLOBE_IMG       = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+const GLOBE_NIGHT_TEX = 'https://unpkg.com/three-globe/example/img/earth-night.jpg';
+const GLOBE_BUMP      = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
+const GLOBE_NIGHT     = 'https://unpkg.com/three-globe/example/img/night-sky.png';
+const GLOBE_CLOUDS    = 'https://unpkg.com/three-globe/example/img/earth-water.png';
 
 function updateGlobePoints() {
   state.globe.points = Object.entries(groupBy(state.filtered, o => o.country_code || o.country))
@@ -1536,46 +1546,213 @@ function updateGlobePoints() {
       return { code, name: arr[0]?.country || ref.name, lat: ref.lat, lon: ref.lon,
                orders: arr.length, revenue: sum(validRevenueOrders(arr), netRev) };
     });
+
+  // Actualizar slider max con el revenue real más alto
+  const maxRev = Math.max(...state.globe.points.map(p => p.revenue), 1);
+  const sl = document.getElementById('globeRevenueSlider');
+  if (sl) sl.max = Math.ceil(maxRev / 100) * 100;
+
   _globeRefresh();
+}
+
+// Panel lateral al hacer clic en un país del globo
+function _showGlobeCountryPanel(p) {
+  const panel = document.getElementById('globeCountryPanel');
+  if (!panel) return;
+  const orders = state.filtered.filter(o => (o.country_code || o.country) === p.code);
+  const revMonth = {};
+  orders.forEach(o => {
+    const d = new Date(o.date_created || o.date_paid || '');
+    if (isNaN(d)) return;
+    const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    revMonth[k] = (revMonth[k] || 0) + (parseFloat(o.total)||0);
+  });
+  const mKeys  = Object.keys(revMonth).sort().slice(-6);
+  const mVals  = mKeys.map(k => revMonth[k]);
+  const mMax   = Math.max(...mVals, 1);
+  const bars   = mKeys.map((k, i) => {
+    const h = Math.round(50 * mVals[i] / mMax) || 2;
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="width:18px;height:${h}px;background:linear-gradient(to top,#4ade80,#22d3ee);border-radius:3px 3px 0 0;min-height:3px"></div>
+      <span style="font-size:9px;color:#94a3b8">${k.slice(5)}</span>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="globe-cp-header">
+      <strong>${esc(p.name)}</strong>
+      <button onclick="document.getElementById('globeCountryPanel').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div class="globe-cp-stats">
+      <div class="globe-cp-stat"><span>${p.orders}</span>Pedidos</div>
+      <div class="globe-cp-stat"><span>${fmtMoney(p.revenue)}</span>Ingresos</div>
+    </div>
+    <div style="display:flex;gap:4px;align-items:flex-end;margin-top:10px;height:60px;padding-bottom:4px">${bars}</div>
+    <button class="chip" style="margin-top:10px;width:100%" onclick="
+      const s=document.getElementById('countryFilter');
+      if(s){s.value='${esc(p.code)}';applyFilters();}
+      document.getElementById('globeCountryPanel').style.display='none';
+    ">Filtrar por este país</button>
+  `;
+  panel.style.display = 'block';
 }
 
 function _globeRefresh() {
   if (!_globe) return;
-  const pts     = state.globe.points;
-  const maxRev  = Math.max(...pts.map(p => p.revenue), 1);
+  const allPts = state.globe.points;
 
-  // Puntos (columnas 3D proporcionales a ingresos)
+  // ── Filtro slider: ocultar puntos con revenue < mínimo ──
+  const pts = _globeMinRev > 0
+    ? allPts.filter(p => p.revenue >= _globeMinRev)
+    : allPts;
+
+  const maxRev = Math.max(...pts.map(p => p.revenue), 1);
+
+  // ── Modo noche/día ──
+  const nightHour = new Date().getHours();
+  const isNight   = _globeNight; // manual toggle
   _globe
-    .pointsData(pts)
-    .pointLat('lat')
-    .pointLng('lon')
-    .pointAltitude(p => 0.04 + (p.revenue / maxRev) * 0.18)
-    .pointRadius(p => 0.35 + (p.revenue / maxRev) * 1.4)
-    .pointColor(p => {
-      const t = p.revenue / maxRev;
-      const r = Math.round(220 + t * 35);
-      const g = Math.round(40  - t * 30);
-      const b = Math.round(60  - t * 40);
-      return `rgba(${r},${g},${b},0.92)`;
-    })
-    .pointLabel(p =>
-      `<div style="background:rgba(8,12,24,.92);border:1px solid rgba(255,255,255,.18);
-        border-radius:8px;padding:.5rem .75rem;font-family:Inter,sans-serif;font-size:13px;color:#fff;min-width:150px">
-        <strong>${esc(p.name)}</strong><br>
-        <span style="color:#f87171">&#128197; ${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
-        <span style="color:#4ade80">${fmtMoney(p.revenue)}</span>
-      </div>`
-    );
+    .globeImageUrl(isNight ? GLOBE_NIGHT_TEX : GLOBE_IMG)
+    .atmosphereColor(isNight ? '#ff9944' : 'lightskyblue');
 
-  // Arcos: top país → los demás (solo si hay 2+)
-  if (pts.length >= 2) {
-    const sorted  = [...pts].sort((a, b) => b.revenue - a.revenue);
+  // ── Helper color choropleth ──
+  function choroplethColor(rev) {
+    const t = Math.pow(rev / maxRev, 0.5);
+    const r = Math.round(20  + t * 220);
+    const g = Math.round(60  - t * 10);
+    const b = Math.round(180 - t * 160);
+    return `rgba(${r},${g},${b},0.82)`;
+  }
+
+  // ── Modo TOP5: atenuar todo salvo top 5 ──
+  const top5Codes = new Set(
+    [...pts].sort((a,b) => b.revenue - a.revenue).slice(0,5).map(p => p.code)
+  );
+
+  // ── Tooltip enriquecido con mini-barras últimos 6 meses ──
+  function richLabel(p) {
+    // Calcular ventas de este país por mes (últimos 6 meses)
+    const now    = new Date();
+    const months = Array.from({length:6}, (_,i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5-i), 1);
+      return { label: d.toLocaleString('es',{month:'short'}), year: d.getFullYear(), month: d.getMonth() };
+    });
+    const byMonth = months.map(m => {
+      const rev = state.filtered
+        .filter(o => {
+          const d   = new Date(o.date_created || o.date_paid || '');
+          const cc  = o.country_code || o.country;
+          return cc === p.code && d.getFullYear() === m.year && d.getMonth() === m.month;
+        })
+        .reduce((s,o) => s + (parseFloat(o.total)||0), 0);
+      return { label: m.label, rev };
+    });
+    const mMax   = Math.max(...byMonth.map(m => m.rev), 1);
+    const bars   = byMonth.map(m => {
+      const h = Math.round(24 * m.rev / mMax) || 1;
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="width:14px;height:${h}px;background:#4ade80;border-radius:2px 2px 0 0;min-height:2px"></div>
+        <span style="font-size:9px;opacity:.6">${m.label}</span>
+      </div>`;
+    }).join('');
+
+    return `<div style="background:rgba(8,12,24,.95);border:1px solid rgba(255,255,255,.18);
+      border-radius:10px;padding:.6rem .8rem;font-family:Inter,sans-serif;font-size:13px;color:#fff;min-width:170px">
+      <strong style="font-size:14px">${esc(p.name)}</strong><br>
+      <span style="color:#f87171">📅 ${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
+      <span style="color:#4ade80">${fmtMoney(p.revenue)}</span>
+      <div style="display:flex;gap:3px;align-items:flex-end;margin-top:8px;height:30px">${bars}</div>
+    </div>`;
+  }
+
+  // ── MODO: default / choropleth / pulse / arcs / all / top5 / heatmap ──
+  const mode = _globeMode;
+
+  // Polígonos choropleth (precisa world-polys)
+  if ((mode === 'choropleth' || mode === 'all') && typeof window._worldPolys !== 'undefined') {
+    const revByCode = {};
+    pts.forEach(p => revByCode[p.code] = p.revenue);
+    _globe
+      .polygonsData(window._worldPolys.features)
+      .polygonAltitude(0.005)
+      .polygonCapColor(f => {
+        const rev = revByCode[f.properties.ISO_A2] || 0;
+        if (rev === 0) return 'rgba(255,255,255,0.04)';
+        return choroplethColor(rev);
+      })
+      .polygonSideColor(() => 'rgba(255,255,255,0.03)')
+      .polygonStrokeColor(() => 'rgba(255,255,255,0.12)')
+      .polygonLabel(f => {
+        const pt = pts.find(p => p.code === f.properties.ISO_A2);
+        return pt ? richLabel(pt) : `<div style="background:rgba(8,12,24,.85);border-radius:8px;padding:.4rem .6rem;color:#fff;font-size:12px">${f.properties.NAME}</div>`;
+      });
+  } else {
+    _globe.polygonsData([]);
+  }
+
+  // Puntos/columnas
+  const showPoints = ['default','arcs','all','top5','heatmap'].includes(mode) || !['choropleth'].includes(mode);
+  if (showPoints) {
+    _globe
+      .pointsData(pts)
+      .pointLat('lat')
+      .pointLng('lon')
+      .pointAltitude(p => {
+        if (mode === 'heatmap') return 0.001;
+        return 0.04 + (p.revenue / maxRev) * 0.18;
+      })
+      .pointRadius(p => {
+        if (mode === 'heatmap') return 1.5 + (p.revenue / maxRev) * 3.5;
+        if (mode === 'top5') return top5Codes.has(p.code) ? 0.5 + (p.revenue / maxRev) * 1.8 : 0.2;
+        return 0.35 + (p.revenue / maxRev) * 1.4;
+      })
+      .pointColor(p => {
+        if (mode === 'heatmap') {
+          const t = p.revenue / maxRev;
+          return `rgba(${Math.round(255*t)},${Math.round(120*(1-t))},60,${0.3 + t*0.45})`;
+        }
+        if (mode === 'top5') {
+          return top5Codes.has(p.code)
+            ? (() => { const t=p.revenue/maxRev; return `rgba(${Math.round(220+t*35)},${Math.round(40-t*30)},${Math.round(60-t*40)},0.95)`; })()
+            : 'rgba(150,150,150,0.25)';
+        }
+        if (mode === 'choropleth' || mode === 'all') return choroplethColor(p.revenue);
+        const t = p.revenue / maxRev;
+        return `rgba(${Math.round(220+t*35)},${Math.round(40-t*30)},${Math.round(60-t*40)},0.92)`;
+      })
+      .pointLabel(p => richLabel(p));
+  } else {
+    _globe.pointsData([]);
+  }
+
+  // Pulso (anillos de onda al actualizar datos)
+  if (mode === 'pulse' || mode === 'all') {
+    _globe
+      .ringsData(pts)
+      .ringLat('lat')
+      .ringLng('lon')
+      .ringMaxRadius(p => 2 + (p.revenue / maxRev) * 3)
+      .ringPropagationSpeed(p => 1 + (p.revenue / maxRev) * 2)
+      .ringRepeatPeriod(p => 800 + (1 - p.revenue/maxRev) * 1200)
+      .ringColor(p => {
+        const t  = p.revenue / maxRev;
+        const alpha = (f) => `rgba(${Math.round(80+t*175)},${Math.round(200-t*100)},255,${Math.max(0,0.8-f)})`;
+        return alpha;
+      });
+  } else {
+    _globe.ringsData([]);
+  }
+
+  // Arcos
+  if (['arcs','all'].includes(mode) && pts.length >= 2) {
+    const sorted  = [...pts].sort((a,b) => b.revenue - a.revenue);
     const origin  = sorted[0];
     const targets = sorted.slice(1, Math.min(9, sorted.length));
     const arcs    = targets.map(t => ({
       startLat: origin.lat, startLng: origin.lon,
       endLat:   t.lat,      endLng:   t.lon,
-      color:    ['rgba(255,200,60,0.8)', 'rgba(255,100,60,0.5)']
+      color: ['rgba(255,200,60,0.9)','rgba(255,100,60,0.4)'],
+      stroke: 0.4 + (t.revenue / maxRev) * 0.8
     }));
     _globe
       .arcsData(arcs)
@@ -1583,12 +1760,31 @@ function _globeRefresh() {
       .arcEndLat('endLat').arcEndLng('endLng')
       .arcColor('color')
       .arcAltitudeAutoScale(0.4)
-      .arcStroke(0.5)
-      .arcDashLength(0.4)
-      .arcDashGap(0.2)
-      .arcDashAnimateTime(2000);
+      .arcStroke('stroke')
+      .arcDashLength(0.35)
+      .arcDashGap(0.15)
+      .arcDashAnimateTime(1800)
+      // Estela de cola brillante: usar dashInitialGap para efecto tail
+      .arcDashInitialGap(() => Math.random());
   } else {
     _globe.arcsData([]);
+  }
+
+  // Labels flotantes para top 5
+  if (mode === 'top5' || mode === 'all') {
+    const top5 = [...pts].sort((a,b) => b.revenue - a.revenue).slice(0,5);
+    _globe
+      .labelsData(top5)
+      .labelLat('lat')
+      .labelLng('lon')
+      .labelText(p => `${p.name}`)
+      .labelSize(p => 0.5 + (p.revenue/maxRev)*0.5)
+      .labelDotRadius(p => 0.3 + (p.revenue/maxRev)*0.4)
+      .labelColor(() => '#fff')
+      .labelResolution(2)
+      .labelAltitude(0.03);
+  } else {
+    _globe.labelsData([]);
   }
 }
 
@@ -1674,6 +1870,9 @@ function _initGlobeNow() {
       const sel = document.getElementById('countryFilter');
       if (sel) { sel.value = p.code; applyFilters(); }
       toast('País seleccionado: ' + p.name);
+      // Zoom al país + panel lateral
+      _globe.pointOfView({ lat: p.lat, lng: p.lon, altitude: 1.4 }, 900);
+      _showGlobeCountryPanel(p);
     })
     .onGlobeReady(() => {
       _globeRefresh();
@@ -1715,11 +1914,173 @@ function _initGlobeNow() {
       document.querySelectorAll('.globe-mode-btn').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
       const mode = this.dataset.mode;
+      _globeMode = mode;
       try { localStorage.setItem('crm_globe_mode', mode); } catch(e) {}
-      if (!['arcs','all','default'].includes(mode)) _globe.arcsData([]);
-      else _globeRefresh();
+      _globeRefresh();
     });
   });
+
+  // ── BÚSQUEDA DE PAÍS ──
+  const searchInput = document.getElementById('globeSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const q = this.value.trim().toLowerCase();
+      if (!q) return;
+      const match = state.globe.points.find(p =>
+        p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+      );
+      if (match) {
+        _globe.pointOfView({ lat: match.lat, lng: match.lon, altitude: 1.5 }, 1000);
+        _showGlobeCountryPanel(match);
+      }
+    });
+  }
+
+  // ── SLIDER DE REVENUE MÍNIMO ──
+  const revSlider = document.getElementById('globeRevenueSlider');
+  const revLabel  = document.getElementById('globeRevenueLabel');
+  if (revSlider) {
+    revSlider.addEventListener('input', function() {
+      _globeMinRev = parseFloat(this.value) || 0;
+      if (revLabel) revLabel.textContent = _globeMinRev > 0 ? fmtMoney(_globeMinRev) : 'Todos';
+      _globeRefresh();
+    });
+  }
+
+  // ── TOGGLE MODO NOCHE ──
+  const nightBtn = document.getElementById('globeNightBtn');
+  if (nightBtn) {
+    nightBtn.addEventListener('click', function() {
+      _globeNight = !_globeNight;
+      this.classList.toggle('active', _globeNight);
+      this.textContent = _globeNight ? '☀️ Día' : '🌙 Noche';
+      _globeRefresh();
+    });
+  }
+
+  // ── TOGGLE NUBES ANIMADAS ──
+  const cloudsBtn = document.getElementById('globeCloudsBtn');
+  let _cloudsMesh = null;
+  if (cloudsBtn) {
+    cloudsBtn.addEventListener('click', function() {
+      this.classList.toggle('active');
+      const active = this.classList.contains('active');
+      if (active && !_cloudsMesh) {
+        // Cargar textura de nubes y añadir esfera extra a la escena
+        const THREE = _globe.scene ? window.THREE : null;
+        if (THREE) {
+          const loader = new THREE.TextureLoader();
+          loader.load(GLOBE_CLOUDS, tex => {
+            const R = 101.5; // radio ligeramente mayor que el globo (100)
+            const geo = new THREE.SphereGeometry(R, 48, 48);
+            const mat = new THREE.MeshPhongMaterial({
+              map: tex, transparent: true, opacity: 0.32, depthWrite: false
+            });
+            _cloudsMesh = new THREE.Mesh(geo, mat);
+            _globe.scene().add(_cloudsMesh);
+            // Animar nubes girando lentamente
+            (function animate() {
+              if (!_cloudsMesh) return;
+              requestAnimationFrame(animate);
+              _cloudsMesh.rotation.y += 0.0005;
+            })();
+          });
+        }
+      } else if (!active && _cloudsMesh) {
+        _globe.scene().remove(_cloudsMesh);
+        _cloudsMesh = null;
+      }
+    });
+  }
+
+  // ── TIMELINE DE MESES ──
+  const timelineSlider = document.getElementById('globeTimelineSlider');
+  const timelineLabel  = document.getElementById('globeTimelineLabel');
+  const timelinePlay   = document.getElementById('globeTimelinePlay');
+
+  function _buildTimelineFrames() {
+    // Agrupar pedidos por mes → { "2024-01": [...], ... }
+    const byMonth = {};
+    state.filtered.forEach(o => {
+      const d = new Date(o.date_created || o.date_paid || '');
+      if (isNaN(d)) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      (byMonth[key] = byMonth[key] || []).push(o);
+    });
+    return Object.keys(byMonth).sort().map(k => ({
+      label: k,
+      orders: byMonth[k]
+    }));
+  }
+
+  function _applyTimelineFrame(frames, idx) {
+    if (!frames || !frames[idx]) return;
+    const frame = frames[idx];
+    // Construir puntos de globo solo con los pedidos del mes
+    const grouped = groupBy(frame.orders, o => o.country_code || o.country);
+    const pts = Object.entries(grouped)
+      .map(([code, orders]) => {
+        const geo = COUNTRY_COORDS[code];
+        if (!geo) return null;
+        return {
+          code,
+          name: geo.name || code,
+          lat:  geo.lat,
+          lon:  geo.lon,
+          orders: orders.length,
+          revenue: orders.reduce((s,o) => s + (parseFloat(o.total)||0), 0)
+        };
+      }).filter(Boolean);
+    const tmp = state.globe.points;
+    state.globe.points = pts;
+    if (timelineLabel) timelineLabel.textContent = frame.label;
+    _globeRefresh();
+    state.globe.points = tmp; // restaurar estado real
+  }
+
+  if (timelineSlider) {
+    timelineSlider.addEventListener('input', function() {
+      if (_globeTimelineTimer) { clearInterval(_globeTimelineTimer); _globeTimelineTimer = null; }
+      const frames = _buildTimelineFrames();
+      if (!frames.length) return;
+      const idx = Math.min(parseInt(this.value), frames.length - 1);
+      this.max = frames.length - 1;
+      _globeTimelineIdx = idx;
+      _applyTimelineFrame(frames, idx);
+    });
+  }
+  if (timelinePlay) {
+    timelinePlay.addEventListener('click', function() {
+      if (_globeTimelineTimer) {
+        clearInterval(_globeTimelineTimer);
+        _globeTimelineTimer = null;
+        this.textContent = '▶';
+        if (timelineSlider) timelineSlider.value = 0;
+        _globeRefresh(); // restaurar datos actuales
+        return;
+      }
+      const frames = _buildTimelineFrames();
+      if (!frames.length) { toast('Sin datos para timeline'); return; }
+      if (timelineSlider) { timelineSlider.max = frames.length - 1; timelineSlider.value = 0; }
+      let idx = 0;
+      this.textContent = '⏹';
+      _globeTimelineIdx = 0;
+      _applyTimelineFrame(frames, idx);
+      _globeTimelineTimer = setInterval(() => {
+        idx++;
+        if (idx >= frames.length) {
+          clearInterval(_globeTimelineTimer);
+          _globeTimelineTimer = null;
+          if (timelinePlay) timelinePlay.textContent = '▶';
+          if (timelineSlider) timelineSlider.value = 0;
+          _globeRefresh();
+          return;
+        }
+        if (timelineSlider) timelineSlider.value = idx;
+        _applyTimelineFrame(frames, idx);
+      }, 1200);
+    });
+  }
 
   // Vista inicial centrada en Latinoamérica
   _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 });
