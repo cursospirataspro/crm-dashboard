@@ -1592,7 +1592,46 @@ function _globeRefresh() {
   }
 }
 
+// Reconstruir el globo cuando se pierde el contexto WebGL
+function _rebuildGlobe() {
+  try {
+    if (_globe) {
+      // Detener animación y liberar recursos Three.js
+      if (_globe.controls) _globe.controls().autoRotate = false;
+      if (_globe.renderer) {
+        const r = _globe.renderer();
+        if (r.dispose) r.dispose();
+      }
+      _globe = null;
+    }
+    const container = document.getElementById('globeCanvas');
+    if (container) container.innerHTML = ''; // limpiar el canvas viejo
+    _initGlobeNow();
+  } catch(e) {
+    // Si falla, esperar 1s y reintentar una vez
+    setTimeout(() => {
+      _globe = null;
+      const c = document.getElementById('globeCanvas');
+      if (c) c.innerHTML = '';
+      _initGlobeNow();
+    }, 1000);
+  }
+}
+
 function initGlobe() {
+  // Listener de visibilitychange: si el tab vuelve visible y el globo está
+  // en blanco (contexto WebGL perdido), lo reconstruimos automáticamente
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (!_globe) return;
+    const view = document.getElementById('view-home');
+    if (!view || view.style.display === 'none') return; // solo si el globo está visible
+    try {
+      const gl = _globe.renderer && _globe.renderer().getContext();
+      if (gl && gl.isContextLost()) _rebuildGlobe();
+    } catch(e) { _rebuildGlobe(); }
+  });
+
   // Si globe.gl aún no cargó, esperar hasta 10s
   if (typeof Globe === 'undefined') {
     let tries = 0;
@@ -1636,7 +1675,22 @@ function _initGlobeNow() {
       if (sel) { sel.value = p.code; applyFilters(); }
       toast('País seleccionado: ' + p.name);
     })
-    .onGlobeReady(() => { _globeRefresh(); });
+    .onGlobeReady(() => {
+      _globeRefresh();
+
+      // ── Recuperación ante pérdida de contexto WebGL (tab en background) ──
+      const glCanvas = _globe.renderer && _globe.renderer().domElement;
+      if (glCanvas) {
+        glCanvas.addEventListener('webglcontextlost', e => {
+          e.preventDefault(); // necesario para permitir restauración
+        }, false);
+
+        glCanvas.addEventListener('webglcontextrestored', () => {
+          // Esperar un frame y reinicializar el globo completo
+          setTimeout(_rebuildGlobe, 200);
+        }, false);
+      }
+    });
 
   // Auto-rotación
   _globe.controls().autoRotate      = state.globe.autoRotate;
