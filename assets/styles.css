@@ -444,7 +444,8 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
   line-height:   1.55;
 }
 .globe-tooltip strong { display: block; margin-bottom: 5px; color: #07101e; font-size: 14px; }
-.globe-hint           { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.5; }
+.globe-hint           { color: var(--muted); font-size: 11px; margin-top: 8px; line-height: 1.6; }
+.globe-hint kbd       { background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:1px 5px;font-size:10px;font-family:monospace; }
 
 /* Toolbar avanzada del globo */
 .globe-toolbar {

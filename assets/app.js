@@ -1530,13 +1530,20 @@ let _globeTimelineIdx = -1;    // índice del mes actual en timeline
 let _globeTimelineTimer = null;// intervalo del timeline
 let _globeRings   = [];        // anillos actuales
 let _globeRingTimer = null;    // timer de anillos de onda
+// Nuevas vars para mejoras
+let _globeCompareA = null;     // país A para comparador
+let _globeCompareB = null;     // país B para comparador
+let _globeIsolated = null;     // país aislado (doble clic)
+let _globeAlertDays= 30;       // días sin ventas = alerta
+let _globeNavIdx   = 0;        // índice de navegación por teclado
 
 // Texturas
-const GLOBE_IMG       = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
-const GLOBE_NIGHT_TEX = 'https://unpkg.com/three-globe/example/img/earth-night.jpg';
-const GLOBE_BUMP      = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
-const GLOBE_NIGHT     = 'https://unpkg.com/three-globe/example/img/night-sky.png';
-const GLOBE_CLOUDS    = 'https://unpkg.com/three-globe/example/img/earth-water.png';
+const GLOBE_IMG        = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+const GLOBE_IMG_8K     = 'https://unpkg.com/three-globe/example/img/earth-day.jpg';
+const GLOBE_NIGHT_TEX  = 'https://unpkg.com/three-globe/example/img/earth-night.jpg';
+const GLOBE_BUMP       = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
+const GLOBE_NIGHT      = 'https://unpkg.com/three-globe/example/img/night-sky.png';
+const GLOBE_CLOUDS     = 'https://unpkg.com/three-globe/example/img/earth-water.png';
 
 function updateGlobePoints() {
   state.globe.points = Object.entries(groupBy(state.filtered, o => o.country_code || o.country))
@@ -1553,6 +1560,99 @@ function updateGlobePoints() {
   if (sl) sl.max = Math.ceil(maxRev / 100) * 100;
 
   _globeRefresh();
+  // Pulsación visual al actualizar datos
+  if (_globe) setTimeout(_globePulseOnLoad, 100);
+}
+
+// ── Pulsación al cargar nuevos datos ──
+function _globePulseOnLoad() {
+  if (!_globe) return;
+  const pts = state.globe.points;
+  if (!pts.length) return;
+  // Doble pulso rápido en todos los puntos
+  _globe.ringsData(pts)
+    .ringLat('lat').ringLng('lon')
+    .ringMaxRadius(3)
+    .ringPropagationSpeed(3)
+    .ringRepeatPeriod(500)
+    .ringColor(() => f => `rgba(255,255,255,${Math.max(0,0.6-f)})`);
+  setTimeout(() => {
+    // Volver al estado normal del modo activo
+    _globeRefresh();
+  }, 1800);
+}
+
+// ── Explosión de partículas al clic (DOM overlay) ──
+function _globeSpawnParticles(x, y) {
+  const wrap = document.querySelector('.globe-wrap');
+  if (!wrap) return;
+  const colors = ['#4ade80','#f87171','#fbbf24','#818cf8','#22d3ee','#fb7185'];
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement('div');
+    const angle  = (Math.random() * Math.PI * 2);
+    const dist   = 30 + Math.random() * 55;
+    const size   = 4 + Math.random() * 6;
+    const color  = colors[Math.floor(Math.random() * colors.length)];
+    const dur    = 500 + Math.random() * 400;
+    p.style.cssText = `
+      position:absolute;left:${x}px;top:${y}px;width:${size}px;height:${size}px;
+      background:${color};border-radius:50%;pointer-events:none;z-index:30;
+      transform:translate(-50%,-50%);opacity:1;
+      transition:transform ${dur}ms ease-out,opacity ${dur}ms ease-out;
+    `;
+    wrap.appendChild(p);
+    requestAnimationFrame(() => {
+      p.style.transform = `translate(calc(-50% + ${Math.cos(angle)*dist}px), calc(-50% + ${Math.sin(angle)*dist}px)) scale(0.2)`;
+      p.style.opacity   = '0';
+    });
+    setTimeout(() => p.remove(), dur + 50);
+  }
+}
+
+// ── COMPARADOR DE 2 PAÍSES ──
+function _showGlobeCompare(pA, pB) {
+  const panel = document.getElementById('globeCountryPanel');
+  if (!panel) return;
+  function mkCol(p) {
+    const orders = state.filtered.filter(o => (o.country_code||o.country)===p.code);
+    const revMonth = {};
+    orders.forEach(o => {
+      const d = new Date(o.date_created||o.date_paid||'');
+      if (isNaN(d)) return;
+      const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      revMonth[k] = (revMonth[k]||0) + (parseFloat(o.total)||0);
+    });
+    const mKeys = Object.keys(revMonth).sort().slice(-6);
+    const mVals = mKeys.map(k => revMonth[k]);
+    const mMax  = Math.max(...mVals, 1);
+    const bars  = mKeys.map((k,i) => {
+      const h = Math.round(40 * mVals[i] / mMax) || 2;
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="width:14px;height:${h}px;background:#4ade80;border-radius:2px 2px 0 0;min-height:2px"></div>
+        <span style="font-size:8px;color:#94a3b8">${k.slice(5)}</span>
+      </div>`;
+    }).join('');
+    return `<div style="flex:1;text-align:center">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px">${esc(p.name)}</div>
+      <div style="color:#f87171;font-size:12px">${p.orders} pedidos</div>
+      <div style="color:#4ade80;font-size:13px;font-weight:700">${fmtMoney(p.revenue)}</div>
+      <div style="display:flex;gap:2px;align-items:flex-end;margin-top:8px;height:46px;justify-content:center">${bars}</div>
+    </div>`;
+  }
+  const winner = pA.revenue >= pB.revenue ? pA : pB;
+  panel.innerHTML = `
+    <div class="globe-cp-header">
+      <strong>⚖️ Comparador</strong>
+      <button onclick="document.getElementById('globeCountryPanel').style.display='none';_globeCompareA=null;_globeCompareB=null;" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div style="font-size:11px;color:#fbbf24;margin-bottom:8px">🏆 Gana <strong>${esc(winner.name)}</strong></div>
+    <div style="display:flex;gap:12px;border-top:1px solid rgba(255,255,255,.1);padding-top:10px">
+      ${mkCol(pA)}
+      <div style="width:1px;background:rgba(255,255,255,.1)"></div>
+      ${mkCol(pB)}
+    </div>
+  `;
+  panel.style.display = 'block';
 }
 
 // Panel lateral al hacer clic en un país del globo
@@ -1593,6 +1693,11 @@ function _showGlobeCountryPanel(p) {
       if(s){s.value='${esc(p.code)}';applyFilters();}
       document.getElementById('globeCountryPanel').style.display='none';
     ">Filtrar por este país</button>
+    <button class="chip" style="margin-top:6px;width:100%;background:rgba(99,102,241,.25)" onclick="
+      if(!_globeCompareA){_globeCompareA=window.__lastClickedPt;toast('País A: ${esc(p.name)} — ahora clic en otro');}
+      else if(!_globeCompareB && _globeCompareA.code!=='${esc(p.code)}'){_globeCompareB=window.__lastClickedPt;_showGlobeCompare(_globeCompareA,_globeCompareB);}
+      else{_globeCompareA=window.__lastClickedPt;_globeCompareB=null;toast('País A: ${esc(p.name)} — ahora clic en otro');}
+    ">⚖️ Comparar</button>
   `;
   panel.style.display = 'block';
 }
@@ -1601,19 +1706,23 @@ function _globeRefresh() {
   if (!_globe) return;
   const allPts = state.globe.points;
 
-  // ── Filtro slider: ocultar puntos con revenue < mínimo ──
-  const pts = _globeMinRev > 0
+  // ── Filtro slider mínimo revenue ──
+  let pts = _globeMinRev > 0
     ? allPts.filter(p => p.revenue >= _globeMinRev)
     : allPts;
 
-  const maxRev = Math.max(...pts.map(p => p.revenue), 1);
+  // ── Filtro: país aislado (doble clic) ──
+  if (_globeIsolated) pts = pts.filter(p => p.code === _globeIsolated);
 
-  // ── Modo noche/día ──
-  const nightHour = new Date().getHours();
-  const isNight   = _globeNight; // manual toggle
+  const maxRev    = Math.max(...pts.map(p => p.revenue), 1);
+  const maxOrders = Math.max(...pts.map(p => p.orders), 1);
+
+  // ── Textura: modo noche o 8K ──
+  const use8K = document.getElementById('globe8KBtn')?.classList.contains('active');
+  const dayTex = use8K ? GLOBE_IMG_8K : GLOBE_IMG;
   _globe
-    .globeImageUrl(isNight ? GLOBE_NIGHT_TEX : GLOBE_IMG)
-    .atmosphereColor(isNight ? '#ff9944' : 'lightskyblue');
+    .globeImageUrl(_globeNight ? GLOBE_NIGHT_TEX : dayTex)
+    .atmosphereColor(_globeNight ? '#ff9944' : 'lightskyblue');
 
   // ── Helper color choropleth ──
   function choroplethColor(rev) {
@@ -1624,51 +1733,116 @@ function _globeRefresh() {
     return `rgba(${r},${g},${b},0.82)`;
   }
 
-  // ── Modo TOP5: atenuar todo salvo top 5 ──
+  // ── Top 5 ──
   const top5Codes = new Set(
     [...pts].sort((a,b) => b.revenue - a.revenue).slice(0,5).map(p => p.code)
   );
 
-  // ── Tooltip enriquecido con mini-barras últimos 6 meses ──
+  // ── Alertas: países sin ventas en X días ──
+  const now = Date.now();
+  const alertCodes = new Set();
+  const lastSaleDate = {};
+  state.filtered.forEach(o => {
+    const d = new Date(o.date_created || o.date_paid || '');
+    const cc = o.country_code || o.country;
+    if (!isNaN(d) && cc) {
+      if (!lastSaleDate[cc] || d > lastSaleDate[cc]) lastSaleDate[cc] = d;
+    }
+  });
+  pts.forEach(p => {
+    const last = lastSaleDate[p.code];
+    if (!last || (now - last.getTime()) > _globeAlertDays * 86400000) alertCodes.add(p.code);
+  });
+
+  // ── Tooltip enriquecido con sparkline 12 meses ──
   function richLabel(p) {
-    // Calcular ventas de este país por mes (últimos 6 meses)
-    const now    = new Date();
-    const months = Array.from({length:6}, (_,i) => {
-      const d = new Date(now.getFullYear(), now.getMonth() - (5-i), 1);
+    const nowD   = new Date();
+    const months = Array.from({length:12}, (_,i) => {
+      const d = new Date(nowD.getFullYear(), nowD.getMonth() - (11-i), 1);
       return { label: d.toLocaleString('es',{month:'short'}), year: d.getFullYear(), month: d.getMonth() };
     });
     const byMonth = months.map(m => {
       const rev = state.filtered
         .filter(o => {
-          const d   = new Date(o.date_created || o.date_paid || '');
-          const cc  = o.country_code || o.country;
+          const d  = new Date(o.date_created || o.date_paid || '');
+          const cc = o.country_code || o.country;
           return cc === p.code && d.getFullYear() === m.year && d.getMonth() === m.month;
         })
         .reduce((s,o) => s + (parseFloat(o.total)||0), 0);
       return { label: m.label, rev };
     });
-    const mMax   = Math.max(...byMonth.map(m => m.rev), 1);
-    const bars   = byMonth.map(m => {
-      const h = Math.round(24 * m.rev / mMax) || 1;
-      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-        <div style="width:14px;height:${h}px;background:#4ade80;border-radius:2px 2px 0 0;min-height:2px"></div>
-        <span style="font-size:9px;opacity:.6">${m.label}</span>
-      </div>`;
-    }).join('');
-
-    return `<div style="background:rgba(8,12,24,.95);border:1px solid rgba(255,255,255,.18);
-      border-radius:10px;padding:.6rem .8rem;font-family:Inter,sans-serif;font-size:13px;color:#fff;min-width:170px">
-      <strong style="font-size:14px">${esc(p.name)}</strong><br>
-      <span style="color:#f87171">📅 ${p.orders} pedido${p.orders !== 1 ? 's' : ''}</span><br>
-      <span style="color:#4ade80">${fmtMoney(p.revenue)}</span>
-      <div style="display:flex;gap:3px;align-items:flex-end;margin-top:8px;height:30px">${bars}</div>
+    const mMax = Math.max(...byMonth.map(m => m.rev), 1);
+    // Sparkline SVG línea
+    const svgW = 160, svgH = 32;
+    const points = byMonth.map((m,i) => {
+      const x = Math.round(i * svgW / 11);
+      const y = Math.round(svgH - (m.rev / mMax) * svgH);
+      return `${x},${y}`;
+    }).join(' ');
+    // Tendencia (últimos 3 meses)
+    const recent = byMonth.slice(-3).map(m=>m.rev);
+    const trend  = recent[2] > recent[0] ? '↑' : recent[2] < recent[0] ? '↓' : '→';
+    const tColor = trend === '↑' ? '#4ade80' : trend === '↓' ? '#f87171' : '#fbbf24';
+    const alertBadge = alertCodes.has(p.code)
+      ? `<span style="background:#7f1d1d;color:#fca5a5;padding:2px 6px;border-radius:4px;font-size:10px">⚠ Sin ventas +${_globeAlertDays}d</span>`
+      : '';
+    return `<div style="background:rgba(8,12,24,.96);border:1px solid rgba(255,255,255,.18);
+      border-radius:12px;padding:.7rem .9rem;font-family:Inter,sans-serif;font-size:13px;color:#fff;min-width:190px">
+      <strong style="font-size:15px">${esc(p.name)}</strong>
+      <span style="float:right;font-size:18px">${tColor === '#4ade80' ? '📈' : tColor === '#f87171' ? '📉' : '📊'}</span><br>
+      <span style="color:#f87171">📅 ${p.orders} pedido${p.orders!==1?'s':''}</span>&nbsp;&nbsp;
+      <span style="color:#4ade80">${fmtMoney(p.revenue)}</span>&nbsp;
+      <span style="color:${tColor};font-weight:700">${trend}</span><br>
+      ${alertBadge}
+      <svg width="${svgW}" height="${svgH}" style="margin-top:6px;display:block">
+        <polyline points="${points}" fill="none" stroke="#4ade80" stroke-width="1.8" stroke-linejoin="round"/>
+        <polyline points="${points}" fill="url(#gl)" stroke="none"/>
+        <defs>
+          <linearGradient id="gl" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#4ade80" stop-opacity=".25"/>
+            <stop offset="100%" stop-color="#4ade80" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+      </svg>
     </div>`;
   }
 
-  // ── MODO: default / choropleth / pulse / arcs / all / top5 / heatmap ──
   const mode = _globeMode;
 
-  // Polígonos choropleth (precisa world-polys)
+  // ── MODO HEX BINS (hexágonos 3D) ──
+  if (mode === 'hexbin') {
+    // Usar los pedidos individuales como puntos lat/lng para hex binning
+    const hexPts = state.filtered
+      .map(o => {
+        const cc  = o.country_code || o.country;
+        const ref = COUNTRIES.find(c => c.code === cc);
+        if (!ref) return null;
+        // Dispersión aleatoria para que los hex bins no colapsen en un solo hex
+        return { lat: ref.lat + (Math.random()-0.5)*4, lng: ref.lon + (Math.random()-0.5)*4, weight: parseFloat(o.total)||1 };
+      }).filter(Boolean);
+    _globe
+      .hexBinPointsData(hexPts)
+      .hexBinPointWeight('weight')
+      .hexAltitude(d => 0.05 + d.sumWeight / Math.max(...hexPts.map(p=>p.weight), 1) * 0.25)
+      .hexBinResolution(3)
+      .hexTopColor(d => {
+        const t = d.sumWeight / Math.max(...hexPts.map(p=>p.weight), 1);
+        return `rgba(${Math.round(60+t*195)},${Math.round(220-t*180)},${Math.round(255-t*200)},0.9)`;
+      })
+      .hexSideColor(d => {
+        const t = d.sumWeight / Math.max(...hexPts.map(p=>p.weight), 1);
+        return `rgba(${Math.round(60+t*195)},${Math.round(220-t*180)},${Math.round(255-t*200)},0.4)`;
+      })
+      .hexLabel(d => `<div style="background:rgba(8,12,24,.9);border-radius:8px;padding:6px 10px;color:#fff;font-size:12px">
+        Densidad: <strong>${d.points.length}</strong> pedidos<br>Rev: <strong>${fmtMoney(d.sumWeight)}</strong>
+      </div>`);
+    _globe.pointsData([]).ringsData([]).arcsData([]).labelsData([]).polygonsData([]);
+    return;
+  } else {
+    _globe.hexBinPointsData([]);
+  }
+
+  // ── Polígonos choropleth ──
   if ((mode === 'choropleth' || mode === 'all') && typeof window._worldPolys !== 'undefined') {
     const revByCode = {};
     pts.forEach(p => revByCode[p.code] = p.revenue);
@@ -1690,8 +1864,8 @@ function _globeRefresh() {
     _globe.polygonsData([]);
   }
 
-  // Puntos/columnas
-  const showPoints = ['default','arcs','all','top5','heatmap'].includes(mode) || !['choropleth'].includes(mode);
+  // ── Puntos/columnas (con gradiente densidad+revenue) ──
+  const showPoints = mode !== 'hexbin';
   if (showPoints) {
     _globe
       .pointsData(pts)
@@ -1703,21 +1877,21 @@ function _globeRefresh() {
       })
       .pointRadius(p => {
         if (mode === 'heatmap') return 1.5 + (p.revenue / maxRev) * 3.5;
-        if (mode === 'top5') return top5Codes.has(p.code) ? 0.5 + (p.revenue / maxRev) * 1.8 : 0.2;
+        if (mode === 'top5')    return top5Codes.has(p.code) ? 0.5 + (p.revenue / maxRev) * 1.8 : 0.2;
         return 0.35 + (p.revenue / maxRev) * 1.4;
       })
       .pointColor(p => {
-        if (mode === 'heatmap') {
-          const t = p.revenue / maxRev;
-          return `rgba(${Math.round(255*t)},${Math.round(120*(1-t))},60,${0.3 + t*0.45})`;
-        }
+        // Gradiente por densidad: blend revenue + órdenes
+        const tRev  = p.revenue / maxRev;
+        const tOrd  = p.orders  / maxOrders;
+        const t     = (tRev * 0.6 + tOrd * 0.4);
+        if (mode === 'heatmap') return `rgba(${Math.round(255*t)},${Math.round(120*(1-t))},60,${0.3+t*0.45})`;
         if (mode === 'top5') {
-          return top5Codes.has(p.code)
-            ? (() => { const t=p.revenue/maxRev; return `rgba(${Math.round(220+t*35)},${Math.round(40-t*30)},${Math.round(60-t*40)},0.95)`; })()
-            : 'rgba(150,150,150,0.25)';
+          if (!top5Codes.has(p.code)) return 'rgba(150,150,150,0.25)';
+          return `rgba(${Math.round(220+t*35)},${Math.round(40-t*30)},${Math.round(60-t*40)},0.95)`;
         }
+        if (alertCodes.has(p.code)) return 'rgba(239,68,68,0.85)'; // rojo alerta
         if (mode === 'choropleth' || mode === 'all') return choroplethColor(p.revenue);
-        const t = p.revenue / maxRev;
         return `rgba(${Math.round(220+t*35)},${Math.round(40-t*30)},${Math.round(60-t*40)},0.92)`;
       })
       .pointLabel(p => richLabel(p));
@@ -1725,35 +1899,62 @@ function _globeRefresh() {
     _globe.pointsData([]);
   }
 
-  // Pulso (anillos de onda al actualizar datos)
-  if (mode === 'pulse' || mode === 'all') {
+  // ── Anillos de ALERTA (rojos, países sin ventas X días) ──
+  const alertPts = pts.filter(p => alertCodes.has(p.code));
+  if (alertPts.length && mode !== 'hexbin') {
+    // Mezclamos alertas con pulso si corresponde
+    const ringData = (mode === 'pulse' || mode === 'all')
+      ? pts
+      : alertPts;
+    _globe
+      .ringsData(ringData)
+      .ringLat('lat')
+      .ringLng('lon')
+      .ringMaxRadius(p => alertCodes.has(p.code) ? 3.5 : 2 + (p.revenue/maxRev)*3)
+      .ringPropagationSpeed(p => alertCodes.has(p.code) ? 2.5 : 1 + (p.revenue/maxRev)*2)
+      .ringRepeatPeriod(p => alertCodes.has(p.code) ? 600 : 800 + (1-p.revenue/maxRev)*1200)
+      .ringColor(p => {
+        if (alertCodes.has(p.code)) return f => `rgba(239,68,68,${Math.max(0, 0.9-f)})`;
+        const t = p.revenue/maxRev;
+        return f => `rgba(${Math.round(80+t*175)},${Math.round(200-t*100)},255,${Math.max(0,0.8-f)})`;
+      });
+  } else if (mode === 'pulse' || mode === 'all') {
     _globe
       .ringsData(pts)
       .ringLat('lat')
       .ringLng('lon')
-      .ringMaxRadius(p => 2 + (p.revenue / maxRev) * 3)
-      .ringPropagationSpeed(p => 1 + (p.revenue / maxRev) * 2)
-      .ringRepeatPeriod(p => 800 + (1 - p.revenue/maxRev) * 1200)
-      .ringColor(p => {
-        const t  = p.revenue / maxRev;
-        const alpha = (f) => `rgba(${Math.round(80+t*175)},${Math.round(200-t*100)},255,${Math.max(0,0.8-f)})`;
-        return alpha;
-      });
+      .ringMaxRadius(p => 2 + (p.revenue/maxRev)*3)
+      .ringPropagationSpeed(p => 1 + (p.revenue/maxRev)*2)
+      .ringRepeatPeriod(p => 800 + (1-p.revenue/maxRev)*1200)
+      .ringColor(p => { const t=p.revenue/maxRev; return f=>`rgba(${Math.round(80+t*175)},${Math.round(200-t*100)},255,${Math.max(0,0.8-f)})`; });
   } else {
     _globe.ringsData([]);
   }
 
-  // Arcos
+  // ── Arcos bidireccionales (top país ↔ resto) ──
   if (['arcs','all'].includes(mode) && pts.length >= 2) {
     const sorted  = [...pts].sort((a,b) => b.revenue - a.revenue);
     const origin  = sorted[0];
     const targets = sorted.slice(1, Math.min(9, sorted.length));
-    const arcs    = targets.map(t => ({
-      startLat: origin.lat, startLng: origin.lon,
-      endLat:   t.lat,      endLng:   t.lon,
-      color: ['rgba(255,200,60,0.9)','rgba(255,100,60,0.4)'],
-      stroke: 0.4 + (t.revenue / maxRev) * 0.8
-    }));
+    const arcs    = [];
+    targets.forEach(t => {
+      // A→B
+      arcs.push({
+        startLat: origin.lat, startLng: origin.lon,
+        endLat: t.lat, endLng: t.lon,
+        color: ['rgba(255,200,60,0.9)','rgba(255,100,60,0.4)'],
+        stroke: 0.4 + (t.revenue/maxRev)*0.8,
+        dir: 'out'
+      });
+      // B→A (bidireccional, color diferente)
+      arcs.push({
+        startLat: t.lat, startLng: t.lon,
+        endLat: origin.lat, endLng: origin.lon,
+        color: ['rgba(56,189,248,0.6)','rgba(99,102,241,0.3)'],
+        stroke: 0.2 + (t.revenue/maxRev)*0.4,
+        dir: 'in'
+      });
+    });
     _globe
       .arcsData(arcs)
       .arcStartLat('startLat').arcStartLng('startLng')
@@ -1763,24 +1964,37 @@ function _globeRefresh() {
       .arcStroke('stroke')
       .arcDashLength(0.35)
       .arcDashGap(0.15)
-      .arcDashAnimateTime(1800)
-      // Estela de cola brillante: usar dashInitialGap para efecto tail
+      .arcDashAnimateTime(a => a.dir === 'in' ? 2400 : 1800)
       .arcDashInitialGap(() => Math.random());
   } else {
     _globe.arcsData([]);
   }
 
-  // Labels flotantes para top 5
+  // ── Labels top 5 con KPIs flotantes (tendencia ↑↓) ──
   if (mode === 'top5' || mode === 'all') {
     const top5 = [...pts].sort((a,b) => b.revenue - a.revenue).slice(0,5);
+    // Calcular tendencia mensual para cada uno
+    top5.forEach(p => {
+      const last2m = [1,0].map(offset => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - offset);
+        return state.filtered
+          .filter(o => {
+            const od = new Date(o.date_created||o.date_paid||'');
+            return (o.country_code||o.country)===p.code && od.getMonth()===d.getMonth() && od.getFullYear()===d.getFullYear();
+          })
+          .reduce((s,o) => s+(parseFloat(o.total)||0), 0);
+      });
+      p._trend = last2m[0] > last2m[1] ? '↑' : last2m[0] < last2m[1] ? '↓' : '→';
+    });
     _globe
       .labelsData(top5)
       .labelLat('lat')
       .labelLng('lon')
-      .labelText(p => `${p.name}`)
-      .labelSize(p => 0.5 + (p.revenue/maxRev)*0.5)
+      .labelText(p => `${p.name} ${p._trend}`)
+      .labelSize(p => 0.55 + (p.revenue/maxRev)*0.5)
       .labelDotRadius(p => 0.3 + (p.revenue/maxRev)*0.4)
-      .labelColor(() => '#fff')
+      .labelColor(p => p._trend==='↑' ? '#4ade80' : p._trend==='↓' ? '#f87171' : '#fbbf24')
       .labelResolution(2)
       .labelAltitude(0.03);
   } else {
@@ -1866,26 +2080,41 @@ function _initGlobeNow() {
     .pointLat('lat')
     .pointLng('lon')
     .pointsMerge(false)
-    .onPointClick(p => {
+    .onPointClick((p, event) => {
+      window.__lastClickedPt = p;
       const sel = document.getElementById('countryFilter');
       if (sel) { sel.value = p.code; applyFilters(); }
       toast('País seleccionado: ' + p.name);
       // Zoom al país + panel lateral
       _globe.pointOfView({ lat: p.lat, lng: p.lon, altitude: 1.4 }, 900);
       _showGlobeCountryPanel(p);
+      // Explosión de partículas
+      if (event) {
+        const wrap = document.querySelector('.globe-wrap');
+        if (wrap) {
+          const rect = wrap.getBoundingClientRect();
+          _globeSpawnParticles(event.clientX - rect.left, event.clientY - rect.top);
+        }
+      }
     })
     .onGlobeReady(() => {
-      _globeRefresh();
+      // ── Animación cinematográfica de entrada ──
+      _globe.pointOfView({ lat: 20, lng: -120, altitude: 3.5 });
+      setTimeout(() => _globe.pointOfView({ lat: 5, lng: -40, altitude: 2.5 }, 1200), 200);
+      setTimeout(() => {
+        _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 }, 1000);
+        _globeRefresh();
+        // ── Pulsación inicial: "respirar" al cargar ──
+        _globePulseOnLoad();
+      }, 1600);
 
       // ── Recuperación ante pérdida de contexto WebGL (tab en background) ──
       const glCanvas = _globe.renderer && _globe.renderer().domElement;
       if (glCanvas) {
         glCanvas.addEventListener('webglcontextlost', e => {
-          e.preventDefault(); // necesario para permitir restauración
+          e.preventDefault();
         }, false);
-
         glCanvas.addEventListener('webglcontextrestored', () => {
-          // Esperar un frame y reinicializar el globo completo
           setTimeout(_rebuildGlobe, 200);
         }, false);
       }
@@ -2082,8 +2311,106 @@ function _initGlobeNow() {
     });
   }
 
-  // Vista inicial centrada en Latinoamérica
-  _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 });
+  // Vista inicial centrada en Latinoamérica (antes de animación se sobreescribe en onGlobeReady)
+  _globe.pointOfView({ lat: 20, lng: -120, altitude: 3.5 });
+
+  // ── BOTÓN 8K ──
+  document.getElementById('globe8KBtn')?.addEventListener('click', function() {
+    this.classList.toggle('active');
+    _globeRefresh();
+  });
+
+  // ── BOTÓN ALERTAS ──
+  document.getElementById('globeAlertBtn')?.addEventListener('click', function() {
+    this.classList.toggle('active');
+    const active = this.classList.contains('active');
+    _globeAlertDays = active ? 30 : 9999;
+    this.title = active ? `Alertando países sin ventas +${_globeAlertDays}d` : 'Alertas desactivadas';
+    _globeRefresh();
+  });
+
+  // ── DOBLE CLIC: aislar país ──
+  container.addEventListener('dblclick', () => {
+    if (_globeIsolated) {
+      // Desaislar
+      _globeIsolated = null;
+      toast('Vista global restaurada');
+      _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 }, 800);
+      _globeRefresh();
+    } else if (window.__lastClickedPt) {
+      _globeIsolated = window.__lastClickedPt.code;
+      toast(`Aislando: ${window.__lastClickedPt.name} — doble clic para salir`);
+      _globe.pointOfView({ lat: window.__lastClickedPt.lat, lng: window.__lastClickedPt.lon, altitude: 0.8 }, 1000);
+      _globeRefresh();
+    }
+  });
+
+  // ── ATAJOS DE TECLADO ──
+  document.addEventListener('keydown', e => {
+    // Solo activos si el globo es visible
+    const view = document.getElementById('view-home');
+    if (!view || view.style.display === 'none') return;
+    if (e.target.matches('input,textarea,select')) return;
+
+    const pts = state.globe.points;
+    if (!pts.length) return;
+
+    if (e.key === 'r' || e.key === 'R') {
+      _globeIsolated = null;
+      _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 }, 700);
+      toast('Vista centrada');
+    } else if (e.key === 'n' || e.key === 'N') {
+      _globeNight = !_globeNight;
+      const btn = document.getElementById('globeNightBtn');
+      if (btn) { btn.classList.toggle('active', _globeNight); btn.textContent = _globeNight ? '☀️ Día' : '🌙 Noche'; }
+      _globeRefresh();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      const sorted = [...pts].sort((a,b) => b.revenue - a.revenue);
+      _globeNavIdx = Math.max(0, Math.min(sorted.length-1,
+        _globeNavIdx + (e.key === 'ArrowRight' ? 1 : -1)
+      ));
+      const p = sorted[_globeNavIdx];
+      _globe.pointOfView({ lat: p.lat, lng: p.lon, altitude: 1.5 }, 700);
+      toast(`${p.name} — ${fmtMoney(p.revenue)}`);
+      window.__lastClickedPt = p;
+    } else if (e.key === 'Escape') {
+      _globeIsolated = null;
+      _globeCompareA = null;
+      _globeCompareB = null;
+      const cp = document.getElementById('globeCountryPanel');
+      if (cp) cp.style.display = 'none';
+      _globeRefresh();
+    }
+  });
+
+  // ── AUTOFOCUS: país con mayor crecimiento mensual ──
+  setTimeout(() => {
+    const pts = state.globe.points;
+    if (!pts.length) return;
+    const now    = new Date();
+    const growth = pts.map(p => {
+      const getMonthRev = offset => {
+        const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+        return state.filtered
+          .filter(o => {
+            const od = new Date(o.date_created||o.date_paid||'');
+            const cc = o.country_code||o.country;
+            return cc===p.code && od.getMonth()===d.getMonth() && od.getFullYear()===d.getFullYear();
+          })
+          .reduce((s,o) => s+(parseFloat(o.total)||0), 0);
+      };
+      const m0 = getMonthRev(0), m1 = getMonthRev(1);
+      return { p, pct: m1 > 0 ? (m0-m1)/m1 : (m0 > 0 ? 1 : 0) };
+    });
+    const best = growth.sort((a,b) => b.pct - a.pct)[0];
+    if (best && best.pct > 0) {
+      toast(`🚀 Mayor crecimiento: ${best.p.name} (+${Math.round(best.pct*100)}%)`);
+      setTimeout(() => {
+        _globe.pointOfView({ lat: best.p.lat, lng: best.p.lon, altitude: 1.6 }, 1200);
+        setTimeout(() => _globe.pointOfView({ lat: 10, lng: -70, altitude: 2.2 }, 1200), 3000);
+      }, 500);
+    }
+  }, 3000);
 
   // Redimensionar el globo automáticamente cuando cambia el tamaño del contenedor
   // (rotación de pantalla, resize de ventana, cambio de orientación en móvil)

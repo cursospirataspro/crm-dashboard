@@ -161,13 +161,16 @@
               <button id="resetGlobeBtn" class="chip">Centrar</button>
               <button id="globeNightBtn" class="chip">🌙 Noche</button>
               <button id="globeCloudsBtn" class="chip">☁️ Nubes</button>
+              <button id="globe8KBtn" class="chip" title="Textura 8K alta resolución">🌎 8K</button>
+              <button id="globeAlertBtn" class="chip" title="Alertar países sin ventas en 30 días">⚠️ Alertas</button>
               <div class="globe-mode-pills" id="globeModePills">
                 <button class="globe-mode-btn active" data-mode="default" title="Vista estándar">🌍 Estándar</button>
                 <button class="globe-mode-btn" data-mode="choropleth" title="Color por ingresos">💰 Ingresos</button>
                 <button class="globe-mode-btn" data-mode="pulse" title="Anillos de onda pulsantes">📡 Pulso</button>
-                <button class="globe-mode-btn" data-mode="arcs" title="Arcos de conexión con estela">✈ Arcos</button>
-                <button class="globe-mode-btn" data-mode="top5" title="Resaltar top 5 países">🏆 Top 5</button>
+                <button class="globe-mode-btn" data-mode="arcs" title="Arcos bidireccionales con estela">✈ Arcos</button>
+                <button class="globe-mode-btn" data-mode="top5" title="Resaltar top 5 con KPIs">🏆 Top 5</button>
                 <button class="globe-mode-btn" data-mode="heatmap" title="Mapa de calor por ingresos">🔥 Heatmap</button>
+                <button class="globe-mode-btn" data-mode="hexbin" title="Hexágonos 3D por densidad">⬡ Hex 3D</button>
                 <button class="globe-mode-btn" data-mode="all" title="Todo activado">✨ Todo</button>
               </div>
             </div>
@@ -200,7 +203,7 @@
             <!-- Panel lateral país -->
             <div id="globeCountryPanel" class="globe-country-panel" style="display:none"></div>
           </div>
-          <div class="globe-hint">Arrastra para girar · Rueda para zoom · Clic en un punto para filtrar y ver detalle</div>
+          <div class="globe-hint">Arrastra · Zoom · Clic = filtrar · Doble clic = aislar · <kbd>R</kbd> centrar · <kbd>N</kbd> noche · <kbd>←→</kbd> navegar países · <kbd>Esc</kbd> salir</div>
         </article>
 
         <article class="panel country-panel">
@@ -1484,6 +1487,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=41"></script>
+<script src="assets/app.js?v=42"></script>
 </body>
 </html>
