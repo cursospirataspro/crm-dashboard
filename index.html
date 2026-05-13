@@ -480,8 +480,12 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
                 <option value="risk">⚠ En riesgo (solo 1 compra)</option>
                 <option value="upsell">🚀 Potencial upsell (1 curso, ticket bajo)</option>
                 <option value="country">🌍 Por país</option>
+                <option value="multi_country">🌎 Multi-país (selección múltiple)</option>
                 <option value="ticket">💰 Por ticket mínimo</option>
+                <option value="min_amount">💸 Por monto total gastado</option>
+                <option value="last_purchase">🕐 Última compra hace N días</option>
                 <option value="course">🎓 Por curso comprado</option>
+                <option value="kanban_tag">📌 Por etiqueta Kanban</option>
                 <option value="smart_course">🤖 Smart: recomendación por curso (IA CRM)</option>
               </select>
             </label>
@@ -496,6 +500,27 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <!-- Filtro curso -->
             <label class="sf-label sf-filter-course" id="filterCourseWrap" style="flex:1;min-width:200px;display:none">Curso comprado
               <select id="filterCourse" class="sf-input"></select>
+            </label>
+            <!-- Filtro monto total gastado -->
+            <label class="sf-label" id="filterMinAmountWrap" style="flex:1;min-width:150px;display:none">Monto total mín. ($)
+              <input id="filterMinAmount" type="number" class="sf-input" value="100" min="0" step="10">
+            </label>
+            <!-- Filtro última compra -->
+            <label class="sf-label" id="filterLastPurchaseWrap" style="flex:1;min-width:170px;display:none">Última compra hace más de (días)
+              <input id="filterLastPurchaseDays" type="number" class="sf-input" value="60" min="1" step="1">
+            </label>
+            <!-- Filtro etiqueta Kanban -->
+            <label class="sf-label" id="filterKanbanTagWrap" style="flex:1;min-width:150px;display:none">Etiqueta Kanban
+              <select id="filterKanbanTag" class="sf-input">
+                <option value="new">Nuevo</option>
+                <option value="contacted">Contactado</option>
+                <option value="won">Ganado</option>
+                <option value="lost">Perdido</option>
+              </select>
+            </label>
+            <!-- Filtro multi-país -->
+            <label class="sf-label" id="filterMultiCountryWrap" style="flex:2;min-width:200px;display:none">Países (Ctrl+clic para múltiples)
+              <select id="filterMultiCountry" class="sf-input" multiple size="4" style="height:auto"></select>
             </label>
           </div>
 
@@ -586,6 +611,11 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <label class="sf-label">
             🖼 Imagen de cabecera (URL pública — opcional)
             <input id="emailHeaderImage" type="url" class="sf-input" placeholder="https://tusitio.com/imagen.jpg">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center">
+              <span style="font-size:11px;color:var(--muted)">📷 Galería:</span>
+              <div id="imgGalleryPicker" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+              <button id="imgGallerySaveBtn" type="button" class="btn ghost" style="font-size:11px;padding:3px 9px;margin-top:0">💾 Guardar URL</button>
+            </div>
           </label>
 
           <!-- Asunto + contador caracteres -->
@@ -599,7 +629,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <!-- Modo HTML toggle + cuerpo -->
           <label class="sf-label">
             Cuerpo del mensaje
-            <small style="color:var(--muted);font-weight:400;margin-left:6px">Usa <code style="background:var(--card2);padding:1px 5px;border-radius:3px">{nombre}</code></small>
+            <small style="color:var(--muted);font-weight:400;margin-left:6px">Variables: <code style="background:var(--card2);padding:1px 4px;border-radius:3px">{nombre}</code> <code style="background:var(--card2);padding:1px 4px;border-radius:3px">{curso}</code> <code style="background:var(--card2);padding:1px 4px;border-radius:3px">{fecha}</code> <code style="background:var(--card2);padding:1px 4px;border-radius:3px">{monto}</code></small>
             <span id="htmlModeToggle" style="float:right;font-size:11px;cursor:pointer;color:var(--accent)">&lt;/&gt; Modo HTML</span>
             <textarea id="emailBody" class="sf-input" rows="8" placeholder="Hola {nombre},&#10;&#10;Queremos contarte que tenemos algo especial preparado para ti...&#10;&#10;[Tu mensaje aquí]&#10;&#10;Saludos,&#10;El equipo de Cursos Piratas Pro"></textarea>
           </label>
@@ -631,11 +661,17 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             Incluir footer legal automático (dirección + link de baja)
           </label>
 
-          <!-- Delay entre envíos -->
-          <label class="sf-label" style="max-width:280px">
-            ⏱ Pausa entre envíos (ms)
-            <input id="sendDelay" type="number" class="sf-input" value="400" min="0" max="5000" step="100">
-          </label>
+          <!-- Delay + programar envio -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <label class="sf-label" style="max-width:220px">
+              ⏱ Pausa entre envíos (ms)
+              <input id="sendDelay" type="number" class="sf-input" value="400" min="0" max="5000" step="100">
+            </label>
+            <label class="sf-label" style="flex:1;min-width:200px">
+              📅 Programar envío (opcional)
+              <input id="scheduleSendAt" type="datetime-local" class="sf-input">
+            </label>
+          </div>
 
           <!-- Test A/B -->
           <div style="padding:10px 14px;background:var(--card2);border-radius:10px;border:1px solid var(--line)">
@@ -647,15 +683,28 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
               <label class="sf-label">Asunto versión B (se envía al 50% del segmento)
                 <input id="emailSubjectB" type="text" class="sf-input" placeholder="Versión alternativa del asunto...">
               </label>
+              <button id="abDiffBtn" type="button" class="btn ghost" style="font-size:11px;margin-top:6px;padding:4px 12px">🔍 Ver diferencias A vs B</button>
+              <div id="abDiffResult" style="display:none;margin-top:8px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;border:1px solid var(--line)"></div>
             </div>
           </div>
 
           <!-- Botones de acción -->
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
             <button id="emailPreviewBtn" class="btn ghost">👁 Vista previa</button>
+            <button id="showPlainTextBtn" class="btn ghost">📝 Texto plano</button>
             <button id="emailExportBtn" class="btn ghost">⬇ Exportar CSV</button>
             <button id="emailSendBtn" class="btn ghost" style="font-size:12px;opacity:.8">📩 Abrir cliente de correo</button>
+            <button id="scheduleSendBtn" class="btn ghost" style="font-size:12px">📅 Enviar programado</button>
+            <span id="spamScoreBadge" style="font-size:11px;padding:4px 10px;border-radius:12px;border:1px solid var(--line);color:var(--muted)"></span>
             <button id="emailSendBrevoBtn" class="btn" style="background:linear-gradient(135deg,#0092ff,#005fcb);font-weight:700;padding:10px 20px">🚀 Enviar con Brevo</button>
+          </div>
+          <!-- Vista texto plano -->
+          <div id="plainTextPreviewBox" style="display:none;margin-top:10px;padding:12px;background:var(--bg);border:1px solid var(--line);border-radius:8px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between">
+              <span>📝 Versión texto plano (mejor deliverability)</span>
+              <span onclick="document.getElementById('plainTextPreviewBox').style.display='none'" style="cursor:pointer;color:var(--accent)">✕ Cerrar</span>
+            </div>
+            <pre style="font-family:monospace;font-size:12px;white-space:pre-wrap;color:var(--text);margin:0"></pre>
           </div>
 
           <!-- Barra de progreso de envío Brevo -->
@@ -704,6 +753,59 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <button id="clearCampaignHistoryBtn" class="chip">🗑 Limpiar</button>
         </div>
         <div id="campaignHistory" style="font-size:13px;min-height:40px"></div>
+      </article>
+
+      <!-- ── Lista negra de emails ── -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Exclusiones</p><h2>🚫 Lista negra de emails</h2></div>
+          <button id="toggleBlacklistBtn" class="chip">Ver / Gestionar</button>
+        </div>
+        <div id="blacklistPanel" style="display:none;padding-top:10px">
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Emails aquí serán excluidos automáticamente de todos los envíos de Brevo.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <input id="blacklistInput" type="email" class="sf-input" placeholder="email@ejemplo.com" style="flex:2;min-width:200px;margin-top:0">
+            <button id="blacklistAddBtn" class="btn ghost" style="margin-top:0">➕ Agregar</button>
+          </div>
+          <div id="blacklistList"></div>
+        </div>
+      </article>
+
+      <!-- ── Drip Campaigns (secuencias) ── -->
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Automatización</p><h2>⏰ Secuencias de emails (Drip)</h2></div>
+          <span class="badge">beta</span>
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Define hasta 3 pasos con delays. El segmento activo en el compositor será el destinatario. ⚠ La página debe permanecer abierta durante la ejecución.</p>
+        <div id="dripSteps">
+          <div class="drip-step" data-step="1" style="padding:12px;background:var(--card2);border-radius:8px;margin-bottom:8px;border-left:3px solid var(--accent)">
+            <div style="font-size:12px;font-weight:700;margin-bottom:8px">📨 Paso 1 — Envío inmediato</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input class="sf-input drip-subject" style="flex:2;min-width:200px;margin-top:0" placeholder="Asunto email 1...">
+              <textarea class="sf-input drip-body" rows="3" style="flex:3;min-width:200px;margin-top:0" placeholder="Mensaje email 1... (soporta {nombre}, {curso}, {fecha}, {monto})"></textarea>
+            </div>
+          </div>
+          <div class="drip-step" data-step="2" style="padding:12px;background:var(--card2);border-radius:8px;margin-bottom:8px;border-left:3px solid var(--warn)">
+            <div style="font-size:12px;font-weight:700;margin-bottom:8px">⏱ Paso 2 — <input type="number" class="drip-delay" value="3" min="1" style="width:50px;padding:2px 6px;background:var(--bg);border:1px solid var(--line);border-radius:4px;color:inherit"> días después</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input class="sf-input drip-subject" style="flex:2;min-width:200px;margin-top:0" placeholder="Asunto email 2... (dejar vacío para omitir)">
+              <textarea class="sf-input drip-body" rows="3" style="flex:3;min-width:200px;margin-top:0" placeholder="Mensaje email 2..."></textarea>
+            </div>
+          </div>
+          <div class="drip-step" data-step="3" style="padding:12px;background:var(--card2);border-radius:8px;margin-bottom:8px;border-left:3px solid var(--good)">
+            <div style="font-size:12px;font-weight:700;margin-bottom:8px">⏱ Paso 3 — <input type="number" class="drip-delay" value="7" min="1" style="width:50px;padding:2px 6px;background:var(--bg);border:1px solid var(--line);border-radius:4px;color:inherit"> días después</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input class="sf-input drip-subject" style="flex:2;min-width:200px;margin-top:0" placeholder="Asunto email 3... (dejar vacío para omitir)">
+              <textarea class="sf-input drip-body" rows="3" style="flex:3;min-width:200px;margin-top:0" placeholder="Mensaje email 3..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button id="dripSaveBtn" class="btn ghost">💾 Guardar secuencia</button>
+          <button id="dripRunBtn" class="btn" style="background:linear-gradient(135deg,#0092ff,#16a34a);font-weight:700">▶ Ejecutar ahora con segmento activo</button>
+        </div>
+        <div id="dripCampaignsList" style="margin-top:16px"></div>
       </article>
 
     </section>
@@ -1353,6 +1455,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=38"></script>
+<script src="assets/app.js?v=39"></script>
 </body>
 </html>

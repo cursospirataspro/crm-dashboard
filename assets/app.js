@@ -1005,10 +1005,14 @@ function updateEmailCountBadge() {
   const unsub = getUnsubscribeList();
 
   // Mostrar/ocultar filtros avanzados según segmento
-  if ($('#filterCountryWrap')) $('#filterCountryWrap').style.display = seg === 'country'      ? '' : 'none';
-  if ($('#filterTicketWrap'))  $('#filterTicketWrap').style.display  = seg === 'ticket'       ? '' : 'none';
-  if ($('#filterCourseWrap'))  $('#filterCourseWrap').style.display  = seg === 'course'       ? '' : 'none';
-  if ($('#smartCoursePanel'))  $('#smartCoursePanel').style.display  = seg === 'smart_course' ? '' : 'none';
+  if ($('#filterCountryWrap'))     $('#filterCountryWrap').style.display     = seg === 'country'       ? '' : 'none';
+  if ($('#filterTicketWrap'))      $('#filterTicketWrap').style.display      = seg === 'ticket'        ? '' : 'none';
+  if ($('#filterCourseWrap'))      $('#filterCourseWrap').style.display      = seg === 'course'        ? '' : 'none';
+  if ($('#smartCoursePanel'))      $('#smartCoursePanel').style.display      = seg === 'smart_course'  ? '' : 'none';
+  if ($('#filterMinAmountWrap'))   $('#filterMinAmountWrap').style.display   = seg === 'min_amount'    ? '' : 'none';
+  if ($('#filterLastPurchaseWrap'))$('#filterLastPurchaseWrap').style.display= seg === 'last_purchase' ? '' : 'none';
+  if ($('#filterKanbanTagWrap'))   $('#filterKanbanTagWrap').style.display   = seg === 'kanban_tag'    ? '' : 'none';
+  if ($('#filterMultiCountryWrap'))$('#filterMultiCountryWrap').style.display= seg === 'multi_country' ? '' : 'none';
 
   // Si es smart_course, el conteo lo actualiza renderSmartCourseResults
   if (seg === 'smart_course') return;
@@ -2848,6 +2852,89 @@ function bind() {
 
   // ── Correo de prueba ──
   $("#testEmailSendBtn")?.addEventListener("click", sendTestEmail);
+
+  // ══════════════════════════════════════════════════════
+  // NUEVAS FEATURES EMAIL MARKETING
+  // ══════════════════════════════════════════════════════
+
+  // Spam badge en tiempo real
+  $("#emailSubject")?.addEventListener("input", renderSpamBadge);
+  $("#emailBody")?.addEventListener("input", renderSpamBadge);
+
+  // Guardar imagen en galería
+  $("#imgGallerySaveBtn")?.addEventListener("click", () => {
+    const url = $("#emailHeaderImage")?.value.trim();
+    if (url) saveImageToGallery(url);
+    else toast("⚠ Escribe una URL de imagen primero", "warning");
+  });
+  // Mostrar galería al cargar
+  renderImageGallery();
+
+  // Texto plano
+  $("#showPlainTextBtn")?.addEventListener("click", window.showPlainTextPreview);
+
+  // Envío programado
+  $("#scheduleSendBtn")?.addEventListener("click", scheduleSend);
+
+  // Lista negra: abrir panel + agregar email
+  $("#toggleBlacklistBtn")?.addEventListener("click", () => {
+    const panel = $("#blacklistPanel");
+    if (!panel) return;
+    const open = panel.style.display !== "none";
+    panel.style.display = open ? "none" : "block";
+    if (!open) renderBlacklistPanel();
+  });
+  $("#blacklistAddBtn")?.addEventListener("click", () => {
+    const input = $("#blacklistInput");
+    const email = input?.value.trim();
+    if (!email || !email.includes("@")) { toast("⚠ Ingresa un email válido", "warning"); return; }
+    addToUnsubscribeList(email);
+    if (input) input.value = "";
+    renderBlacklistPanel();
+    updateEmailCountBadge();
+    toast(`🚫 "${email}" agregado a lista negra`, "success");
+  });
+
+  // Drip: guardar secuencia desde el builder
+  $("#dripSaveBtn")?.addEventListener("click", () => {
+    const name = prompt("Nombre de esta secuencia:");
+    if (!name?.trim()) return;
+    const steps = [];
+    document.querySelectorAll(".drip-step").forEach(stepEl => {
+      const sub = stepEl.querySelector(".drip-subject")?.value.trim() || "";
+      const bod = stepEl.querySelector(".drip-body")?.value.trim()    || "";
+      const del = parseInt(stepEl.querySelector(".drip-delay")?.value || "0", 10);
+      if (sub || bod) steps.push({ subject: sub, body: bod, delayDays: del });
+    });
+    if (!steps.length) { toast("⚠ Define al menos un paso con asunto o mensaje", "warning"); return; }
+    saveDripCampaign(name.trim(), steps);
+  });
+
+  // Drip: ejecutar directamente desde el builder
+  $("#dripRunBtn")?.addEventListener("click", () => {
+    const steps = [];
+    document.querySelectorAll(".drip-step").forEach(stepEl => {
+      const sub = stepEl.querySelector(".drip-subject")?.value.trim() || "";
+      const bod = stepEl.querySelector(".drip-body")?.value.trim()    || "";
+      const del = parseInt(stepEl.querySelector(".drip-delay")?.value || "0", 10);
+      if (sub || bod) steps.push({ subject: sub, body: bod, delayDays: del });
+    });
+    if (!steps.length) { toast("⚠ Define al menos un paso", "warning"); return; }
+    const tmpName = "_drip_run_" + Date.now();
+    saveDripCampaign(tmpName, steps);
+    runDripCampaign(tmpName);
+  });
+  renderDripPanel();
+
+  // A/B diff
+  $("#abDiffBtn")?.addEventListener("click", showABDiff);
+  $("#emailSubjectB")?.addEventListener("input", showABDiff);
+
+  // Nuevos filtros avanzados → actualizar badge
+  $("#filterMinAmount")?.addEventListener("input", updateEmailCountBadge);
+  $("#filterLastPurchaseDays")?.addEventListener("input", updateEmailCountBadge);
+  $("#filterKanbanTag")?.addEventListener("change", updateEmailCountBadge);
+  $("#filterMultiCountry")?.addEventListener("change", updateEmailCountBadge);
 }
 
 // =============================================================
@@ -3630,9 +3717,13 @@ async function testBrevoConnection() {
 }
 
 // ── Construye el HTML completo del email ──────────────────────────
-function buildEmailHtml({ name, bodyText, headerImage, ctaText, ctaUrl, includeFooter }) {
+function buildEmailHtml({ name, bodyText, headerImage, ctaText, ctaUrl, includeFooter, extraVars = {} }) {
+  const _fechaDef = new Date().toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" });
   const bodyHtml = bodyText
     .replace(/\{nombre\}/gi, name).replace(/\{name\}/gi, name)
+    .replace(/\{curso\}/gi,  extraVars.curso  ?? "")
+    .replace(/\{fecha\}/gi,  extraVars.fecha  ?? _fechaDef)
+    .replace(/\{monto\}/gi,  extraVars.monto  ?? "")
     .replace(/\n/g, "<br>");
   const imgBlock = headerImage
     ? `<img src="${headerImage}" alt="Banner" style="width:100%;max-height:280px;object-fit:cover;display:block;border-radius:8px 8px 0 0;">`
@@ -3705,12 +3796,20 @@ async function sendViaBrevo() {
   let sent = 0, failed = 0;
   const total = recipients.length;
 
+  // Variables dinámicas {curso} {fecha} {monto} personalizadas por destinatario
+  const _crmByEmail = {};
+  Object.values(customerMap(state.filtered)).forEach(c => { if (c.email) _crmByEmail[c.email] = c; });
+  const _varCurso = _smartState.selectedCourse || $("#filterCourse")?.value || "";
+  const _varFecha = new Date().toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" });
+
   for (let i = 0; i < recipients.length; i++) {
     const r = recipients[i];
     // A/B: alternar asunto
     const chosenSubject = enableAB && i % 2 === 1 ? subjectB : subject;
     const personalSubject = chosenSubject.replace(/\{nombre\}/gi, r.name).replace(/\{name\}/gi, r.name);
-    const htmlContent = buildEmailHtml({ name: r.name, bodyText, headerImage, ctaText, ctaUrl, includeFooter });
+    const _crmC     = _crmByEmail[r.email] || {};
+    const _extraVars = { curso: _varCurso, fecha: _varFecha, monto: _crmC.revenue ? `$${Number(_crmC.revenue).toFixed(2)}` : "" };
+    const htmlContent = buildEmailHtml({ name: r.name, bodyText, headerImage, ctaText, ctaUrl, includeFooter, extraVars: _extraVars });
     try {
       let res, data;
       if (CONFIG.mode === "api") {
@@ -3804,6 +3903,28 @@ function getEmailRecipients(segment, excludeConverted = false) {
         .filter(Boolean);
     }
   }
+  else if (segment === "min_amount") {
+    const minAmt = parseFloat($("#filterMinAmount")?.value || "0");
+    list = cm.filter(c => (c.revenue || 0) >= minAmt);
+  }
+  else if (segment === "last_purchase") {
+    const days = parseInt($("#filterLastPurchaseDays")?.value || "60", 10);
+    list = cm.filter(c => c.last && new Date(c.last) < new Date(now - days * 864e5));
+  }
+  else if (segment === "kanban_tag") {
+    const tag = $("#filterKanbanTag")?.value || "new";
+    const emailsInTag = Object.entries(KANBAN_STATE)
+      .filter(([, s]) => s.status === tag)
+      .map(([id]) => id);
+    list = cm.filter(c => emailsInTag.includes(c.email));
+  }
+  else if (segment === "multi_country") {
+    const sel = $("#filterMultiCountry");
+    if (sel) {
+      const selected = [...sel.selectedOptions].map(o => o.value);
+      if (selected.length) list = cm.filter(c => selected.includes(c.country) || selected.includes(c.billing_country));
+    }
+  }
 
   // Excluir convertidos recientemente (compraron en últimos 30 días)
   if (excludeConverted) {
@@ -3880,11 +4001,12 @@ function renderBestSendHour() {
 // ── Poblar selects de filtros avanzados ───────────────────────────
 function populateAdvancedFilters() {
   // Países
+  const countries = [...new Set(state.filtered.map(o => o.billing?.country || o.billing_country).filter(Boolean))].sort();
   const countrySel = $("#filterCountry");
-  if (countrySel) {
-    const countries = [...new Set(state.filtered.map(o => o.billing?.country || o.billing_country).filter(Boolean))].sort();
-    countrySel.innerHTML = countries.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-  }
+  if (countrySel) countrySel.innerHTML = countries.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  // Multi-país
+  const multiSel = $("#filterMultiCountry");
+  if (multiSel) multiSel.innerHTML = countries.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
   // Cursos (filtro básico)
   const courseSel = $("#filterCourse");
   if (courseSel) {
@@ -4376,6 +4498,13 @@ function renderEmailPreview() {
 
 function saveCampaignToHistory(campaign) {
   try {
+    // Auto-capturar snapshot del compositor si no viene ya incluido
+    if (!campaign.body) {
+      campaign.body        = $("#emailBody")?.value        || "";
+      campaign.headerImage = $("#emailHeaderImage")?.value || "";
+      campaign.ctaText     = $("#ctaText")?.value          || "";
+      campaign.ctaUrl      = $("#ctaUrl")?.value           || "";
+    }
     const history = JSON.parse(localStorage.getItem("crm_campaign_history") || "[]");
     history.unshift(campaign);
     localStorage.setItem("crm_campaign_history", JSON.stringify(history.slice(0, 50)));
@@ -4388,16 +4517,17 @@ function renderCampaignHistory() {
   try {
     const history = JSON.parse(localStorage.getItem("crm_campaign_history") || "[]");
     if (!history.length) { el.innerHTML = '<p style="color:var(--muted);font-size:13px">No hay campañas enviadas aún.</p>'; return; }
-    el.innerHTML = history.map(c => `
+    el.innerHTML = history.map((c, idx) => `
       <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
         <div>
           <strong>${esc(c.subject)}</strong>
           <span style="color:var(--muted);margin-left:8px">${new Date(c.date).toLocaleString()}</span>
         </div>
-        <div style="font-size:12px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">
           <span style="color:var(--good)">✅ ${c.sent} enviados</span>
-          ${c.failed ? `<span style="color:var(--danger);margin-left:8px">❌ ${c.failed} fallidos</span>` : ""}
-          <span style="color:var(--muted);margin-left:8px">Segmento: ${esc(c.segment)}</span>
+          ${c.failed ? `<span style="color:var(--danger)">❌ ${c.failed} fallidos</span>` : ""}
+          <span style="color:var(--muted)">Segmento: ${esc(c.segment)}</span>
+          ${c.body ? `<button onclick="loadCampaignToComposer(${idx})" style="font-size:11px;padding:3px 9px;background:var(--card2);border:1px solid var(--line);border-radius:6px;color:var(--accent);cursor:pointer">↩ Cargar en compositor</button>` : ""}
         </div>
       </div>`).join("");
   } catch(e) {}
@@ -4407,6 +4537,266 @@ function clearCampaignHistory() {
   localStorage.removeItem("crm_campaign_history");
   renderCampaignHistory();
   toast("Historial limpiado", "success");
+}
+
+// =============================================================
+// CARGAR CAMPAÑA AL COMPOSITOR (desde historial)
+// =============================================================
+window.loadCampaignToComposer = function(idx) {
+  try {
+    const c = JSON.parse(localStorage.getItem("crm_campaign_history") || "[]")[idx];
+    if (!c) return;
+    if ($("#emailSubject"))     $("#emailSubject").value     = c.subject     || "";
+    if ($("#emailBody"))        $("#emailBody").value        = c.body        || "";
+    if ($("#emailHeaderImage")) $("#emailHeaderImage").value = c.headerImage || "";
+    if ($("#ctaText"))          $("#ctaText").value          = c.ctaText     || "";
+    if ($("#ctaUrl"))           $("#ctaUrl").value           = c.ctaUrl      || "";
+    updateSubjectCharCount();
+    renderSpamBadge();
+    toast(`↩ Campaña "${(c.subject||"sin asunto").slice(0,40)}" cargada en el compositor`, "success");
+    $("#emailSubject")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  } catch(e) {}
+};
+
+// =============================================================
+// SPAM SCORE CHECKER
+// =============================================================
+const _SPAM_WORDS = [
+  "gratis","free","oferta","urgente","gana dinero","100%","garantizado",
+  "sin costo","haga clic","haga click","winner","ganaste","oro","gold",
+  "forex","mlm","promocion","exclusivo","alerta","dinero facil",
+  "clic aqui","click aqui","compra ya","actua ahora","no te pierdas",
+  "casino","bitcoin","crypto","millonario","millones","dolar"
+];
+
+function checkSpamScore(subject, body) {
+  const norm = s => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const text = norm(subject + " " + body);
+  const hits = _SPAM_WORDS.filter(w => text.includes(norm(w)));
+  return { score: Math.min(100, hits.length * 15), hits };
+}
+
+function renderSpamBadge() {
+  const badge = $("#spamScoreBadge");
+  if (!badge) return;
+  const { score, hits } = checkSpamScore(
+    $("#emailSubject")?.value || "",
+    $("#emailBody")?.value    || ""
+  );
+  const color = score === 0 ? "var(--good)" : score < 30 ? "var(--warn)" : "var(--danger)";
+  badge.textContent = score === 0 ? "✅ Sin spam" : score < 30 ? `⚠ Spam ${score}%` : `🚨 Spam ${score}%`;
+  badge.style.color       = color;
+  badge.style.borderColor = color;
+  badge.title = hits.length ? "Palabras: " + hits.join(", ") : "Sin palabras de spam detectadas";
+}
+
+// =============================================================
+// GALERÍA DE IMÁGENES (localStorage)
+// =============================================================
+function getImageGallery() {
+  try { return JSON.parse(localStorage.getItem("crm_img_gallery") || "[]"); } catch(e) { return []; }
+}
+function saveImageToGallery(url) {
+  if (!url) return;
+  const name = url.split("/").pop().split("?")[0].slice(0, 30) || "imagen";
+  const gallery = getImageGallery().filter(i => i.url !== url);
+  gallery.unshift({ url, name, date: new Date().toISOString() });
+  localStorage.setItem("crm_img_gallery", JSON.stringify(gallery.slice(0, 20)));
+  renderImageGallery();
+  toast("📷 Imagen guardada en galería", "success");
+}
+window.deleteImageFromGallery = function(url) {
+  localStorage.setItem("crm_img_gallery", JSON.stringify(getImageGallery().filter(i => i.url !== url)));
+  renderImageGallery();
+};
+window.pickGalleryImage = function(url) {
+  const inp = $("#emailHeaderImage");
+  if (inp) { inp.value = url; inp.dispatchEvent(new Event("input")); }
+  renderImageGallery();
+};
+function renderImageGallery() {
+  const container = $("#imgGalleryPicker");
+  if (!container) return;
+  const gallery = getImageGallery();
+  if (!gallery.length) {
+    container.innerHTML = '<span style="font-size:11px;color:var(--muted);font-style:italic">Sin imágenes guardadas</span>';
+    return;
+  }
+  container.innerHTML = gallery.map(img => `
+    <div style="position:relative;display:inline-flex">
+      <img src="${esc(img.url)}" alt="${esc(img.name)}" title="Usar: ${esc(img.name)}"
+        onclick="pickGalleryImage('${img.url.replace(/'/g,"\\'")}')"
+        style="width:52px;height:36px;object-fit:cover;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:.15s"
+        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='transparent'">
+      <span onclick="deleteImageFromGallery('${img.url.replace(/'/g,"\\'")}');"
+        style="position:absolute;top:-5px;right:-5px;background:var(--danger);color:#fff;border-radius:50%;width:15px;height:15px;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:900">×</span>
+    </div>`).join("");
+}
+
+// =============================================================
+// TEXTO PLANO AUTO-GENERADO
+// =============================================================
+window.showPlainTextPreview = function() {
+  const body    = $("#emailBody")?.value    || "";
+  const ctaText = $("#ctaText")?.value      || "";
+  const ctaUrl  = $("#ctaUrl")?.value       || "";
+  const plain   = body.replace(/<[^>]+>/g, "").trim()
+    + (ctaText && ctaUrl ? `\n\n▶ ${ctaText}: ${ctaUrl}` : "")
+    + "\n\n---\nCursospirataspro.com | Para darte de baja responde a este correo.";
+  const box = $("#plainTextPreviewBox");
+  if (!box) return;
+  const visible = box.style.display === "block";
+  box.style.display = visible ? "none" : "block";
+  if (!visible) box.querySelector("pre").textContent = plain;
+};
+
+// =============================================================
+// PROGRAMAR ENVÍO
+// =============================================================
+function scheduleSend() {
+  const dtInput = $("#scheduleSendAt");
+  if (!dtInput?.value) { toast("⚠ Selecciona fecha y hora de envío", "warning"); return; }
+  const sendAt  = new Date(dtInput.value);
+  const msDelay = sendAt - Date.now();
+  if (msDelay <= 0) { toast("⚠ La fecha programada ya pasó", "warning"); return; }
+  const mins = Math.round(msDelay / 60000);
+  if (!confirm(`¿Programar envío para ${sendAt.toLocaleString()}? (en ${mins} minuto${mins !== 1 ? "s" : ""})\n\n⚠ Esta pestaña debe permanecer abierta.`)) return;
+  setTimeout(sendViaBrevo, msDelay);
+  toast(`📅 Envío programado para ${sendAt.toLocaleTimeString()} — mantén esta pestaña abierta`, "success");
+}
+
+// =============================================================
+// LISTA NEGRA (blacklist UI)
+// =============================================================
+function renderBlacklistPanel() {
+  const container = $("#blacklistList");
+  if (!container) return;
+  const list = getUnsubscribeList();
+  if (!list.length) {
+    container.innerHTML = '<p style="color:var(--muted);font-size:12px;margin:0">Lista negra vacía — ningún email excluido.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${list.length} email(s) excluidos de todos los envíos:</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      ${list.map(email => `
+        <span style="background:var(--card2);border:1px solid #f8717166;border-radius:14px;padding:4px 10px;font-size:11px;display:inline-flex;align-items:center;gap:6px">
+          ${esc(email)}
+          <span onclick="removeFromBlacklist('${esc(email)}')" title="Eliminar" style="cursor:pointer;color:var(--danger);font-weight:900;font-size:13px;line-height:1">×</span>
+        </span>`).join("")}
+    </div>`;
+}
+window.removeFromBlacklist = function(email) {
+  localStorage.setItem("crm_unsubscribe", JSON.stringify(getUnsubscribeList().filter(e => e !== email)));
+  renderBlacklistPanel();
+  updateEmailCountBadge();
+  toast(`✅ "${email}" eliminado de lista negra`, "success");
+};
+
+// =============================================================
+// DRIP CAMPAIGNS — secuencias de emails
+// =============================================================
+function getDripCampaigns() {
+  try { return JSON.parse(localStorage.getItem("crm_drip_campaigns") || "[]"); } catch(e) { return []; }
+}
+function saveDripCampaign(name, steps) {
+  if (!name || !steps.length) return;
+  const all = getDripCampaigns().filter(c => c.name !== name);
+  all.unshift({ name, steps, created: new Date().toISOString() });
+  localStorage.setItem("crm_drip_campaigns", JSON.stringify(all.slice(0, 20)));
+  renderDripPanel();
+  toast(`💾 Secuencia "${name}" guardada`, "success");
+}
+window.deleteDripCampaign = function(name) {
+  localStorage.setItem("crm_drip_campaigns", JSON.stringify(getDripCampaigns().filter(c => c.name !== name)));
+  renderDripPanel();
+  toast("🗑 Secuencia eliminada", "success");
+};
+function renderDripPanel() {
+  const container = $("#dripCampaignsList");
+  if (!container) return;
+  const all = getDripCampaigns();
+  if (!all.length) {
+    container.innerHTML = '<p style="color:var(--muted);font-size:12px;margin:0">Sin secuencias guardadas.</p>';
+    return;
+  }
+  container.innerHTML = all.map(c => `
+    <div style="padding:10px 14px;background:var(--card2);border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+      <div>
+        <strong style="font-size:13px">${esc(c.name)}</strong>
+        <span style="color:var(--muted);margin-left:8px;font-size:11px">${c.steps.length} paso${c.steps.length !== 1 ? "s" : ""}</span>
+        ${c.steps.map((s, i) => `
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">
+            ${i === 0 ? "📨 Inmediato" : `⏱ +${s.delayDays}d`}: ${esc((s.subject || "").slice(0, 50))}
+          </div>`).join("")}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="runDripCampaign('${esc(c.name)}')" style="font-size:11px;padding:5px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer">▶ Ejecutar</button>
+        <button onclick="deleteDripCampaign('${esc(c.name)}')" style="font-size:11px;padding:5px 10px;background:transparent;color:var(--danger);border:1px solid var(--danger);border-radius:6px;cursor:pointer">🗑</button>
+      </div>
+    </div>`).join("");
+}
+window.runDripCampaign = async function(name) {
+  const campaign = getDripCampaigns().find(c => c.name === name);
+  if (!campaign) return;
+  const segment  = $("#emailSegment")?.value || "all";
+  const excl     = $("#excludeConverted")?.checked ?? false;
+  const recips   = getEmailRecipients(segment, excl).filter(r => !getUnsubscribeList().includes(r.email));
+  if (!recips.length) { toast("⚠ No hay destinatarios para este segmento", "warning"); return; }
+  const totalDays = campaign.steps.reduce((a, s, i) => a + (i === 0 ? 0 : (s.delayDays || 1)), 0);
+  if (!confirm(`Ejecutar "${name}"\n${campaign.steps.length} emails → ${recips.length} destinatarios\nDuración: ~${totalDays} días\n\n⚠ La página debe quedar abierta.`)) return;
+  let msAcc = 0;
+  campaign.steps.forEach((step, idx) => {
+    msAcc += idx === 0 ? 0 : (step.delayDays || 1) * 864e5;
+    const snapMs = msAcc;
+    setTimeout(async () => {
+      toast(`📨 Drip paso ${idx + 1}/${campaign.steps.length}: "${(step.subject||"").slice(0,35)}"`, "success");
+      const headerImage   = $("#emailHeaderImage")?.value || "";
+      const ctaText       = $("#ctaText")?.value          || "";
+      const ctaUrl        = $("#ctaUrl")?.value           || "";
+      const includeFooter = $("#includeFooter")?.checked  ?? true;
+      const delayMs       = parseInt($("#sendDelay")?.value || "400", 10) || 400;
+      for (let i = 0; i < recips.length; i++) {
+        const r = recips[i];
+        const html = buildEmailHtml({ name: r.name, bodyText: step.body || "", headerImage, ctaText, ctaUrl, includeFooter });
+        const subj = (step.subject || "").replace(/\{nombre\}/gi, r.name);
+        try {
+          await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
+            body: JSON.stringify({ to_email: r.email, to_name: r.name, subject: subj, html_content: html }),
+          });
+        } catch(e) {}
+        if (delayMs > 0 && i < recips.length - 1) await new Promise(res => setTimeout(res, delayMs));
+      }
+      saveCampaignToHistory({ segment, subject: step.subject || "", body: step.body || "", total: recips.length, sent: recips.length, failed: 0, date: new Date().toISOString() });
+      renderCampaignHistory();
+    }, snapMs);
+  });
+  toast(`⏰ Secuencia "${name}" iniciada — ${campaign.steps.length} pasos programados`, "success");
+};
+
+// A/B: comparar diferencias inline
+function showABDiff() {
+  const a   = $("#emailSubject")?.value  || "";
+  const b   = $("#emailSubjectB")?.value || "";
+  const box = $("#abDiffResult");
+  if (!box) return;
+  if (!a && !b) { box.style.display = "none"; return; }
+  const wA = a.split(" "), wB = b.split(" ");
+  const max = Math.max(wA.length, wB.length);
+  let dA = "", dB = "";
+  for (let i = 0; i < max; i++) {
+    const wa = wA[i] || "", wb = wB[i] || "";
+    const same = wa.toLowerCase() === wb.toLowerCase();
+    dA += same ? `${esc(wa)} ` : `<mark style="background:#ef444433;border-radius:3px;padding:1px 3px">${esc(wa)} </mark>`;
+    dB += same ? `${esc(wb)} ` : `<mark style="background:#22c55e33;border-radius:3px;padding:1px 3px">${esc(wb)} </mark>`;
+  }
+  box.style.display = "block";
+  box.innerHTML = `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Diferencias (🔴 A · 🟢 B):</div>
+    <div style="margin-bottom:3px;font-size:12px"><strong>A:</strong> ${dA}</div>
+    <div style="font-size:12px"><strong>B:</strong> ${dB}</div>`;
 }
 
 // =============================================================
