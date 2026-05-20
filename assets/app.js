@@ -401,12 +401,16 @@ function customerMap(orders) {
     const billingName = [o.billing?.first_name, o.billing?.last_name].filter(Boolean).join(" ").trim()
       || [o.first_name, o.last_name].filter(Boolean).join(" ").trim();
     const resolvedName = billingName || o.customer || "Cliente";
+    const resolvedPhone = o.billing?.phone || o.phone || "";
     map[key] ??= { name: resolvedName, email: o.customer_email || o.billing?.email || "",
+                   phone: resolvedPhone,
                    revenue: 0, orders: 0, countries: new Set(), courses: new Set(), last: o.date };
     // Actualizar nombre si el actual es genérico y encontramos uno mejor
     if ((map[key].name === "Cliente" || !map[key].name) && resolvedName !== "Cliente") {
       map[key].name = resolvedName;
     }
+    // Actualizar teléfono si aún no tenemos uno
+    if (!map[key].phone && resolvedPhone) map[key].phone = resolvedPhone;
     map[key].orders++;
     if (["completed","processing"].includes(statusNorm(o.status))) map[key].revenue += netRev(o);
     map[key].countries.add(o.country || o.country_code || o.billing?.country || "");
@@ -1404,6 +1408,66 @@ function cmRenderTable() {
       <button class="cm-page-btn" ${_cmState.page >= pages ? "disabled" : ""}
         onclick="_cmState.page++;cmRenderTable()">Siguiente ›</button>`;
   }
+}
+
+function cmExportCSV() {
+  const courses = _cmState.selectedCourses;
+  if (!courses.length) {
+    alert("Selecciona al menos un curso antes de exportar.");
+    return;
+  }
+
+  // Obtener todos los clientes que compraron alguno de los cursos seleccionados
+  const allCustomers = Object.values(customerMap(state.filtered))
+    .filter(c => courses.some(name => c.courses.has(name)))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!allCustomers.length) {
+    alert("No hay clientes para los cursos seleccionados.");
+    return;
+  }
+
+  // Construir CSV (separado por comas, compatible con Excel)
+  const csvEscape = v => {
+    const s = String(v ?? "").replace(/"/g, '""');
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
+  };
+
+  const BOM = "\uFEFF"; // BOM UTF-8 para que Excel abra correctamente con acentos
+  const headers = ["Nombre", "Email", "País", "Teléfono", "Cursos comprados", "Total gastado", "Pedidos"];
+  const rows = allCustomers.map(c => {
+    const countriesList = [...c.countries].filter(Boolean).join(" / ") || "";
+    const boughtCourses = courses.filter(name => c.courses.has(name)).join(" | ");
+    return [
+      c.name,
+      c.email,
+      countriesList,
+      c.phone || "",
+      boughtCourses,
+      Number(c.revenue || 0).toFixed(2),
+      c.orders
+    ].map(csvEscape).join(",");
+  });
+
+  const csvContent = BOM + [headers.map(csvEscape).join(","), ...rows].join("\r\n");
+
+  // Generar nombre de archivo con fecha y cursos
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const courseLabel = courses.length === 1
+    ? courses[0].slice(0, 40).replace(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s]/g, "").trim().replace(/\s+/g, "_")
+    : `${courses.length}_cursos`;
+  const filename = `CRM_${courseLabel}_${dateStr}.csv`;
+
+  // Disparar descarga
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function renderCourseMatrix() {
