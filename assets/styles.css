@@ -166,7 +166,7 @@ button:not(.nav-btn):not(.globe-mode-btn):not(.chip):not(.modal-tag-rm):not(.sid
   width:         42px;
   height:        42px;
   border-radius: 14px;
-  background:    transparent;
+  background:    #ffffff;
   display:       grid;
   place-items:   center;
   flex-shrink:   0;
