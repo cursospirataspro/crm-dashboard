@@ -4351,13 +4351,8 @@ function toggleMidnightMode() {
 
 // Restaurar modo midnight al cargar
 (function restoreMidnight() {
-  try {
-    if (localStorage.getItem("crm_midnight") === "1") {
-      document.querySelector(".app")?.classList.add("midnight-mode");
-      const btn = document.getElementById("midnightToggle");
-      if (btn) btn.textContent = "🌙 Midnight ON";
-    }
-  } catch(e) {}
+  // Midnight mode desactivado — limpiar estado guardado
+  try { localStorage.removeItem("crm_midnight"); } catch(e) {}
 })();
 
 // =============================================================
