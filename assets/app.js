@@ -1069,22 +1069,84 @@ function opoRenderList() {
   }).join('');
 }
 
+// =============================================================
+// EXPORTADOR EXCEL PROFESIONAL (HTML → .xls, sin dependencias)
+// =============================================================
+function _exportXLS(filename, sheetName, headers, colWidths, rows) {
+  const esc = v => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const colDefs = colWidths.map(w => `<col style="width:${w}pt"/>`).join('');
+  const headerRow = headers.map(h =>
+    `<th style="background:#1a1a2e;color:#ffffff;font-weight:700;font-size:11pt;padding:8px 10px;border:1px solid #444;white-space:nowrap">${esc(h)}</th>`
+  ).join('');
+  const dataRows = rows.map((row, i) => {
+    const bg = i % 2 === 0 ? '#f8f9fc' : '#ffffff';
+    const cells = row.map((v, ci) => {
+      const isNum = typeof v === 'number' || (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) && v.trim() !== '');
+      const align = isNum ? 'right' : 'left';
+      const fmt   = isNum ? `mso-number-format:"#,##0.00"` : '';
+      return `<td style="background:${bg};color:#1a1a2e;font-size:10pt;padding:6px 10px;border:1px solid #dde1ea;text-align:${align};${fmt}">${esc(v)}</td>`;
+    }).join('');
+    return `<tr>${cells}</tr>`;
+  }).join('');
+
+  const html = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:x="urn:schemas-microsoft-com:office:excel">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Author>CRM Global Dashboard</Author><Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default"><Font ss:FontName="Calibri" ss:Size="11"/></Style>
+ </Styles>
+</Workbook>`;
+
+  // Usamos HTML table que Excel interpreta perfectamente
+  const tableHtml = `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:x="urn:schemas-microsoft-com:office:excel"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
+<x:ExcelWorksheet><x:Name>${esc(sheetName)}</x:Name>
+<x:WorksheetOptions><x:Selected/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+<style>
+  body { font-family: Calibri, Arial, sans-serif; }
+  table { border-collapse: collapse; width: 100%; }
+</style>
+</head><body>
+<table>
+  <colgroup>${colDefs}</colgroup>
+  <thead><tr>${headerRow}</tr></thead>
+  <tbody>${dataRows}</tbody>
+</table>
+</body></html>`;
+
+  const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename.endsWith('.xls') ? filename : filename + '.xls';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 function opoExportCSV() {
   const { pendingLeads, cancelledLeads, inactiveLeads, upsellLeads } = opoLeads();
   const all = [...pendingLeads, ...cancelledLeads, ...inactiveLeads, ...upsellLeads];
-  const bom = '\uFEFF';
-  const headers = ['tipo','nombre','email','pais','ciudad','cursos','valor_estimado','score','accion'];
+  const headers   = ['Tipo', 'Nombre', 'Email', 'País', 'Ciudad', 'Cursos', 'Valor estimado (USD)', 'Score', 'Acción recomendada'];
+  const colWidths = [90, 160, 200, 80, 100, 220, 100, 60, 180];
   const rows = all.map(l => [
-    l.tag.replace(/[^a-zA-Z\s]/g,'').trim(),
-    l.name, l.email, l.country, l.city,
-    l.courses, l.value.toFixed(2), Math.round(l.score), l.action
-  ].map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(','));
-  const csv = bom + [headers.join(','), ...rows].join('\n');
-  const a   = document.createElement('a');
-  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `leads-email-marketing-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  toast('Lista de leads exportada para email marketing', 'success');
+    l.tag.replace(/[^a-zA-ZáéíóúüñÁÉÍÓÚÜÑ\s]/g, '').trim(),
+    l.name, l.email, l.country || '', l.city || '',
+    l.courses, Number(l.value || 0).toFixed(2), Math.round(l.score), l.action || ''
+  ]);
+  const date = new Date().toISOString().slice(0, 10);
+  _exportXLS(`Leads_Email_Marketing_${date}.xls`, 'Leads Email Marketing', headers, colWidths, rows);
+  toast(`${all.length} leads exportados`, 'success');
 }
 
 function renderSegments() {
@@ -1417,7 +1479,6 @@ function cmExportCSV() {
     return;
   }
 
-  // Obtener todos los clientes que compraron alguno de los cursos seleccionados
   const allCustomers = Object.values(customerMap(state.filtered))
     .filter(c => courses.some(name => c.courses.has(name)))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -1427,47 +1488,30 @@ function cmExportCSV() {
     return;
   }
 
-  // Construir CSV (separado por comas, compatible con Excel)
-  const csvEscape = v => {
-    const s = String(v ?? "").replace(/"/g, '""');
-    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
-  };
-
-  const BOM = "\uFEFF"; // BOM UTF-8 para que Excel abra correctamente con acentos
-  const headers = ["Nombre", "Email", "País", "Teléfono", "Cursos comprados", "Total gastado", "Pedidos"];
+  const headers   = ['Nombre completo', 'Email', 'País', 'Teléfono', 'Cursos comprados', 'Total gastado (USD)', 'Pedidos'];
+  const colWidths = [160, 200, 80, 110, 260, 100, 60];
   const rows = allCustomers.map(c => {
-    const countriesList = [...c.countries].filter(Boolean).join(" / ") || "";
-    const boughtCourses = courses.filter(name => c.courses.has(name)).join(" | ");
+    const countriesList = [...c.countries].filter(Boolean).join(' / ') || '';
+    const boughtCourses = courses.filter(name => c.courses.has(name)).join(' | ');
     return [
       c.name,
       c.email,
       countriesList,
-      c.phone || "",
+      c.phone || '',
       boughtCourses,
       Number(c.revenue || 0).toFixed(2),
       c.orders
-    ].map(csvEscape).join(",");
+    ];
   });
 
-  const csvContent = BOM + [headers.map(csvEscape).join(","), ...rows].join("\r\n");
-
-  // Generar nombre de archivo con fecha y cursos
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr     = new Date().toISOString().slice(0, 10);
   const courseLabel = courses.length === 1
-    ? courses[0].slice(0, 40).replace(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s]/g, "").trim().replace(/\s+/g, "_")
+    ? courses[0].slice(0, 40).replace(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s]/g, '').trim().replace(/\s+/g, '_')
     : `${courses.length}_cursos`;
-  const filename = `CRM_${courseLabel}_${dateStr}.csv`;
 
-  // Disparar descarga
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  _exportXLS(`CRM_${courseLabel}_${dateStr}.xls`, 'Clientes por Curso', headers, colWidths, rows);
+  toast(`${allCustomers.length} clientes exportados`, 'success');
+}
 }
 
 function renderCourseMatrix() {
@@ -3267,21 +3311,17 @@ function toggleTheme() {
 // EXPORTAR CLIENTES CSV
 // =============================================================
 function exportCustomersCSV() {
-  const allC = Object.values(customerMap(state.orders));
-  const list = Object.values(customerMap(state.filtered)).sort((a, b) => b.revenue - a.revenue);
-  const rows = [
-    ['nombre','email','pedidos','cursos','ingresos','rfm_label','rfm_score','ultima_compra'],
-    ...list.map(c => {
-      const rfm = rfmScore(c, allC);
-      return [c.name, c.email, c.orders, c.courses.size, c.revenue.toFixed(2), rfm.label.replace(/[^\w\s]/g,'').trim(), rfm.score, c.last?.slice(0,10)||''];
-    })
-  ];
-  const csv  = '\uFEFF' + rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a    = document.createElement('a');
-  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `clientes-rfm-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  toast(`Clientes exportados: ${list.length}`, 'success');
+  const allC    = Object.values(customerMap(state.orders));
+  const list    = Object.values(customerMap(state.filtered)).sort((a, b) => b.revenue - a.revenue);
+  const headers   = ['Nombre completo', 'Email', 'Pedidos', 'Cursos distintos', 'Ingresos (USD)', 'Segmento RFM', 'Score RFM', 'Última compra'];
+  const colWidths = [160, 200, 60, 70, 90, 120, 60, 90];
+  const rows = list.map(c => {
+    const rfm = rfmScore(c, allC);
+    return [c.name, c.email, c.orders, c.courses.size, Number(c.revenue || 0).toFixed(2),
+            rfm.label.replace(/[^\w\sáéíóúüñÁÉÍÓÚÜÑ]/g, '').trim(), Math.round(rfm.score), c.last?.slice(0, 10) || ''];
+  });
+  _exportXLS(`Clientes_RFM_${new Date().toISOString().slice(0,10)}.xls`, 'Clientes CRM', headers, colWidths, rows);
+  toast(`${list.length} clientes exportados`, 'success');
 }
 
 // =============================================================
