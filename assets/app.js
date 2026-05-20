@@ -1503,6 +1503,60 @@ function cmExportCSV() {
   toast(`${allCustomers.length} clientes exportados`, 'success');
 }
 
+function cmExportAllCourses() {
+  const allCourses = _cmState.allCourses;
+  if (!allCourses.length) {
+    alert("No hay cursos disponibles. Asegúrate de que los datos estén cargados.");
+    return;
+  }
+
+  const dateStr   = new Date().toISOString().slice(0, 10);
+  const headers   = ['Nombre completo', 'Email', 'País', 'Teléfono', 'Cursos comprados', 'Total gastado (USD)', 'Pedidos'];
+  const colWidths = [160, 200, 80, 110, 260, 100, 60];
+  const custMap   = Object.values(customerMap(state.filtered));
+
+  let idx = 0;
+
+  function exportNext() {
+    if (idx >= allCourses.length) {
+      toast(`✅ ${allCourses.length} archivos descargados`, 'success');
+      return;
+    }
+    const courseName = allCourses[idx].name;
+    idx++;
+
+    // Clientes únicos que compraron este curso (sin duplicados por email)
+    const seen = new Set();
+    const customers = custMap
+      .filter(c => c.courses.has(courseName) && !seen.has(c.email) && seen.add(c.email))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (customers.length > 0) {
+      const rows = customers.map(c => {
+        const countriesList = [...c.countries].filter(Boolean).join(' / ') || '';
+        return [
+          c.name,
+          c.email,
+          countriesList,
+          c.phone || '',
+          courseName,
+          Number(c.revenue || 0).toFixed(2),
+          c.orders
+        ];
+      });
+
+      const safeLabel = courseName.slice(0, 50).replace(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s\-]/g, '').trim().replace(/\s+/g, '_');
+      _exportXLS(`${safeLabel}_${dateStr}.xls`, courseName.slice(0, 31), headers, colWidths, rows);
+    }
+
+    // Esperar 400ms entre descargas para no saturar el navegador
+    setTimeout(exportNext, 400);
+  }
+
+  toast(`Descargando ${allCourses.length} archivos, espera…`, 'info');
+  exportNext();
+}
+
 function renderCourseMatrix() {
   _cmState.allCourses = cmBuildCourseList(state.filtered);
   _cmState.page = 1;
