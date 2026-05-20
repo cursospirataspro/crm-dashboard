@@ -3060,6 +3060,43 @@ h3 { font-size: clamp(15px, 1.5vw + 8px, 20px); }
 .pred-card strong { font-size:22px;letter-spacing:-.04em; }
 .pred-sub         { font-size:11px;color:var(--muted); }
 
+/* MAPA DE CALOR — HORA × DÍA */
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: 38px repeat(24, 1fr);
+  gap: 3px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.hm-corner { /* celda vacía esquina */ }
+.hm-hour {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1;
+  padding: 2px 0;
+}
+.hm-day {
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+.heatmap-grid .hm-cell {
+  width: auto;
+  height: 26px;
+  border-radius: 4px;
+  cursor: default;
+  transition: opacity .15s;
+}
+.hm-scale {
+  flex: 1;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(239,35,60,.08), rgba(239,35,60,.9));
+}
+
 /* CALENDARIO HEATMAP */
 .hm-wrap { display:flex;gap:4px;padding:4px 0;overflow-x:auto; }
 .hm-days { display:flex;flex-direction:column;gap:2px;padding-top:2px;flex-shrink:0; }

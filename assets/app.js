@@ -1502,7 +1502,6 @@ function cmExportCSV() {
   _exportXLS(`CRM_${courseLabel}_${dateStr}.xls`, 'Clientes por Curso', headers, colWidths, rows);
   toast(`${allCustomers.length} clientes exportados`, 'success');
 }
-}
 
 function renderCourseMatrix() {
   _cmState.allCourses = cmBuildCourseList(state.filtered);
