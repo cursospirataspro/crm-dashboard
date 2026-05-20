@@ -1089,27 +1089,17 @@ function _exportXLS(filename, sheetName, headers, colWidths, rows) {
     return `<tr>${cells}</tr>`;
   }).join('');
 
-  const html = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:x="urn:schemas-microsoft-com:office:excel">
- <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
-  <Author>CRM Global Dashboard</Author><Created>${new Date().toISOString()}</Created>
- </DocumentProperties>
- <Styles>
-  <Style ss:ID="Default"><Font ss:FontName="Calibri" ss:Size="11"/></Style>
- </Styles>
-</Workbook>`;
-
-  // Usamos HTML table que Excel interpreta perfectamente
   const tableHtml = `\uFEFF<html xmlns:o="urn:schemas-microsoft-com:office:office"
 xmlns:x="urn:schemas-microsoft-com:office:excel"
 xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8">
 <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
 <x:ExcelWorksheet><x:Name>${esc(sheetName)}</x:Name>
-<x:WorksheetOptions><x:Selected/></x:WorksheetOptions>
+<x:WorksheetOptions><x:Selected/>
+<x:FreezePanes/><x:FrozenNoSplit/>
+<x:SplitHorizontal>1</x:SplitHorizontal>
+<x:TopRowBottomPane>1</x:TopRowBottomPane>
+</x:WorksheetOptions>
 </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
 <style>
   body { font-family: Calibri, Arial, sans-serif; }
