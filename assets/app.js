@@ -3579,7 +3579,7 @@ function bind() {
   });
 
   // ── PDF Export ──
-  $("#pdfExportBtn")?.addEventListener("click", exportPDF);
+
 
   // ── Presentación ──
   initPresentationMode();
@@ -6281,39 +6281,6 @@ function detectDuplicates() {
   }).join("");
 }
 
-// =============================================================
-// EXPORTAR PDF (html2canvas + jsPDF)
-// =============================================================
-async function exportPDF() {
-  const btn = $("#pdfExportBtn");
-  if (btn) { btn.textContent = "⏳ Generando PDF..."; btn.disabled = true; }
-
-  try {
-    // Capturar la sección activa
-    const activeView = $(".view.active") || $(".main");
-    const canvas = await html2canvas(activeView, {
-      backgroundColor: getComputedStyle(document.body).backgroundColor || "#080a0f",
-      scale: 1.5,
-      useCORS: true,
-      allowTaint: true,
-      logging: false
-    });
-
-    const imgData = canvas.toDataURL("image/png");
-    const { jsPDF } = window.jspdf;
-    const pdf   = new jsPDF({ orientation: "landscape", unit: "px", format: [canvas.width / 1.5, canvas.height / 1.5] });
-    const pw    = pdf.internal.pageSize.getWidth();
-    const ph    = pdf.internal.pageSize.getHeight();
-    pdf.addImage(imgData, "PNG", 0, 0, pw, ph);
-    pdf.save(`crm-dashboard-${new Date().toISOString().slice(0,10)}.pdf`);
-    toast("PDF exportado correctamente", "success");
-  } catch(err) {
-    toast("Error al generar PDF. Asegúrate de que html2canvas cargó.", "error");
-    console.error(err);
-  } finally {
-    if (btn) { btn.textContent = "📄 PDF"; btn.disabled = false; }
-  }
-}
 
 // =============================================================
 // MODO PRESENTACIÓN
