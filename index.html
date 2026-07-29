@@ -13,8 +13,8 @@
   <link rel="apple-touch-icon" href="assets/logo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=3">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css?v=4">
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
@@ -41,18 +41,26 @@
       </div>
     </div>
     <nav class="nav">
-      <button class="nav-btn active" data-view="command">🌐 Centro de mando</button>
-      <button class="nav-btn" data-view="crm">👥 CRM clientes</button>
-      <button class="nav-btn" data-view="oportunidades">📧 Email Marketing</button>
-      <button class="nav-btn" data-view="kanban">📌 Kanban leads</button>
-      <button class="nav-btn" data-view="analytics">📈 Análisis</button>
-      <button class="nav-btn" data-view="sales">💳 Ventas</button>
-      <button class="nav-btn" data-view="courses">🎓 Cursos</button>
-      <button class="nav-btn" data-view="geo">📍 Geografía</button>
-      <button class="nav-btn" data-view="paypal">💰 PayPal</button>
-      <button class="nav-btn" data-view="stripe">💳 Stripe</button>
-      <button class="nav-btn" data-view="suscripciones">🔄 Suscripciones</button>
-      <button class="nav-btn" data-view="settings">⚙️ Conexión</button>
+      <p class="nav-section">Principal</p>
+      <button class="nav-btn active" data-view="command"><span class="nav-ico">🏠</span> Resumen</button>
+      <button class="nav-btn" data-view="crm"><span class="nav-ico">👥</span> Clientes</button>
+      <button class="nav-btn" data-view="sales"><span class="nav-ico">🧾</span> Ventas</button>
+      <button class="nav-btn" data-view="courses"><span class="nav-ico">🎓</span> Cursos</button>
+      <button class="nav-btn" data-view="geo"><span class="nav-ico">🌍</span> Geografía</button>
+      <p class="nav-section">Operaciones</p>
+      <div class="nav-group" id="navGroupPayments">
+        <button class="nav-group-btn" type="button" aria-expanded="true">
+          <span class="nav-ico">💳</span> Pagos <span class="nav-caret">▾</span>
+        </button>
+        <div class="nav-group-items">
+          <button class="nav-btn nav-sub" data-view="paypal">PayPal</button>
+          <button class="nav-btn nav-sub" data-view="stripe">Stripe</button>
+        </div>
+      </div>
+      <button class="nav-btn" data-view="oportunidades"><span class="nav-ico">✉️</span> Email Marketing</button>
+      <button class="nav-btn" data-view="waitlist"><span class="nav-ico">📥</span> Solicitudes de cursos <span id="navWaitlistCount" class="nav-count" style="display:none">0</span></button>
+      <p class="nav-section">Sistema</p>
+      <button class="nav-btn" data-view="settings"><span class="nav-ico">⚙️</span> Conexión</button>
     </nav>
     <div class="sidebar-tools">
       <button id="themeToggle" class="chip">☀ Modo claro</button>
@@ -84,14 +92,14 @@
     <!-- HERO -->
     <header class="hero">
       <div>
-        <p class="eyebrow">Dashboard ejecutivo interactivo</p>
-        <h1>Mapa global, CRM y ventas de cursos digitales</h1>
-        <p class="hero-copy">Visualiza clientes, ingresos, países, ciudades, embudo comercial, cursos más vendidos, recurrencia y alertas operativas desde una sola pantalla.</p>
+        <p class="eyebrow">CRM Global · Cursos digitales + WooCommerce</p>
+        <h1 id="heroTitle">Resumen</h1>
+        <p class="hero-copy" id="heroCopy">Clientes, ingresos, geografía y alertas operativas en una sola pantalla.</p>
       </div>
       <div class="hero-actions">
-        <button id="refreshBtn" class="btn ghost">Actualizar</button>
+        <button id="refreshBtn" class="btn ghost">↻ Actualizar</button>
         <button id="exportBtn" class="btn primary">Exportar CSV</button>
-        <button id="presentationBtn" class="btn ghost">📺 Presentación</button>
+        <button id="presentationBtn" class="btn ghost" title="Modo presentación">📺</button>
       </div>
     </header>
 
@@ -260,22 +268,63 @@
         </article>
 
       </section>
+
+      <!-- Análisis avanzado (plegable) -->
+      <details class="acc" data-rerender="forecast">
+        <summary><span class="acc-title">📈 Análisis avanzado</span><span class="acc-sub">Forecast de ingresos · Comparador de periodos</span></summary>
+        <div class="acc-body">
+          <article class="panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Proyección</p><h2>Forecast de ingresos — próximos 30 días</h2></div>
+              <span id="forecastBadge" class="badge">—</span>
+            </div>
+            <div id="forecastBars" class="payment-bars"></div>
+          </article>
+          <article class="panel" style="margin-top:14px">
+            <div class="panel-head">
+              <div><p class="eyebrow">Análisis temporal</p><h2>Comparador de periodos</h2></div>
+            </div>
+            <div class="period-compare-controls">
+              <label class="sf-label">Periodo A
+                <select id="periodA" class="sf-input">
+                  <option value="current_month">Mes actual</option>
+                  <option value="last_month">Mes anterior</option>
+                  <option value="last_30">Últimos 30 días</option>
+                  <option value="last_90">Últimos 90 días</option>
+                  <option value="last_year">Último año</option>
+                </select>
+              </label>
+              <label class="sf-label">Periodo B
+                <select id="periodB" class="sf-input">
+                  <option value="last_month" selected>Mes anterior</option>
+                  <option value="current_month">Mes actual</option>
+                  <option value="last_30">Últimos 30 días</option>
+                  <option value="last_90">Últimos 90 días</option>
+                  <option value="same_month_prev_year">Mismo mes año anterior</option>
+                </select>
+              </label>
+              <button id="periodCompareBtn" class="btn">📊 Comparar</button>
+            </div>
+            <div id="periodCompareResult" class="period-compare-result"></div>
+          </article>
+        </div>
+      </details>
+
     </section>
 
-    <!-- VISTA: CRM -->
+    <!-- VISTA: CRM / CLIENTES -->
     <section id="view-crm" class="view">
 
-      <!-- Ranking de cursos -->
-      <article class="panel" style="margin-bottom:14px">
-        <div class="panel-head">
-          <div>
-            <p class="eyebrow">Productos</p>
-            <h2>&#x1F3AF; Cursos m&#xE1;s vendidos</h2>
-          </div>
-          <span id="courseRankBadge" class="badge">—</span>
-        </div>
-        <div id="courseRankingList" class="payment-bars"></div>
-      </article>
+      <!-- Tabs internas -->
+      <div class="view-tabs" id="crmTabs">
+        <button class="view-tab active" data-tab="crm-resumen">Resumen</button>
+        <button class="view-tab" data-tab="crm-comportamiento">Comportamiento</button>
+        <button class="view-tab" data-tab="crm-historial">Historial</button>
+        <button class="view-tab" data-tab="crm-avanzado">Avanzado</button>
+      </div>
+
+      <!-- TAB: RESUMEN -->
+      <div id="tab-crm-resumen" class="tab-pane active">
 
       <section class="two-col">
         <article class="panel">
@@ -288,32 +337,12 @@
           <div id="segmentsGrid" class="segments-grid"></div>
           <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
             <div>
-              <p class="eyebrow">Comportamiento</p>
-              <h2>Ventas por d&#xED;a de la semana</h2>
+              <p class="eyebrow">Productos</p>
+              <h2>Cursos m&#xE1;s vendidos</h2>
             </div>
+            <span id="courseRankBadge" class="badge">—</span>
           </div>
-          <div id="weekdayBars" class="payment-bars"></div>
-          <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
-            <div>
-              <p class="eyebrow">Distribuci&#xF3;n</p>
-              <h2>Ingresos por m&#xE9;todo de pago</h2>
-            </div>
-          </div>
-          <div id="paymentBars" class="payment-bars"></div>
-          <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
-            <div>
-              <p class="eyebrow">Actividad</p>
-              <h2>Resumen de pedidos</h2>
-            </div>
-          </div>
-          <div id="orderSummary" class="order-summary-grid"></div>
-          <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
-            <div>
-              <p class="eyebrow">Retenci&#xF3;n</p>
-              <h2>Clientes por frecuencia</h2>
-            </div>
-          </div>
-          <div id="frequencyBars" class="payment-bars"></div>
+          <div id="courseRankingList" class="payment-bars"></div>
         </article>
         <article class="panel">
           <div class="panel-head">
@@ -343,6 +372,43 @@
           <div id="customerList" class="customer-list"></div>
         </article>
       </section>
+      </div><!-- /tab-crm-resumen -->
+
+      <!-- TAB: COMPORTAMIENTO -->
+      <div id="tab-crm-comportamiento" class="tab-pane">
+        <section class="two-col">
+          <article class="panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Comportamiento</p><h2>Ventas por día de la semana</h2></div>
+            </div>
+            <div id="weekdayBars" class="payment-bars"></div>
+            <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
+              <div><p class="eyebrow">Distribución</p><h2>Ingresos por método de pago</h2></div>
+            </div>
+            <div id="paymentBars" class="payment-bars"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Actividad</p><h2>Resumen de pedidos</h2></div>
+            </div>
+            <div id="orderSummary" class="order-summary-grid"></div>
+            <div class="panel-head" style="margin-top:28px;margin-bottom:12px">
+              <div><p class="eyebrow">Retención</p><h2>Clientes por frecuencia</h2></div>
+            </div>
+            <div id="frequencyBars" class="payment-bars"></div>
+          </article>
+        </section>
+        <article class="panel" style="margin-top:14px">
+          <div class="panel-head">
+            <div><p class="eyebrow">Comportamiento</p><h2>Mapa de calor de ventas</h2></div>
+            <span class="badge">hora × día</span>
+          </div>
+          <div id="salesHeatmap" class="sales-heatmap"></div>
+        </article>
+      </div><!-- /tab-crm-comportamiento -->
+
+      <!-- TAB: HISTORIAL -->
+      <div id="tab-crm-historial" class="tab-pane">
 
       <!-- Matriz cliente × curso -->
       <article class="panel crm-matrix-panel">
@@ -354,16 +420,25 @@
           <span id="matrixBadge" class="badge">—</span>
         </div>
 
-        <!-- Selector de cursos -->
+        <!-- Selector de cursos (dropdown) -->
         <div class="cm-selector">
           <div class="cm-selector-top">
-            <input id="cmCourseSearch" type="text" placeholder="🔍 Buscar curso..." class="cm-search-input" autocomplete="off">
-            <button id="cmClearBtn" class="cm-action-btn">Limpiar selección</button>
-            <button id="cmSelectTopBtn" class="cm-action-btn cm-action-primary">Top 10 cursos</button>
+            <div class="cm-dd" id="cmCourseDD">
+              <button id="cmCourseDDBtn" class="cm-dd-btn" type="button" aria-expanded="false">
+                🎓 Cursos <span id="cmDDCount" class="cm-dd-count">0</span> <span class="cm-dd-caret">▾</span>
+              </button>
+              <div id="cmCourseDDPanel" class="cm-dd-panel" hidden>
+                <input id="cmCourseSearch" type="text" placeholder="🔍 Buscar curso..." class="cm-search-input" autocomplete="off">
+                <div class="cm-dd-actions">
+                  <button id="cmSelectTopBtn" class="cm-action-btn cm-action-primary">Top 10 cursos</button>
+                  <button id="cmClearBtn" class="cm-action-btn">Limpiar selección</button>
+                </div>
+                <div id="cmCourseChips" class="cm-dd-list"></div>
+              </div>
+            </div>
             <button id="cmExportBtn" class="cm-action-btn cm-action-export" onclick="cmExportCSV()" title="Exportar clientes de los cursos seleccionados a CSV">⬇ Exportar CSV</button>
             <button id="cmExportAllBtn" class="cm-action-btn cm-action-export" onclick="cmExportAllCourses()" title="Descargar un XLS por cada curso (todos los cursos)">⬇ Exportar todos</button>
           </div>
-          <div id="cmCourseChips" class="cm-chips"></div>
         </div>
 
         <!-- Mini-tarjetas resumen por curso seleccionado -->
@@ -377,15 +452,27 @@
         <!-- Paginación -->
         <div id="cmPagination" class="cm-pagination"></div>
       </article>
+      </div><!-- /tab-crm-historial -->
 
-      <!-- Mapa de calor: ventas por hora y día -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Comportamiento</p><h2>Mapa de calor de ventas</h2></div>
-          <span class="badge">hora × día</span>
-        </div>
-        <div id="salesHeatmap" class="sales-heatmap"></div>
-      </article>
+      <!-- TAB: AVANZADO -->
+      <div id="tab-crm-avanzado" class="tab-pane">
+
+      <section class="two-col">
+        <article class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Segmentación RFM</p><h2>Scatter: Recencia vs Frecuencia</h2></div>
+            <span class="badge">burbuja = revenue</span>
+          </div>
+          <div id="rfmScatter" class="rfm-scatter-wrap"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-head">
+            <div><p class="eyebrow">Valor del cliente</p><h2>LTV — Proyección a 12 meses</h2></div>
+            <span id="ltvBadge" class="badge">—</span>
+          </div>
+          <div id="ltvBars" class="payment-bars"></div>
+        </article>
+      </section>
 
       <!-- Análisis de cohortes -->
       <article class="panel crm-matrix-panel" style="margin-top:14px">
@@ -404,6 +491,7 @@
         </div>
         <div id="duplicatesList" class="duplicates-list"></div>
       </article>
+      </div><!-- /tab-crm-avanzado -->
 
     </section>
 
@@ -484,6 +572,21 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
       <!-- ── KPIs de oportunidades ── -->
       <div id="emKpis" class="opo-kpis" style="margin-bottom:14px"></div>
 
+      <!-- ── Hora óptima de envío ── -->
+      <details class="acc" style="margin-bottom:14px" open data-rerender="optimaltime">
+        <summary><span class="acc-title">⏰ Hora óptima de envío</span><span class="acc-sub">Comportamiento horario y recomendación automática</span></summary>
+        <div class="acc-body">
+          <article class="panel">
+            <div class="panel-head">
+              <div><p class="eyebrow">Email marketing</p><h2>Hora óptima de envío</h2></div>
+              <span id="optimalTimeBadge" class="badge">—</span>
+            </div>
+            <div id="optimalTimeChart" class="payment-bars"></div>
+            <p id="optimalTimeRecommend" style="margin-top:12px;font-size:13px;color:var(--muted)"></p>
+          </article>
+        </div>
+      </details>
+
       <!-- ── Segmentos de destinatarios ── -->
       <article class="panel" style="margin-bottom:14px">
         <div class="panel-head">
@@ -502,6 +605,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <span id="emailCountBadge" class="badge">0 destinatarios</span>
           </div>
         </div>
+        <div class="em-grid">
         <div class="email-compose">
 
           <!-- Fila 1: Segmento + Filtros avanzados -->
@@ -519,7 +623,8 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
                 <option value="min_amount">💸 Por monto total gastado</option>
                 <option value="last_purchase">🕐 Última compra hace N días</option>
                 <option value="course">🎓 Por curso comprado</option>
-                <option value="kanban_tag">📌 Por etiqueta Kanban</option>
+                <option value="waitlist">📥 Lista de espera (selección enviada)</option>
+                <option value="waitlist_course">📥 Lista de espera por curso</option>
                 <option value="smart_course">🤖 Smart: recomendación por curso (IA CRM)</option>
               </select>
             </label>
@@ -543,14 +648,9 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <label class="sf-label" id="filterLastPurchaseWrap" style="flex:1;min-width:170px;display:none">Última compra hace más de (días)
               <input id="filterLastPurchaseDays" type="number" class="sf-input" value="60" min="1" step="1">
             </label>
-            <!-- Filtro etiqueta Kanban -->
-            <label class="sf-label" id="filterKanbanTagWrap" style="flex:1;min-width:150px;display:none">Etiqueta Kanban
-              <select id="filterKanbanTag" class="sf-input">
-                <option value="new">Nuevo</option>
-                <option value="contacted">Contactado</option>
-                <option value="won">Ganado</option>
-                <option value="lost">Perdido</option>
-              </select>
+            <!-- Filtro curso de lista de espera -->
+            <label class="sf-label" id="filterWaitlistCourseWrap" style="flex:1;min-width:200px;display:none">Curso solicitado
+              <select id="filterWaitlistCourse" class="sf-input"></select>
             </label>
             <!-- Filtro multi-país -->
             <label class="sf-label" id="filterMultiCountryWrap" style="flex:2;min-width:200px;display:none">Países (Ctrl+clic para múltiples)
@@ -631,8 +731,22 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           </div>
 
           <!-- Plantillas -->
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
-            <span style="font-size:12px;color:var(--muted);font-weight:600">📄 Plantillas:</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">✨ Prediseñadas:</span>
+            <select id="prebuiltTemplateSelect" class="sf-input" style="flex:1;min-width:180px;max-width:280px;margin-top:0;font-size:12px">
+              <option value="">— Elegir plantilla profesional —</option>
+              <option value="lanzamiento">🎓 Lanzamiento de curso nuevo</option>
+              <option value="waitlist">🔔 Curso conseguido (lista de espera)</option>
+              <option value="reactivacion">😴 Reactivación de clientes inactivos</option>
+              <option value="carrito">🛒 Pago pendiente / carrito abandonado</option>
+              <option value="oferta">💥 Oferta flash con descuento</option>
+              <option value="newsletter">📰 Newsletter mensual</option>
+              <option value="gracias">🙌 Agradecimiento post-compra</option>
+            </select>
+            <button id="prebuiltApplyBtn" class="btn ghost" style="font-size:12px;padding:6px 11px">✨ Aplicar</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">📄 Mis plantillas:</span>
             <select id="templateSelect" class="sf-input" style="flex:1;min-width:180px;max-width:280px;margin-top:0;font-size:12px">
               <option value="">— Seleccionar plantilla guardada —</option>
             </select>
@@ -660,6 +774,38 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <input id="emailSubject" type="text" class="sf-input" placeholder="Ej: 🎓 Tenemos algo especial para ti, {nombre}">
           </label>
 
+          <!-- Preheader -->
+          <label class="sf-label">
+            Preheader
+            <small style="color:var(--muted);font-weight:400;margin-left:6px">Texto gris que aparece junto al asunto en la bandeja de entrada — mejora la tasa de apertura</small>
+            <input id="emailPreheader" type="text" class="sf-input" maxlength="110" placeholder="Ej: Solo por 48 horas · acceso inmediato y de por vida">
+          </label>
+
+          <!-- Diseño del correo -->
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <label class="sf-label" style="max-width:170px">🎨 Color de acento
+              <input id="emailAccentColor" type="color" value="#0092ff" class="sf-input" style="height:42px;padding:4px;cursor:pointer">
+            </label>
+            <label class="sf-label" style="flex:1;min-width:150px">🌓 Tema del correo
+              <select id="emailTheme" class="sf-input">
+                <option value="light">☀️ Claro (recomendado)</option>
+                <option value="dark">🌙 Oscuro</option>
+              </select>
+            </label>
+            <label class="sf-label" style="flex:2;min-width:180px">✍ Firma (opcional)
+              <input id="emailSignature" type="text" class="sf-input" placeholder="El equipo de Cursos Piratas Pro">
+            </label>
+          </div>
+
+          <!-- Variables rápidas -->
+          <div class="em-vars" id="emVarChips">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">🔤 Insertar variable:</span>
+            <button type="button" class="em-var-chip" data-var="{nombre}">{nombre}</button>
+            <button type="button" class="em-var-chip" data-var="{curso}">{curso}</button>
+            <button type="button" class="em-var-chip" data-var="{fecha}">{fecha}</button>
+            <button type="button" class="em-var-chip" data-var="{monto}">{monto}</button>
+          </div>
+
           <!-- Modo HTML toggle + cuerpo -->
           <label class="sf-label">
             Cuerpo del mensaje
@@ -670,11 +816,16 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 
           <!-- Barra de formato (modo visual) -->
           <div id="formatBar" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:-6px">
-            <button class="btn ghost fmt-btn" data-fmt="bold" style="font-size:12px;padding:4px 10px;font-weight:700">B</button>
-            <button class="btn ghost fmt-btn" data-fmt="italic" style="font-size:12px;padding:4px 10px;font-style:italic">I</button>
-            <button class="btn ghost fmt-btn" data-fmt="link" style="font-size:12px;padding:4px 10px">🔗 Link</button>
-            <button class="btn ghost fmt-btn" data-fmt="h2" style="font-size:12px;padding:4px 10px">H2</button>
-            <button class="btn ghost fmt-btn" data-fmt="hr" style="font-size:12px;padding:4px 10px">— separador</button>
+            <button class="btn ghost fmt-btn" data-fmt="bold" style="font-size:12px;padding:4px 10px;font-weight:700" title="Negrita">B</button>
+            <button class="btn ghost fmt-btn" data-fmt="italic" style="font-size:12px;padding:4px 10px;font-style:italic" title="Cursiva">I</button>
+            <button class="btn ghost fmt-btn" data-fmt="underline" style="font-size:12px;padding:4px 10px;text-decoration:underline" title="Subrayado">U</button>
+            <button class="btn ghost fmt-btn" data-fmt="link" style="font-size:12px;padding:4px 10px" title="Insertar enlace">🔗 Link</button>
+            <button class="btn ghost fmt-btn" data-fmt="h2" style="font-size:12px;padding:4px 10px" title="Título">H2</button>
+            <button class="btn ghost fmt-btn" data-fmt="ul" style="font-size:12px;padding:4px 10px" title="Lista con viñetas">• Lista</button>
+            <button class="btn ghost fmt-btn" data-fmt="quote" style="font-size:12px;padding:4px 10px" title="Cita destacada">❝ Cita</button>
+            <button class="btn ghost fmt-btn" data-fmt="center" style="font-size:12px;padding:4px 10px" title="Centrar texto">≡ Centrar</button>
+            <button class="btn ghost fmt-btn" data-fmt="highlight" style="font-size:12px;padding:4px 10px" title="Caja resaltada">📦 Caja</button>
+            <button class="btn ghost fmt-btn" data-fmt="hr" style="font-size:12px;padding:4px 10px" title="Línea separadora">— separador</button>
           </div>
 
           <!-- CTA Button -->
@@ -753,16 +904,41 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <div id="brevoProgressLog" style="font-size:12px;color:var(--muted);max-height:140px;overflow-y:auto;line-height:2"></div>
           </div>
 
-          <!-- Vista previa del email (HTML real) -->
-          <div id="emailPreviewBox" style="display:none;margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden">
-            <div style="background:var(--card2);padding:8px 14px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between">
-              <span>Vista previa — como se verá en el inbox</span>
-              <span id="closePreviewBtn" style="cursor:pointer;color:var(--accent)">✕ Cerrar</span>
+        </div><!-- /email-compose -->
+
+        <!-- ── VISTA PREVIA EN VIVO ── -->
+        <aside class="em-preview" id="emLivePreview">
+          <div class="em-preview-head">
+            <div class="em-preview-tabs">
+              <button class="em-ptab active" data-pmode="desktop" type="button">🖥 Normal</button>
+              <button class="em-ptab" data-pmode="mobile" type="button">📱 Móvil</button>
+              <button class="em-ptab" data-pmode="code" type="button">&lt;/&gt; Código</button>
             </div>
-            <iframe id="emailPreviewFrame" style="width:100%;height:500px;border:none;background:#fff"></iframe>
+            <div class="em-preview-tools">
+              <button id="emCopyHtmlBtn" class="chip" type="button" title="Copiar el HTML del correo">⧉ Copiar</button>
+              <button id="emDownloadHtmlBtn" class="chip" type="button" title="Descargar como archivo .html">⬇ .html</button>
+            </div>
           </div>
 
-        </div>
+          <!-- Simulación de bandeja de entrada -->
+          <div class="em-inbox-sim">
+            <span class="em-inbox-avatar" id="emPrevAvatar">CP</span>
+            <div class="em-inbox-lines">
+              <div class="em-inbox-from"><strong id="emPrevFrom">Remitente</strong><span class="em-inbox-time" id="emPrevTime">ahora</span></div>
+              <div class="em-inbox-subject" id="emPrevSubject">(sin asunto)</div>
+              <div class="em-inbox-preheader" id="emPrevPreheader">Añade un preheader para mejorar aperturas…</div>
+            </div>
+          </div>
+
+          <div class="em-preview-body" id="emPreviewBody">
+            <iframe id="emailPreviewFrame" class="em-preview-frame" title="Vista previa del email"></iframe>
+            <pre id="emailHtmlCode" class="em-preview-code" hidden></pre>
+          </div>
+
+          <!-- Checklist pre-envío -->
+          <div class="em-checklist" id="emChecklist"></div>
+        </aside>
+        </div><!-- /em-grid -->
       </article>
 
       <!-- ── Leads de oportunidad ── -->
@@ -844,120 +1020,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 
     </section>
 
-    <!-- VISTA: KANBAN DE LEADS -->
-    <section id="view-kanban" class="view">
-      <div class="kanban-toolbar">
-        <h2>📌 Kanban de leads</h2>
-        <button id="kanbanExportBtn" class="chip">⬇ Exportar CSV</button>
-      </div>
-      <div class="kanban-board">
-        <div class="kanban-col" data-status="new">
-          <div class="kanban-col-head">Nuevo <span id="kn-new-count" class="badge">0</span></div>
-          <div class="kanban-list" id="kn-new"></div>
-        </div>
-        <div class="kanban-col" data-status="contacted">
-          <div class="kanban-col-head">📧 Contactado <span id="kn-contacted-count" class="badge">0</span></div>
-          <div class="kanban-list" id="kn-contacted"></div>
-        </div>
-        <div class="kanban-col" data-status="won">
-          <div class="kanban-col-head">✅ Ganado <span id="kn-won-count" class="badge">0</span></div>
-          <div class="kanban-list" id="kn-won"></div>
-        </div>
-        <div class="kanban-col" data-status="lost">
-          <div class="kanban-col-head">❌ Perdido <span id="kn-lost-count" class="badge">0</span></div>
-          <div class="kanban-list" id="kn-lost"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- VISTA: ANÁLISIS AVANZADO -->
-    <section id="view-analytics" class="view">
-
-      <!-- Forecasting -->
-      <article class="panel">
-        <div class="panel-head">
-          <div><p class="eyebrow">Proyección</p><h2>Forecast de ingresos — próximos 30 días</h2></div>
-          <span id="forecastBadge" class="badge">—</span>
-        </div>
-        <div id="forecastBars" class="payment-bars"></div>
-      </article>
-
-      <!-- Scatter RFM visual -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Segmentación RFM</p><h2>Scatter: Recencia vs Frecuencia</h2></div>
-          <span class="badge">burbuja = revenue</span>
-        </div>
-        <div id="rfmScatter" class="rfm-scatter-wrap"></div>
-      </article>
-
-      <!-- Análisis de abandono -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Riesgo</p><h2>Análisis de abandono por curso</h2></div>
-          <span id="abandonBadge" class="badge">—</span>
-        </div>
-        <div id="abandonList" class="payment-bars"></div>
-      </article>
-
-      <!-- Embudo por curso -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Conversión</p><h2>Embudo por curso</h2></div>
-        </div>
-        <div id="coursesFunnel"></div>
-      </article>
-
-      <!-- LTV — Lifetime Value -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Valor del cliente</p><h2>LTV — Proyección a 12 meses</h2></div>
-          <span id="ltvBadge" class="badge">—</span>
-        </div>
-        <div id="ltvBars" class="payment-bars"></div>
-      </article>
-
-      <!-- Comparador de periodos -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Análisis temporal</p><h2>Comparador de periodos</h2></div>
-        </div>
-        <div class="period-compare-controls">
-          <label class="sf-label">Periodo A
-            <select id="periodA" class="sf-input">
-              <option value="current_month">Mes actual</option>
-              <option value="last_month">Mes anterior</option>
-              <option value="last_30">Últimos 30 días</option>
-              <option value="last_90">Últimos 90 días</option>
-              <option value="last_year">Último año</option>
-            </select>
-          </label>
-          <label class="sf-label">Periodo B
-            <select id="periodB" class="sf-input">
-              <option value="last_month" selected>Mes anterior</option>
-              <option value="current_month">Mes actual</option>
-              <option value="last_30">Últimos 30 días</option>
-              <option value="last_90">Últimos 90 días</option>
-              <option value="same_month_prev_year">Mismo mes año anterior</option>
-            </select>
-          </label>
-          <button id="periodCompareBtn" class="btn">📊 Comparar</button>
-        </div>
-        <div id="periodCompareResult" class="period-compare-result"></div>
-      </article>
-
-      <!-- Hora óptima de envío -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Email marketing</p><h2>Hora óptima de envío</h2></div>
-          <span id="optimalTimeBadge" class="badge">—</span>
-        </div>
-        <div id="optimalTimeChart" class="payment-bars"></div>
-        <p id="optimalTimeRecommend" style="margin-top:12px;font-size:13px;color:var(--muted)"></p>
-      </article>
-
-    </section>
-
     <!-- VISTA: VENTAS -->
     <section id="view-sales" class="view">
       <article class="panel">
@@ -995,30 +1057,53 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
       </article>
 
       <!-- Comparativa de dos cursos -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Comparativa</p><h2>Comparar dos cursos</h2></div>
+      <details class="acc" style="margin-top:14px">
+        <summary><span class="acc-title">⚖️ Comparar dos cursos</span><span class="acc-sub">Comparativa lado a lado</span></summary>
+        <div class="acc-body">
+          <article class="panel">
+            <div class="course-compare-selects">
+              <label class="sf-label">Curso A
+                <select id="compareA" class="sf-input"><option value="">-- Selecciona --</option></select>
+              </label>
+              <label class="sf-label">Curso B
+                <select id="compareB" class="sf-input"><option value="">-- Selecciona --</option></select>
+              </label>
+              <button id="compareBtn" class="btn">📊 Comparar</button>
+            </div>
+            <div id="compareResult" class="compare-result"></div>
+          </article>
         </div>
-        <div class="course-compare-selects">
-          <label class="sf-label">Curso A
-            <select id="compareA" class="sf-input"><option value="">-- Selecciona --</option></select>
-          </label>
-          <label class="sf-label">Curso B
-            <select id="compareB" class="sf-input"><option value="">-- Selecciona --</option></select>
-          </label>
-          <button id="compareBtn" class="btn">📊 Comparar</button>
-        </div>
-        <div id="compareResult" class="compare-result"></div>
-      </article>
+      </details>
 
       <!-- Análisis de precios -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Distribución</p><h2>Análisis de precios</h2></div>
-          <span id="priceAnalysisBadge" class="badge">—</span>
+      <details class="acc" style="margin-top:14px">
+        <summary><span class="acc-title">💲 Análisis de precios</span><span class="acc-sub">Distribución por rango de precio</span> <span id="priceAnalysisBadge" class="badge">—</span></summary>
+        <div class="acc-body">
+          <article class="panel">
+            <div id="priceDistribution" class="price-dist"></div>
+          </article>
         </div>
-        <div id="priceDistribution" class="price-dist"></div>
-      </article>
+      </details>
+
+      <!-- Análisis de abandono -->
+      <details class="acc" style="margin-top:14px">
+        <summary><span class="acc-title">⚠️ Abandono por curso</span><span class="acc-sub">Pedidos cancelados / no pagados</span> <span id="abandonBadge" class="badge">—</span></summary>
+        <div class="acc-body">
+          <article class="panel">
+            <div id="abandonList" class="payment-bars"></div>
+          </article>
+        </div>
+      </details>
+
+      <!-- Embudo por curso -->
+      <details class="acc" style="margin-top:14px">
+        <summary><span class="acc-title">🏳️ Embudo por curso</span><span class="acc-sub">Conversión por producto</span></summary>
+        <div class="acc-body">
+          <article class="panel">
+            <div id="coursesFunnel"></div>
+          </article>
+        </div>
+      </details>
     </section>
 
     <!-- VISTA: GEOGRAFÍA -->
@@ -1198,46 +1283,55 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 
     </section>
 
-    <!-- VISTA: SUSCRIPCIONES -->
-    <section id="view-suscripciones" class="view">
+    <!-- VISTA: SOLICITUDES DE CURSOS (LISTA DE ESPERA) -->
+    <section id="view-waitlist" class="view">
 
-      <!-- KPIs suscripciones -->
-      <div id="subKpis" class="kpi-grid" style="margin-bottom:14px"></div>
+      <!-- KPIs -->
+      <div id="wlKpis" class="kpi-grid" style="margin-bottom:14px"></div>
 
-      <!-- Panel MRR -->
+      <!-- Gestión de solicitudes -->
       <article class="panel" style="margin-bottom:14px">
         <div class="panel-head">
-          <div><p class="eyebrow">Ingresos recurrentes</p><h2>MRR &#x2014; Ingresos mensuales recurrentes</h2></div>
-          <span id="subMrrBadge" class="badge">&#x2014;</span>
+          <div><p class="eyebrow">Lista de espera</p><h2>Solicitudes de cursos</h2></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="wlNewBtn" class="btn primary">+ Nueva solicitud</button>
+            <button id="wlExportBtn" class="btn ghost">⬇ Exportar CSV</button>
+          </div>
         </div>
-        <div id="subMrrBars" class="payment-bars"></div>
+        <div class="wl-toolbar">
+          <input id="wlSearch" type="search" class="sf-input" placeholder="🔍 Nombre, email o curso..." style="flex:2;min-width:200px">
+          <select id="wlStatusFilter" class="sf-input" style="min-width:170px">
+            <option value="all">Todos los estados</option>
+            <option value="pendiente">⏳ Pendiente</option>
+            <option value="buscando">🔎 Buscando</option>
+            <option value="conseguido">✅ Conseguido</option>
+            <option value="notificado">🔔 Notificado</option>
+            <option value="compro">💰 Compró</option>
+            <option value="archivado">🗄 Archivado</option>
+          </select>
+          <select id="wlGroupBy" class="sf-input" style="min-width:190px">
+            <option value="none">Vista: lista</option>
+            <option value="course">Vista: agrupar por curso</option>
+          </select>
+        </div>
+        <!-- Barra de acciones masivas -->
+        <div id="wlBulkBar" class="wl-bulk hidden">
+          <span id="wlBulkCount" class="wl-bulk-count">0 seleccionados</span>
+          <button id="wlBulkEmail" class="chip">✉ Enviar a Email Marketing</button>
+          <button id="wlBulkNotified" class="chip">🔔 Marcar notificado</button>
+          <button id="wlBulkArchive" class="chip">🗄 Archivar</button>
+          <button id="wlBulkDelete" class="chip" style="color:var(--accent2)">🗑 Eliminar</button>
+        </div>
+        <div id="wlList" class="wl-list"></div>
       </article>
 
-      <!-- Clientes recurrentes -->
+      <!-- Interesados por curso -->
       <article class="panel">
         <div class="panel-head">
-          <div><p class="eyebrow">Base de suscriptores</p><h2>Clientes con compras recurrentes</h2></div>
-          <span id="subCountBadge" class="badge">&#x2014;</span>
+          <div><p class="eyebrow">Demanda</p><h2>Interesados por curso</h2></div>
+          <span id="wlCourseBadge" class="badge">—</span>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-          <input id="subSearch" type="search" class="sf-input" placeholder="&#x1F50D; Buscar..." style="flex:1;min-width:160px">
-          <select id="subFilter" class="sf-input" style="min-width:160px;font-size:13px">
-            <option value="all">Todos los recurrentes</option>
-            <option value="active">Activos (&#xFA;lt. 60 d&#xED;as)</option>
-            <option value="atrisk">En riesgo (61&#x2013;180 d&#xED;as)</option>
-            <option value="churned">Perdidos (+180 d&#xED;as)</option>
-          </select>
-          <button id="subExportBtn" class="chip">&#x2B07; CSV</button>
-        </div>
-        <div id="subList" class="customer-list"></div>
-      </article>
-
-      <!-- Cursos con suscriptores -->
-      <article class="panel" style="margin-top:14px">
-        <div class="panel-head">
-          <div><p class="eyebrow">Retenci&#xF3;n por producto</p><h2>Cursos con m&#xE1;s compras recurrentes</h2></div>
-        </div>
-        <div id="subCourseBars" class="payment-bars"></div>
+        <div id="wlByCourse" class="wl-by-course"></div>
       </article>
 
     </section>
@@ -1452,6 +1546,79 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 
 </div>
 
+<!-- MODAL: Solicitud de curso (lista de espera) -->
+<div id="wlModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-head">
+      <div>
+        <p class="eyebrow">Lista de espera</p>
+        <h2 id="wlModalTitle">Nueva solicitud</h2>
+      </div>
+      <button class="modal-close" id="wlModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="wlFieldId">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="sf-label" style="flex:1;min-width:200px">Nombre del cliente *
+          <input id="wlFieldName" type="text" class="sf-input" placeholder="Ej: Ana Torres">
+        </label>
+        <label class="sf-label" style="flex:1;min-width:200px">Email *
+          <input id="wlFieldEmail" type="email" class="sf-input" placeholder="cliente@correo.com">
+        </label>
+      </div>
+      <label class="sf-label">Curso solicitado *
+        <input id="wlFieldCourse" type="text" class="sf-input" placeholder="Ej: Carolina Mata 2026" list="wlCourseDatalist">
+        <datalist id="wlCourseDatalist"></datalist>
+      </label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="sf-label" style="flex:1;min-width:160px">Categoría / tipo
+          <input id="wlFieldCategory" type="text" class="sf-input" placeholder="Ej: Trading, Marketing...">
+        </label>
+        <label class="sf-label" style="flex:1;min-width:150px">Origen del lead
+          <select id="wlFieldSource" class="sf-input">
+            <option value="manual">Manual</option>
+            <option value="telegram">Telegram</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="instagram">Instagram</option>
+            <option value="web">Web</option>
+            <option value="email">Email</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="sf-label" style="flex:1;min-width:150px">Prioridad
+          <select id="wlFieldPriority" class="sf-input">
+            <option value="alta">🔴 Alta</option>
+            <option value="media" selected>🟡 Media</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+        </label>
+        <label class="sf-label" style="flex:1;min-width:150px">Estado
+          <select id="wlFieldStatus" class="sf-input">
+            <option value="pendiente">⏳ Pendiente</option>
+            <option value="buscando">🔎 Buscando</option>
+            <option value="conseguido">✅ Conseguido</option>
+            <option value="notificado">🔔 Notificado</option>
+            <option value="compro">💰 Compró</option>
+            <option value="archivado">🗄 Archivado</option>
+          </select>
+        </label>
+        <label class="sf-label" style="flex:1;min-width:160px">Fecha de solicitud
+          <input id="wlFieldDate" type="date" class="sf-input">
+        </label>
+      </div>
+      <label class="sf-label">Notas internas
+        <textarea id="wlFieldNotes" class="sf-input" rows="3" placeholder="Detalles, versión del curso, contexto..."></textarea>
+      </label>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap">
+        <button id="wlSaveBtn" class="btn primary">💾 Guardar solicitud</button>
+        <button id="wlCancelBtn" class="btn ghost">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- BÚSQUEDA GLOBAL (Ctrl+K) -->
 <div id="globalSearchModal" class="global-search-modal hidden" role="dialog" aria-label="Búsqueda global">
   <div class="global-search-backdrop"></div>
@@ -1489,6 +1656,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=42"></script>
+<script src="assets/app.js?v=43"></script>
 </body>
 </html>

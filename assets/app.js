@@ -463,7 +463,6 @@ function renderAll() {
   renderAbandonAnalysis();
   renderCoursesFunnel();
   renderPriceDistribution();
-  renderKanban();
   updateFollowupBadges();
   renderLTV();
   renderOptimalSendTime();
@@ -471,7 +470,7 @@ function renderAll() {
   renderEmailMarketing();
   renderWidgetCustomizer();
   renderStripeView();
-  renderSuscripciones();
+  renderWaitlist();
   renderRevenuePrediction();
   renderSalesHeatmap();
   renderConversionByCountry();
@@ -1015,7 +1014,10 @@ function updateEmailCountBadge() {
   if ($('#smartCoursePanel'))      $('#smartCoursePanel').style.display      = seg === 'smart_course'  ? '' : 'none';
   if ($('#filterMinAmountWrap'))   $('#filterMinAmountWrap').style.display   = seg === 'min_amount'    ? '' : 'none';
   if ($('#filterLastPurchaseWrap'))$('#filterLastPurchaseWrap').style.display= seg === 'last_purchase' ? '' : 'none';
-  if ($('#filterKanbanTagWrap'))   $('#filterKanbanTagWrap').style.display   = seg === 'kanban_tag'    ? '' : 'none';
+  if ($('#filterWaitlistCourseWrap')) {
+    $('#filterWaitlistCourseWrap').style.display = seg === 'waitlist_course' ? '' : 'none';
+    if (seg === 'waitlist_course') populateWaitlistCourseFilter();
+  }
   if ($('#filterMultiCountryWrap'))$('#filterMultiCountryWrap').style.display= seg === 'multi_country' ? '' : 'none';
 
   // Si es smart_course, el conteo lo actualiza renderSmartCourseResults
@@ -1339,13 +1341,17 @@ function cmRenderChips(filter = "") {
 
   container.innerHTML = visible.map((c, i) => {
     const active = _cmState.selectedCourses.includes(c.name);
-    const label  = c.name.length > 32 ? c.name.slice(0, 32) + "…" : c.name;
-    return `<button class="cm-chip${active ? " cm-chip-active" : ""}"
-      onclick="cmToggleIdx(${i})"
+    return `<div class="cm-dd-item${active ? " active" : ""}" onclick="event.stopPropagation();cmToggleIdx(${i})"
       title="${esc(c.name)} · ${c.sales} ventas · ${fmtMoney(c.revenue)}">
-      ${esc(label)}<span class="cm-chip-count">${c.sales}</span>
-    </button>`;
-  }).join("");
+      <span class="cm-dd-check">${active ? "✓" : ""}</span>
+      <span class="cm-dd-name">${esc(c.name)}</span>
+      <span class="cm-chip-count">${c.sales}</span>
+    </div>`;
+  }).join("") || `<div class="cm-dd-empty">Sin cursos que coincidan.</div>`;
+
+  // Contador del botón del dropdown
+  const cnt = document.getElementById("cmDDCount");
+  if (cnt) cnt.textContent = _cmState.selectedCourses.length;
 }
 
 function cmToggleCourse(name) {
@@ -1576,6 +1582,37 @@ function renderCourseMatrix() {
   if (searchEl && !searchEl._cmBound) {
     searchEl._cmBound = true;
     searchEl.addEventListener("input", () => cmRenderChips(searchEl.value));
+  }
+
+  // Botón dropdown de cursos
+  const ddBtn = document.getElementById("cmCourseDDBtn");
+  if (ddBtn && !ddBtn._cmBound) {
+    ddBtn._cmBound = true;
+    ddBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      const panel = document.getElementById("cmCourseDDPanel");
+      if (!panel) return;
+      panel.hidden = !panel.hidden;
+      ddBtn.setAttribute("aria-expanded", String(!panel.hidden));
+      if (!panel.hidden) setTimeout(() => document.getElementById("cmCourseSearch")?.focus(), 40);
+    });
+    // Cerrar al hacer clic fuera o con Escape
+    document.addEventListener("click", e => {
+      const dd    = document.getElementById("cmCourseDD");
+      const panel = document.getElementById("cmCourseDDPanel");
+      if (panel && !panel.hidden && dd && !dd.contains(e.target)) {
+        panel.hidden = true;
+        ddBtn.setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", e => {
+      if (e.key !== "Escape") return;
+      const panel = document.getElementById("cmCourseDDPanel");
+      if (panel && !panel.hidden) {
+        panel.hidden = true;
+        ddBtn.setAttribute("aria-expanded", "false");
+      }
+    });
   }
 
   // Botón limpiar
@@ -2211,10 +2248,11 @@ function _initGlobeNow() {
   if (!container) return;
 
   const wrap = container.parentElement;
-  const W = wrap ? (wrap.offsetWidth || 700) : 700;
-  const H = Math.max(460, Math.round(W * 0.65));
-  container.style.width  = W + 'px';
-  container.style.height = H + 'px';
+  // Ocupar TODO el contenedor .globe-wrap (ancho y alto reales)
+  const W = wrap ? (wrap.clientWidth  || 700) : 700;
+  const H = wrap ? (wrap.clientHeight || Math.max(460, Math.round(W * 0.65))) : Math.max(460, Math.round(W * 0.65));
+  container.style.width  = '100%';
+  container.style.height = '100%';
 
   // Constructor correcto: new Globe(domElement, options)
   _globe = new Globe(container, { animateIn: true })
@@ -2564,7 +2602,7 @@ function _initGlobeNow() {
   }, 3000);
 
   // Redimensionar el globo automáticamente cuando cambia el tamaño del contenedor
-  // (rotación de pantalla, resize de ventana, cambio de orientación en móvil)
+  // (rotación de pantalla, resize de ventana, colapso del sidebar, cambio de orientación)
   if (typeof ResizeObserver !== 'undefined') {
     const _ro = new ResizeObserver(entries => {
       for (const entry of entries) {
@@ -2575,7 +2613,8 @@ function _initGlobeNow() {
         }
       }
     });
-    _ro.observe(container);
+    // Observar el wrap (el canvas tiene tamaño derivado, no cambia solo)
+    _ro.observe(wrap || container);
   }
 }
 
@@ -2737,43 +2776,58 @@ function renderRfmScatter() {
   const now   = Date.now();
   const maxRev = Math.max(...list.map(c => c.revenue), 1);
   const maxOrd = Math.max(...list.map(c => c.orders), 1);
-  const maxDays = 365;
+  const daysOf = c => Math.max(0, (now - new Date(c.last)) / 864e5);
+  // Escala vertical basada en los datos reales (no fija a 365 días)
+  const maxDays = Math.max(30, ...list.map(daysOf));
 
-  const W = 540, H = 280, padL = 40, padB = 30, padT = 10, padR = 10;
+  const W = 560, H = 300, padL = 46, padB = 26, padT = 14, padR = 14;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
 
   const colors = { '💎 VIP':'#fbbf24', '🔥 Activo':'#ef233c', '⚡ Potencial':'#38bdf8', '😴 En riesgo':'#f59e0b', '💤 Inactivo':'#9ca3af' };
 
-  const dots = list.slice(0, 120).map(c => {
-    const rfm   = rfmScore(c, allC);
-    const days  = Math.min((now - new Date(c.last)) / 864e5, maxDays);
-    const x     = padL + ((maxOrd - c.orders) / maxOrd) * (W - padL - padR);  // left=more orders
-    const y     = padT + (days / maxDays) * (H - padT - padB);                 // top=recent
-    const r     = 4 + Math.sqrt(c.revenue / maxRev) * 14;
+  // Rejilla sutil
+  const grid = [0.25, 0.5, 0.75].map(t =>
+    `<line x1="${padL}" y1="${(padT + t*plotH).toFixed(1)}" x2="${W-padR}" y2="${(padT + t*plotH).toFixed(1)}" stroke="rgba(255,255,255,.06)"/>
+     <line x1="${(padL + t*plotW).toFixed(1)}" y1="${padT}" x2="${(padL + t*plotW).toFixed(1)}" y2="${H-padB}" stroke="rgba(255,255,255,.06)"/>`
+  ).join('') +
+  `<rect x="${padL}" y="${padT}" width="${plotW}" height="${plotH}" fill="none" stroke="rgba(255,255,255,.1)"/>`;
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  const dots = list.slice(0, 120).map((c, i) => {
+    const rfm  = rfmScore(c, allC);
+    // Jitter determinista para separar clientes con los mismos valores
+    const jx = (((i * 37) % 13) - 6) * 2.2;
+    const jy = (((i * 53) % 11) - 5) * 2.0;
+    // X: frecuencia (izq = más pedidos). Escala sqrt para repartir mejor
+    const tx = 1 - Math.sqrt(c.orders / maxOrd);
+    // Y: recencia (arriba = reciente). Escala sqrt sobre el rango real de datos
+    const ty = Math.sqrt(Math.min(daysOf(c), maxDays) / maxDays);
+    const r  = 4 + Math.sqrt(c.revenue / maxRev) * 13;
+    const x  = clamp(padL + tx * plotW + jx, padL + r, W - padR - r);
+    const y  = clamp(padT + ty * plotH + jy, padT + r, H - padB - r);
     const color = colors[rfm.label] || '#9ca3af';
     return `<circle class="scatter-dot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}"
-      fill="${color}" fill-opacity=".72" stroke="${color}" stroke-width="1"
-      title="${esc(c.name)} · ${rfm.label} · ${fmtMoney(c.revenue)}">
-      <title>${esc(c.name)} — ${rfm.label} — ${fmtMoney(c.revenue)}</title>
+      fill="${color}" fill-opacity=".68" stroke="${color}" stroke-width="1">
+      <title>${esc(c.name)} — ${rfm.label} — ${fmtMoney(c.revenue)} · ${c.orders} pedido${c.orders!==1?'s':''} · hace ${Math.round(daysOf(c))} días</title>
     </circle>`;
   }).join('');
 
   // Axis labels
-  const axisX = `<text x="${padL}" y="${H}" font-size="9" fill="#9ca3af">Más freq.</text>
-    <text x="${W-padR-50}" y="${H}" font-size="9" fill="#9ca3af">Menos freq.</text>`;
-  const axisY = `<text x="2" y="${padT+8}" font-size="9" fill="#9ca3af">Recientes</text>
-    <text x="2" y="${H-padB}" font-size="9" fill="#9ca3af">Inactivos</text>`;
+  const axisX = `<text x="${padL}" y="${H-8}" font-size="9" fill="#9ca3af">Más freq.</text>
+    <text x="${W-padR-50}" y="${H-8}" font-size="9" fill="#9ca3af">Menos freq.</text>`;
+  const axisY = `<text x="4" y="${padT+10}" font-size="9" fill="#9ca3af">Recientes</text>
+    <text x="4" y="${H-padB-4}" font-size="9" fill="#9ca3af">Inactivos</text>`;
 
-  // Legend
-  const legend = Object.entries(colors).map(([label, color], i) =>
-    `<g transform="translate(${padL + i * 100},${H - 4})">
-       <circle cx="5" cy="-4" r="5" fill="${color}" fill-opacity=".8"/>
-       <text x="13" y="0" font-size="9" fill="#9ca3af">${label.replace(/[^\w\s]/g,'').trim()}</text>
-     </g>`
-  ).join('');
+  // Leyenda HTML debajo del gráfico
+  const legend = `<div class="rfm-scatter-legend">` +
+    Object.entries(colors).map(([label, color]) =>
+      `<span class="rfm-legend-item"><span class="rfm-legend-dot" style="background:${color}"></span>${label}</span>`
+    ).join('') + `</div>`;
 
-  el.innerHTML = `<svg class="rfm-scatter-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-    ${dots}${axisX}${axisY}
-  </svg>`;
+  el.innerHTML = `<svg class="rfm-scatter-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    ${grid}${dots}${axisX}${axisY}
+  </svg>${legend}`;
 }
 
 // =============================================================
@@ -2911,6 +2965,8 @@ function saveKanban() {
 }
 
 function renderKanban() {
+  // Vista kanban eliminada del dashboard — se mantiene el estado por compatibilidad
+  if (!document.querySelector('#kn-new')) return;
   const { pendingLeads, cancelledLeads, inactiveLeads, upsellLeads } = opoLeads();
   const allLeads = [...pendingLeads, ...cancelledLeads, ...inactiveLeads, ...upsellLeads];
 
@@ -3133,7 +3189,13 @@ function openCustomerModal(emailOrName) {
       pred.daysLeft > 0
         ? `🗓 Próx. compra estimada en ~${pred.daysLeft} días`
         : `⚡ Compra esperada hace ${Math.abs(pred.daysLeft)} días`
-    }</span>` : ''}`;
+    }</span>` : ''}
+    ${(() => {
+      try {
+        const wl = loadWaitlist().filter(w => w.email && w.email.toLowerCase() === (c.email || '').toLowerCase() && w.status !== 'archivado');
+        return wl.length ? `<span class="rfm-badge" style="font-size:12px;padding:4px 12px;background:rgba(56,189,248,.14);color:#7dd3fc;border:1px solid rgba(56,189,248,.3)">📥 En lista de espera: ${esc(wl.map(w => w.course).join(', ').slice(0, 80))}</span>` : '';
+      } catch(e) { return ''; }
+    })()}`;
 
   const customerOrders = state.orders
     .filter(o => o.customer_email === (c.email || c.name) || o.customer === c.name)
@@ -3529,9 +3591,6 @@ function bind() {
     });
   }
 
-  // ── Kanban export ──
-  $("#kanbanExportBtn")?.addEventListener("click", kanbanExportCSV);
-
   // ── Course compare ──
   $("#compareBtn")?.addEventListener("click", runCourseCompare);
 
@@ -3623,10 +3682,12 @@ function bind() {
   $("#stripeRefreshBtn")?.addEventListener("click", renderStripeView);
   $("#stripeSearch")?.addEventListener("input", renderStripeView);
 
-  // ── Suscripciones ──
-  $("#subExportBtn")?.addEventListener("click", exportSuscripcionesCSV);
-  $("#subSearch")?.addEventListener("input", renderSuscripciones);
-  $("#subFilter")?.addEventListener("change", renderSuscripciones);
+  // ── Navegación: grupos, tabs, acordeones y lista de espera ──
+  initNavGroups();
+  initCrmTabs();
+  initAccordions();
+  setTimeout(initWaitlist, 0);   // diferido: sus constantes se declaran al final del script
+  setTimeout(initEmailStudio, 0); // diferido: estudio de email con vista previa en vivo
 
   // ── Email Marketing: actualizar badge al cambiar segmento/filtros ──
   $("#emailSegment")?.addEventListener("change", updateEmailCountBadge);
@@ -3694,14 +3755,20 @@ function bind() {
       let ins = sel;
       if (fmt === "bold")   ins = `<strong>${sel}</strong>`;
       if (fmt === "italic") ins = `<em>${sel}</em>`;
+      if (fmt === "underline") ins = `<u>${sel}</u>`;
       if (fmt === "h2")     ins = `\n<h2>${sel}</h2>\n`;
       if (fmt === "hr")     ins = `\n<hr>\n`;
+      if (fmt === "ul")     ins = `\n<ul>\n<li>${sel || "Primer punto"}</li>\n<li>Segundo punto</li>\n<li>Tercer punto</li>\n</ul>\n`;
+      if (fmt === "quote")  ins = `\n<blockquote style="border-left:4px solid #0092ff;margin:16px 0;padding:8px 16px;background:#f0f7ff;color:#1f2937">${sel || "Texto de la cita"}</blockquote>\n`;
+      if (fmt === "center") ins = `<div style="text-align:center">${sel || "Texto centrado"}</div>`;
+      if (fmt === "highlight") ins = `\n<div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:14px 18px;margin:14px 0">${sel || "💡 Información importante destacada"}</div>\n`;
       if (fmt === "link") {
         const url = prompt("URL del enlace:");
         if (!url) return;
         ins = `<a href="${url}">${sel || url}</a>`;
       }
       area.value = area.value.substring(0, start) + ins + area.value.substring(end);
+      area.dispatchEvent(new Event("input"));
     });
   });
 
@@ -3822,7 +3889,7 @@ function bind() {
   // Nuevos filtros avanzados → actualizar badge
   $("#filterMinAmount")?.addEventListener("input", updateEmailCountBadge);
   $("#filterLastPurchaseDays")?.addEventListener("input", updateEmailCountBadge);
-  $("#filterKanbanTag")?.addEventListener("change", updateEmailCountBadge);
+  $("#filterWaitlistCourse")?.addEventListener("change", updateEmailCountBadge);
   $("#filterMultiCountry")?.addEventListener("change", updateEmailCountBadge);
 }
 
@@ -3993,6 +4060,8 @@ function buildRecurringCustomers() {
 }
 
 function renderSuscripciones() {
+  // Vista suscripciones eliminada del dashboard
+  if (!document.querySelector('#subList')) return;
   const search    = ($("#subSearch")?.value || "").trim().toLowerCase();
   const filterVal = $("#subFilter")?.value || "all";
 
@@ -4795,12 +4864,17 @@ function getEmailRecipients(segment, excludeConverted = false) {
     const days = parseInt($("#filterLastPurchaseDays")?.value || "60", 10);
     list = cm.filter(c => c.last && new Date(c.last) < new Date(now - days * 864e5));
   }
-  else if (segment === "kanban_tag") {
-    const tag = $("#filterKanbanTag")?.value || "new";
-    const emailsInTag = Object.entries(KANBAN_STATE)
-      .filter(([, s]) => s.status === tag)
-      .map(([id]) => id);
-    list = cm.filter(c => emailsInTag.includes(c.email));
+  else if (segment === "waitlist") {
+    // Selección enviada desde el módulo de solicitudes de cursos
+    return getWaitlistEmailSelection();
+  }
+  else if (segment === "waitlist_course") {
+    const course = $("#filterWaitlistCourse")?.value || "";
+    const seen = new Set();
+    return loadWaitlist()
+      .filter(w => w.email && w.status !== "archivado" && (!course || w.course === course))
+      .filter(w => { const k = w.email.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .map(w => ({ email: w.email, name: w.name || w.email }));
   }
   else if (segment === "multi_country") {
     const sel = $("#filterMultiCountry");
@@ -5758,10 +5832,14 @@ function initSidebarToggle() {
   updatePushBtn();
   loadGA4Config();
   applyWidgetConfig(loadWidgetConfig());
-  load().then(() => {
-    // Auto-arrancar polling en tiempo real tras primera carga
-    autoStartPolling();
-  });
+  // Diferido a la siguiente vuelta del event loop para que todo el script
+  // (constantes declaradas al final) esté inicializado antes del primer render
+  setTimeout(() => {
+    load().then(() => {
+      // Auto-arrancar polling en tiempo real tras primera carga
+      autoStartPolling();
+    });
+  }, 0);
 })();
 // =============================================================
 // BÚSQUEDA GLOBAL (Ctrl+K)
@@ -5846,6 +5924,13 @@ function renderGlobalSearch(q) {
   }
   const courses = Object.values(courseMap).slice(0, 4);
 
+  // Buscar en lista de espera
+  const waitlist = loadWaitlist().filter(w =>
+    (w.name || "").toLowerCase().includes(query) ||
+    (w.email || "").toLowerCase().includes(query) ||
+    (w.course || "").toLowerCase().includes(query)
+  ).slice(0, 4);
+
   let html = "";
   if (customers.length) {
     html += `<div class="gs-section">👥 Clientes</div>`;
@@ -5885,6 +5970,19 @@ function renderGlobalSearch(q) {
       </div>`;
     });
   }
+  if (waitlist.length) {
+    html += `<div class="gs-section">📥 Lista de espera</div>`;
+    waitlist.forEach(w => {
+      const st = WL_STATUS[w.status] || WL_STATUS.pendiente;
+      html += `<div class="gs-item" data-type="waitlist" data-id="${esc(w.id)}">
+        <span class="gs-item-icon">📥</span>
+        <div class="gs-item-main">
+          <div class="gs-item-title">${esc(w.name)} — ${esc(w.course)}</div>
+          <div class="gs-item-sub">${esc(w.email)} · ${st.label}</div>
+        </div>
+      </div>`;
+    });
+  }
   if (!html) html = `<div class="gs-empty">Sin resultados para "<strong>${esc(q)}</strong>"</div>`;
 
   box.innerHTML = html;
@@ -5908,6 +6006,9 @@ function renderGlobalSearch(q) {
         }, 300);
       } else if (type === "course") {
         switchView("courses");
+      } else if (type === "waitlist") {
+        switchView("waitlist");
+        setTimeout(() => openWlModal(item.dataset.id), 150);
       }
     });
   });
@@ -5915,10 +6016,28 @@ function renderGlobalSearch(q) {
 
 // Helper switchView
 let _paypalInited = false;
+const VIEW_HERO = {
+  command:       ["Resumen",               "Clientes, ingresos, geografía y alertas operativas en una sola pantalla."],
+  crm:           ["Clientes",              "Segmentación, comportamiento, historial y análisis avanzado de tu base de clientes."],
+  sales:         ["Ventas",                "Pedidos recientes con estado, curso, país y total."],
+  courses:       ["Cursos",                "Rendimiento, comparativa y análisis de precios por curso."],
+  geo:           ["Geografía",             "Ranking de países y ciudades por ventas."],
+  paypal:        ["Pagos · PayPal",        "Ingresos brutos, comisiones, netos y transacciones de PayPal."],
+  stripe:        ["Pagos · Stripe",        "Ingresos, comisiones estimadas y transacciones vía Stripe."],
+  oportunidades: ["Email Marketing",       "Campañas, segmentos, hora óptima de envío y automatizaciones."],
+  waitlist:      ["Solicitudes de cursos", "Lista de espera de clientes interesados en cursos que aún no tienes."],
+  settings:      ["Conexión",             "Integraciones con WordPress, Brevo, GA4 y preferencias del panel."]
+};
 function switchView(id) {
   $$(".view").forEach(v => v.classList.remove("active"));
   $(`#view-${id}`)?.classList.add("active");
   $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === id));
+  const hero = VIEW_HERO[id];
+  if (hero) {
+    const t = $("#heroTitle"), c = $("#heroCopy");
+    if (t) t.textContent = hero[0];
+    if (c) c.textContent = hero[1];
+  }
   if (id === "paypal") {
     if (!_paypalInited) {
       _paypalInited = true;
@@ -5928,8 +6047,8 @@ function switchView(id) {
       if (!gross || gross.textContent === "—") loadPaypalData();
     }
   }
-  if (id === "stripe")        renderStripeView();
-  if (id === "suscripciones") renderSuscripciones();
+  if (id === "stripe")   renderStripeView();
+  if (id === "waitlist") renderWaitlist();
 }
 
 // =============================================================
@@ -6286,14 +6405,13 @@ function detectDuplicates() {
 // MODO PRESENTACIÓN
 // =============================================================
 const PRES_VIEWS = [
-  { id: "command",      label: "🌐 Centro de mando" },
-  { id: "crm",          label: "👥 CRM clientes" },
-  { id: "oportunidades",label: "🎯 Oportunidades" },
-  { id: "kanban",       label: "📌 Kanban leads" },
-  { id: "analytics",    label: "📈 Análisis avanzado" },
-  { id: "sales",        label: "💳 Ventas" },
+  { id: "command",      label: "� Resumen" },
+  { id: "crm",          label: "👥 Clientes" },
+  { id: "oportunidades",label: "✉️ Email Marketing" },
+  { id: "sales",        label: "🧾 Ventas" },
   { id: "courses",      label: "🎓 Cursos" },
-  { id: "geo",          label: "🗺 Geografía" },
+  { id: "geo",          label: "🌍 Geografía" },
+  { id: "waitlist",     label: "📥 Solicitudes de cursos" },
 ];
 let _presIdx     = 0;
 let _presTimer   = null;
@@ -6379,13 +6497,12 @@ function updatePresTimer() {
 // =============================================================
 const WIDGET_DEFS = [
   { id: "kpiGrid",       label: "📊 KPIs principales",     sub: "Ingresos, pedidos, clientes" },
-  { id: "view-command",  label: "🌐 Centro de mando",      sub: "Globo + ventas + feed" },
-  { id: "view-crm",      label: "👥 CRM clientes",         sub: "Segmentos, tabla, heatmap" },
-  { id: "view-analytics",label: "📈 Análisis avanzado",    sub: "Forecast, RFM, abandono" },
-  { id: "view-kanban",   label: "📌 Kanban de leads",      sub: "Pipeline drag & drop" },
-  { id: "view-oportunidades",label: "🎯 Oportunidades",    sub: "Leads, upsell, email" },
+  { id: "view-command",  label: "� Resumen",              sub: "Globo + ventas + feed" },
+  { id: "view-crm",      label: "👥 Clientes",             sub: "Segmentos, tabla, heatmap" },
+  { id: "view-oportunidades",label: "✉️ Email Marketing",  sub: "Campañas, segmentos, envíos" },
   { id: "view-courses",  label: "🎓 Cursos",               sub: "Rendimiento y comparativa" },
-  { id: "view-geo",      label: "🗺 Geografía",            sub: "Rankings de países y ciudades" },
+  { id: "view-geo",      label: "🌍 Geografía",            sub: "Rankings de países y ciudades" },
+  { id: "view-waitlist", label: "📥 Solicitudes de cursos", sub: "Lista de espera de interesados" },
 ];
 
 function loadWidgetConfig() {
@@ -7134,3 +7251,389 @@ function initPaypalView() {
   // Cargar datos automáticamente
   loadPaypalData();
 }
+
+// =============================================================
+// NAVEGACIÓN: GRUPOS DEL SIDEBAR, TABS Y ACORDEONES
+// =============================================================
+function initNavGroups() {
+  document.querySelectorAll(".nav-group").forEach(g => {
+    const btn = g.querySelector(".nav-group-btn");
+    btn?.addEventListener("click", () => {
+      const collapsed = g.classList.toggle("collapsed");
+      btn.setAttribute("aria-expanded", String(!collapsed));
+    });
+  });
+}
+
+function initCrmTabs() {
+  const wrap = document.getElementById("crmTabs");
+  if (!wrap) return;
+  const rerenders = {
+    "crm-resumen":        () => { try { renderSegments(); renderCourseRanking(); renderCustomers(); } catch(e) {} },
+    "crm-comportamiento": () => { try { renderWeekdayChart(); renderPaymentBars(); renderHeatmap(); } catch(e) {} },
+    "crm-historial":      () => { try { renderCourseMatrix(); } catch(e) {} },
+    "crm-avanzado":       () => { try { renderRfmScatter(); renderLTV(); renderCohorts(); detectDuplicates(); } catch(e) {} }
+  };
+  wrap.querySelectorAll(".view-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      wrap.querySelectorAll(".view-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll("#view-crm > .tab-pane").forEach(p => p.classList.remove("active"));
+      document.getElementById("tab-" + btn.dataset.tab)?.classList.add("active");
+      rerenders[btn.dataset.tab]?.();
+    });
+  });
+}
+
+function initAccordions() {
+  const map = {
+    forecast:    () => { try { renderForecast(); } catch(e) {} },
+    optimaltime: () => { try { renderOptimalSendTime(); } catch(e) {} }
+  };
+  document.querySelectorAll("details.acc[data-rerender]").forEach(d => {
+    d.addEventListener("toggle", () => { if (d.open) map[d.dataset.rerender]?.(); });
+  });
+}
+
+// =============================================================
+// SOLICITUDES DE CURSOS — LISTA DE ESPERA
+// =============================================================
+const WL_KEY     = "crm_waitlist";
+const WL_SEL_KEY = "crm_waitlist_email_selection";
+let _wlSelected  = new Set();   // ids seleccionados en la tabla
+
+const WL_STATUS = {
+  pendiente:  { label: "⏳ Pendiente",  cls: "wl-st-pendiente"  },
+  buscando:   { label: "🔎 Buscando",   cls: "wl-st-buscando"   },
+  conseguido: { label: "✅ Conseguido", cls: "wl-st-conseguido" },
+  notificado: { label: "🔔 Notificado", cls: "wl-st-notificado" },
+  compro:     { label: "💰 Compró",     cls: "wl-st-compro"     },
+  archivado:  { label: "🗄 Archivado",  cls: "wl-st-archivado"  }
+};
+const WL_PRIORITY = { alta: "🔴 Alta", media: "🟡 Media", baja: "🟢 Baja" };
+const WL_SOURCE   = { manual: "Manual", telegram: "Telegram", whatsapp: "WhatsApp", instagram: "Instagram", web: "Web", email: "Email", otro: "Otro" };
+
+function loadWaitlist() {
+  try { return JSON.parse(localStorage.getItem(WL_KEY) || "[]"); } catch(e) { return []; }
+}
+function saveWaitlist(list) {
+  try { localStorage.setItem(WL_KEY, JSON.stringify(list)); } catch(e) {}
+}
+function getWaitlistEmailSelection() {
+  try { return JSON.parse(localStorage.getItem(WL_SEL_KEY) || "[]"); } catch(e) { return []; }
+}
+
+function populateWaitlistCourseFilter() {
+  const sel = $("#filterWaitlistCourse");
+  if (!sel) return;
+  const current = sel.value;
+  const courses = [...new Set(loadWaitlist().filter(w => w.status !== "archivado").map(w => w.course))].sort();
+  sel.innerHTML = `<option value="">Todos los cursos solicitados</option>` +
+    courses.map(c => `<option value="${esc(c)}"${c === current ? " selected" : ""}>${esc(c)}</option>`).join("");
+}
+
+function initWaitlist() {
+  if (!document.getElementById("view-waitlist")) return;
+
+  $("#wlNewBtn")?.addEventListener("click", () => openWlModal(null));
+  $("#wlExportBtn")?.addEventListener("click", wlExportCSV);
+  $("#wlSearch")?.addEventListener("input", debounce(renderWaitlist, 200));
+  $("#wlStatusFilter")?.addEventListener("change", renderWaitlist);
+  $("#wlGroupBy")?.addEventListener("change", renderWaitlist);
+
+  // Modal
+  $("#wlModalClose")?.addEventListener("click", closeWlModal);
+  $("#wlCancelBtn")?.addEventListener("click", closeWlModal);
+  $("#wlModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeWlModal(); });
+  $("#wlSaveBtn")?.addEventListener("click", saveWlFromModal);
+
+  // Acciones masivas
+  $("#wlBulkEmail")?.addEventListener("click", wlSendSelectedToEmail);
+  $("#wlBulkNotified")?.addEventListener("click", () => wlBulkSetStatus("notificado"));
+  $("#wlBulkArchive")?.addEventListener("click", () => wlBulkSetStatus("archivado"));
+  $("#wlBulkDelete")?.addEventListener("click", wlBulkDelete);
+
+  renderWaitlist();
+}
+
+function openWlModal(id) {
+  const modal = $("#wlModal");
+  if (!modal) return;
+  const item = id ? loadWaitlist().find(w => w.id === id) : null;
+  $("#wlModalTitle").textContent = item ? "Editar solicitud" : "Nueva solicitud";
+  $("#wlFieldId").value       = item?.id || "";
+  $("#wlFieldName").value     = item?.name || "";
+  $("#wlFieldEmail").value    = item?.email || "";
+  $("#wlFieldCourse").value   = item?.course || "";
+  $("#wlFieldCategory").value = item?.category || "";
+  $("#wlFieldSource").value   = item?.source || "manual";
+  $("#wlFieldPriority").value = item?.priority || "media";
+  $("#wlFieldStatus").value   = item?.status || "pendiente";
+  $("#wlFieldDate").value     = (item?.date || new Date().toISOString()).slice(0, 10);
+  $("#wlFieldNotes").value    = item?.notes || "";
+
+  // Sugerencias de cursos ya solicitados
+  const dl = $("#wlCourseDatalist");
+  if (dl) {
+    const courses = [...new Set(loadWaitlist().map(w => w.course))].sort();
+    dl.innerHTML = courses.map(c => `<option value="${esc(c)}">`).join("");
+  }
+  modal.classList.remove("hidden");
+  setTimeout(() => $("#wlFieldName")?.focus(), 60);
+}
+
+function closeWlModal() { $("#wlModal")?.classList.add("hidden"); }
+
+function saveWlFromModal() {
+  const name   = $("#wlFieldName").value.trim();
+  const email  = $("#wlFieldEmail").value.trim();
+  const course = $("#wlFieldCourse").value.trim();
+  if (!name || !email || !course) { toast("⚠ Nombre, email y curso son obligatorios", "warning"); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("⚠ Email no válido", "warning"); return; }
+
+  const list = loadWaitlist();
+  const id   = $("#wlFieldId").value;
+  const data = {
+    name, email, course,
+    category: $("#wlFieldCategory").value.trim(),
+    source:   $("#wlFieldSource").value,
+    priority: $("#wlFieldPriority").value,
+    status:   $("#wlFieldStatus").value,
+    date:     $("#wlFieldDate").value || new Date().toISOString().slice(0, 10),
+    notes:    $("#wlFieldNotes").value.trim()
+  };
+  if (id) {
+    const idx = list.findIndex(w => w.id === id);
+    if (idx >= 0) list[idx] = { ...list[idx], ...data, updated: new Date().toISOString() };
+    toast("✓ Solicitud actualizada", "success");
+  } else {
+    list.unshift({ id: "wl_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), created: new Date().toISOString(), ...data });
+    toast("✓ Solicitud registrada", "success");
+  }
+  saveWaitlist(list);
+  closeWlModal();
+  renderWaitlist();
+}
+
+function wlSetStatus(id, status) {
+  const list = loadWaitlist();
+  const it = list.find(w => w.id === id);
+  if (!it) return;
+  it.status = status;
+  it.updated = new Date().toISOString();
+  saveWaitlist(list);
+  renderWaitlist();
+  toast(`Estado → ${WL_STATUS[status]?.label || status}`, "success");
+}
+
+function wlDelete(id) {
+  if (!confirm("¿Eliminar esta solicitud definitivamente?")) return;
+  saveWaitlist(loadWaitlist().filter(w => w.id !== id));
+  _wlSelected.delete(id);
+  renderWaitlist();
+  toast("Solicitud eliminada", "success");
+}
+
+function wlBulkSetStatus(status) {
+  if (!_wlSelected.size) return;
+  const list = loadWaitlist();
+  list.forEach(w => { if (_wlSelected.has(w.id)) { w.status = status; w.updated = new Date().toISOString(); } });
+  saveWaitlist(list);
+  toast(`${_wlSelected.size} solicitudes → ${WL_STATUS[status]?.label || status}`, "success");
+  _wlSelected.clear();
+  renderWaitlist();
+}
+
+function wlBulkDelete() {
+  if (!_wlSelected.size) return;
+  if (!confirm(`¿Eliminar ${_wlSelected.size} solicitudes definitivamente?`)) return;
+  saveWaitlist(loadWaitlist().filter(w => !_wlSelected.has(w.id)));
+  _wlSelected.clear();
+  renderWaitlist();
+  toast("Solicitudes eliminadas", "success");
+}
+
+function wlSendSelectedToEmail() {
+  const list = loadWaitlist().filter(w => _wlSelected.has(w.id) && w.email);
+  if (!list.length) { toast("Selecciona al menos una solicitud con email", "warning"); return; }
+  const seen = new Set();
+  const sel  = list.filter(w => { const k = w.email.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+                   .map(w => ({ email: w.email, name: w.name || w.email, course: w.course }));
+  try { localStorage.setItem(WL_SEL_KEY, JSON.stringify(sel)); } catch(e) {}
+  switchView("oportunidades");
+  const seg = $("#emailSegment");
+  if (seg) { seg.value = "waitlist"; seg.dispatchEvent(new Event("change")); }
+  toast(`📩 ${sel.length} correos enviados al compositor de Email Marketing`, "success");
+}
+
+function wlFilteredItems() {
+  const q      = ($("#wlSearch")?.value || "").trim().toLowerCase();
+  const status = $("#wlStatusFilter")?.value || "all";
+  let list = loadWaitlist();
+  if (status !== "all") list = list.filter(w => w.status === status);
+  else list = list.filter(w => w.status !== "archivado"); // por defecto ocultar archivados
+  if (q) list = list.filter(w =>
+    (w.name || "").toLowerCase().includes(q) ||
+    (w.email || "").toLowerCase().includes(q) ||
+    (w.course || "").toLowerCase().includes(q)
+  );
+  return list;
+}
+
+function wlRowHTML(w) {
+  const st  = WL_STATUS[w.status] || WL_STATUS.pendiente;
+  const checked = _wlSelected.has(w.id) ? " checked" : "";
+  const nextBtn = w.status === "conseguido"
+    ? `<button class="chip" onclick="wlSetStatus('${esc(w.id)}','notificado')" title="Marcar como notificado">🔔 Notificar</button>`
+    : w.status === "notificado"
+      ? `<button class="chip" onclick="wlSetStatus('${esc(w.id)}','compro')" title="El cliente compró">💰 Compró</button>`
+      : "";
+  return `<div class="wl-row" data-id="${esc(w.id)}">
+    <input type="checkbox" class="wl-check" data-id="${esc(w.id)}"${checked}>
+    <div class="wl-main">
+      <div class="wl-name">${esc(w.name)} <span class="wl-priority wl-pr-${esc(w.priority || "media")}" title="Prioridad">${WL_PRIORITY[w.priority] || ""}</span></div>
+      <div class="wl-meta">${esc(w.email)} · ${esc(WL_SOURCE[w.source] || w.source || "")} · ${esc((w.date || "").slice(0, 10))}${w.notes ? ` · 📝 ${esc(w.notes.slice(0, 60))}${w.notes.length > 60 ? "…" : ""}` : ""}</div>
+    </div>
+    <div class="wl-course" title="Curso solicitado">${esc(w.course)}${w.category ? `<small>${esc(w.category)}</small>` : ""}</div>
+    <span class="wl-status ${st.cls}">${st.label}</span>
+    <div class="wl-actions">
+      ${nextBtn}
+      <button class="chip" onclick="openWlModal('${esc(w.id)}')" title="Editar">✏️</button>
+      <button class="chip" onclick="wlSetStatus('${esc(w.id)}','archivado')" title="Archivar">🗄</button>
+      <button class="chip wl-del" onclick="wlDelete('${esc(w.id)}')" title="Eliminar">🗑</button>
+    </div>
+  </div>`;
+}
+
+function renderWaitlist() {
+  const box = $("#wlList");
+  if (!box) { updateWaitlistNavCount(); return; }
+
+  const all  = loadWaitlist();
+  const list = wlFilteredItems();
+
+  // ── KPIs ──
+  const kpis = $("#wlKpis");
+  if (kpis) {
+    const active     = all.filter(w => w.status !== "archivado");
+    const pendientes = all.filter(w => ["pendiente", "buscando"].includes(w.status)).length;
+    const conseguidos= all.filter(w => w.status === "conseguido").length;
+    const compraron  = all.filter(w => w.status === "compro").length;
+    const cursos     = new Set(active.map(w => w.course)).size;
+    const conv       = active.length ? (compraron / active.length * 100).toFixed(0) : 0;
+    kpis.innerHTML = [
+      ["Solicitudes activas", active.length, "Sin contar archivadas"],
+      ["Pendientes / buscando", pendientes, "Cursos por conseguir"],
+      ["Conseguidos sin notificar", conseguidos, "Listos para avisar"],
+      ["Cursos distintos", cursos, "Demanda única"],
+      ["Conversión a compra", conv + "%", `${compraron} compraron`]
+    ].map(([l, v, s]) => `<article class="kpi"><label>${l}</label><strong>${v}</strong><p>${s}</p></article>`).join("");
+  }
+
+  // ── Lista / agrupada ──
+  const groupBy = $("#wlGroupBy")?.value || "none";
+  if (!list.length) {
+    box.innerHTML = `<div class="wl-empty">📥 No hay solicitudes${all.length ? " con estos filtros" : ""}.<br><small>Registra el interés de un cliente con «+ Nueva solicitud» y notifícale cuando consigas el curso.</small></div>`;
+  } else if (groupBy === "course") {
+    const groups = {};
+    list.forEach(w => { (groups[w.course] ??= []).push(w); });
+    box.innerHTML = Object.entries(groups)
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([course, items]) => `<details class="wl-group" open>
+        <summary><span class="wl-group-title">🎓 ${esc(course)}</span>
+          <span class="wl-group-tools"><span class="badge">${items.length} interesado${items.length !== 1 ? "s" : ""}</span>
+          <button class="chip" onclick="event.preventDefault();wlExportCourse('${esc(course).replace(/'/g, "\\'")}')" title="Exportar interesados de este curso">⬇ CSV</button>
+          <button class="chip" onclick="event.preventDefault();wlSelectCourse('${esc(course).replace(/'/g, "\\'")}')" title="Seleccionar todos">☑ Seleccionar</button></span>
+        </summary>
+        ${items.map(wlRowHTML).join("")}
+      </details>`).join("");
+  } else {
+    box.innerHTML = list.map(wlRowHTML).join("");
+  }
+
+  // Checkboxes
+  box.querySelectorAll(".wl-check").forEach(chk => {
+    chk.addEventListener("change", () => {
+      if (chk.checked) _wlSelected.add(chk.dataset.id);
+      else _wlSelected.delete(chk.dataset.id);
+      updateWlBulkBar();
+    });
+  });
+  updateWlBulkBar();
+
+  // ── Interesados por curso ──
+  const byCourseBox = $("#wlByCourse");
+  if (byCourseBox) {
+    const active = all.filter(w => w.status !== "archivado");
+    const counts = {};
+    active.forEach(w => { counts[w.course] = (counts[w.course] || 0) + 1; });
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(...entries.map(e => e[1]), 1);
+    $("#wlCourseBadge") && ($("#wlCourseBadge").textContent = `${entries.length} cursos`);
+    byCourseBox.innerHTML = entries.length ? `<div class="payment-bars">` + entries.map(([course, n]) => `
+      <div class="pb-row">
+        <span class="pb-label" title="${esc(course)}">${esc(course)}</span>
+        <div class="pb-track"><div class="pb-fill" style="width:${(n / max * 100).toFixed(1)}%"></div></div>
+        <span class="pb-val">${n} interesado${n !== 1 ? "s" : ""}</span>
+      </div>`).join("") + `</div>`
+      : `<p style="color:var(--muted);font-size:13px">Aún no hay demanda registrada.</p>`;
+  }
+
+  updateWaitlistNavCount();
+}
+
+function updateWlBulkBar() {
+  const bar = $("#wlBulkBar");
+  if (!bar) return;
+  bar.classList.toggle("hidden", !_wlSelected.size);
+  const c = $("#wlBulkCount");
+  if (c) c.textContent = `${_wlSelected.size} seleccionado${_wlSelected.size !== 1 ? "s" : ""}`;
+}
+
+function updateWaitlistNavCount() {
+  const el = $("#navWaitlistCount");
+  if (!el) return;
+  const n = loadWaitlist().filter(w => ["pendiente", "buscando", "conseguido"].includes(w.status)).length;
+  el.textContent = n;
+  el.style.display = n ? "" : "none";
+}
+
+function wlSelectCourse(course) {
+  loadWaitlist().filter(w => w.course === course && w.status !== "archivado").forEach(w => _wlSelected.add(w.id));
+  renderWaitlist();
+}
+
+function _wlToCSV(items) {
+  const head = ["Nombre", "Email", "Curso solicitado", "Categoría", "Origen", "Prioridad", "Estado", "Fecha", "Notas"];
+  const rows = items.map(w => [w.name, w.email, w.course, w.category || "", WL_SOURCE[w.source] || w.source || "", w.priority || "", WL_STATUS[w.status]?.label.replace(/^[^\w]+/, "") || w.status, (w.date || "").slice(0, 10), (w.notes || "").replace(/\r?\n/g, " ")]);
+  return [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+}
+
+function _wlDownloadCSV(csv, filename) {
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: filename });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function wlExportCSV() {
+  const list = wlFilteredItems();
+  if (!list.length) { toast("Nada que exportar", "warning"); return; }
+  _wlDownloadCSV(_wlToCSV(list), `solicitudes-cursos-${new Date().toISOString().slice(0, 10)}.csv`);
+  toast(`${list.length} solicitudes exportadas`, "success");
+}
+
+function wlExportCourse(course) {
+  const list = loadWaitlist().filter(w => w.course === course && w.status !== "archivado");
+  if (!list.length) { toast("Nada que exportar", "warning"); return; }
+  const slug = course.toLowerCase().replace(/[^\w]+/g, "-").slice(0, 50);
+  _wlDownloadCSV(_wlToCSV(list), `interesados-${slug}.csv`);
+  toast(`${list.length} interesados exportados`, "success");
+}
+
+// Exponer funciones usadas en atributos onclick
+window.openWlModal    = openWlModal;
+window.wlSetStatus    = wlSetStatus;
+window.wlDelete       = wlDelete;
+window.wlExportCourse = wlExportCourse;
+window.wlSelectCourse = wlSelectCourse;
