@@ -44,6 +44,25 @@ const CONFIG = {
 
 Si quieres soles peruanos, usa `currency: "PEN"`.
 
+## Email Marketing profesional
+
+El módulo incluye compositor visual/HTML, vista previa en escritorio y móvil,
+código fuente descargable, texto plano, plantillas, variables personalizadas,
+segmentos, A/B, blacklist, autoguardado, envío de prueba, programación y envío
+mediante Brevo.
+
+Para usar Brevo de forma segura, actualiza el plugin incluido en
+`wordpress-plugin/cpp-dashboard-crm-api` y agrega en `wp-config.php`:
+
+```php
+define('CPP_BREVO_API_KEY', 'TU_API_KEY_DE_BREVO');
+define('CPP_BREVO_SENDER_NAME', 'Tu empresa');
+define('CPP_BREVO_SENDER_EMAIL', 'correo-verificado@tudominio.com');
+```
+
+El dashboard enviará la clave únicamente desde WordPress; no es necesario
+publicarla en el JavaScript del sitio.
+
 ## Nota sobre el globo
 
 WooCommerce normalmente guarda país y ciudad de facturación, pero no latitud/longitud exacta. Esta versión usa coordenadas por país. Si luego quieres precisión por ciudad, se puede ampliar con geocoding o una tabla de coordenadas.

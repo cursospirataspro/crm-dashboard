@@ -459,7 +459,14 @@ function cpp_brevo_send( WP_REST_Request $request ) {
     $to_email    = sanitize_email( $request->get_param('to_email') );
     $to_name     = sanitize_text_field( $request->get_param('to_name') );
     $subject     = sanitize_text_field( $request->get_param('subject') );
-    $html        = wp_kses_post( $request->get_param('html_content') );
+    $html        = cpp_brevo_sanitize_email_html( $request->get_param('html_content') );
+    $text        = sanitize_textarea_field( $request->get_param('text_content') );
+    $reply_to    = sanitize_email( $request->get_param('reply_to') );
+    $scheduled   = sanitize_text_field( $request->get_param('scheduled_at') );
+    $raw_tags    = $request->get_param('tags');
+    $tags        = is_array($raw_tags)
+        ? array_values(array_filter(array_map('sanitize_key', $raw_tags)))
+        : [];
 
     if ( ! $to_email || ! $subject || ! $html ) {
         return new WP_Error( 'brevo_missing', 'Faltan campos: to_email, subject, html_content', [ 'status' => 400 ] );
@@ -471,6 +478,22 @@ function cpp_brevo_send( WP_REST_Request $request ) {
         'subject'     => $subject,
         'htmlContent' => $html,
     ];
+    if ( $text ) {
+        $payload['textContent'] = $text;
+    }
+    if ( $reply_to ) {
+        $payload['replyTo'] = [ 'email' => $reply_to, 'name' => $cfg['sender_name'] ];
+    }
+    if ( $tags ) {
+        $payload['tags'] = array_slice($tags, 0, 10);
+    }
+    if ( $scheduled ) {
+        $scheduled_ts = strtotime($scheduled);
+        if ( ! $scheduled_ts || $scheduled_ts <= time() || $scheduled_ts > time() + (72 * HOUR_IN_SECONDS) ) {
+            return new WP_Error( 'brevo_schedule_invalid', 'La fecha programada debe estar entre ahora y las próximas 72 horas', [ 'status' => 400 ] );
+        }
+        $payload['scheduledAt'] = gmdate('Y-m-d\TH:i:s.000\Z', $scheduled_ts);
+    }
 
     $response = wp_remote_post( 'https://api.brevo.com/v3/smtp/email', [
         'headers' => [
@@ -491,6 +514,43 @@ function cpp_brevo_send( WP_REST_Request $request ) {
         return new WP_Error( 'brevo_send_error', $body['message'] ?? 'Error al enviar', [ 'status' => $code ] );
     }
     return rest_ensure_response( [ 'success' => true, 'messageId' => $body['messageId'] ?? '' ] );
+}
+
+/**
+ * Conserva la estructura de un email HTML (tablas, estilos inline y metadatos)
+ * sin permitir scripts, iframes ni manejadores de eventos.
+ */
+function cpp_brevo_sanitize_email_html( $html ) {
+    $allowed = wp_kses_allowed_html('post');
+    $global_attrs = [
+        'style' => true, 'class' => true, 'id' => true, 'title' => true,
+        'role' => true, 'aria-hidden' => true, 'lang' => true,
+    ];
+    $allowed['html'] = [ 'lang' => true ];
+    $allowed['head'] = [];
+    $allowed['meta'] = [ 'charset' => true, 'name' => true, 'content' => true ];
+    $allowed['body'] = array_merge($global_attrs, [ 'bgcolor' => true ]);
+    $allowed['table'] = array_merge($global_attrs, [
+        'width' => true, 'height' => true, 'align' => true, 'bgcolor' => true,
+        'border' => true, 'cellpadding' => true, 'cellspacing' => true,
+    ]);
+    foreach (['thead','tbody','tfoot','tr','td','th'] as $tag) {
+        $allowed[$tag] = array_merge($global_attrs, [
+            'width' => true, 'height' => true, 'align' => true,
+            'valign' => true, 'bgcolor' => true, 'colspan' => true, 'rowspan' => true,
+        ]);
+    }
+    $allowed['img'] = array_merge($allowed['img'] ?? [], [
+        'src' => true, 'alt' => true, 'width' => true, 'height' => true,
+        'style' => true, 'border' => true, 'title' => true,
+    ]);
+    $allowed['a'] = array_merge($allowed['a'] ?? [], [
+        'href' => true, 'target' => true, 'rel' => true, 'style' => true, 'title' => true,
+    ]);
+    foreach (['div','span','p','h1','h2','h3','h4','h5','h6','ul','ol','li','blockquote','strong','em','u','br','hr'] as $tag) {
+        $allowed[$tag] = array_merge($allowed[$tag] ?? [], $global_attrs);
+    }
+    return wp_kses( wp_unslash((string) $html), $allowed );
 }
 
 function cpp_brevo_events( WP_REST_Request $request ) {

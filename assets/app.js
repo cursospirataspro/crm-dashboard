@@ -3782,13 +3782,7 @@ function bind() {
   $("#templateSaveBtn")?.addEventListener("click", () => {
     const name = prompt("Nombre de la plantilla:");
     if (!name?.trim()) return;
-    saveTemplate(name.trim(), {
-      subject:     $("#emailSubject")?.value     || "",
-      body:        $("#emailBody")?.value        || "",
-      headerImage: $("#emailHeaderImage")?.value || "",
-      ctaText:     $("#ctaText")?.value          || "",
-      ctaUrl:      $("#ctaUrl")?.value           || "",
-    });
+    saveTemplate(name.trim(), getEmailComposerState());
     toast(`💾 Plantilla "${name}" guardada`, "success");
   });
   $("#templateLoadBtn")?.addEventListener("click", () => {
@@ -4595,7 +4589,17 @@ function saveBrevoConfig() {
   const key   = $("#brevoApiKey")?.value.trim()   || "";
   const name  = $("#brevoSenderName")?.value.trim() || "";
   const email = $("#brevoSenderEmail")?.value.trim() || "";
-  localStorage.setItem("crm_brevo", JSON.stringify({ key, name, email }));
+  const replyTo = $("#brevoReplyTo")?.value.trim() || email;
+  const address = $("#brevoCompanyAddress")?.value.trim() || "";
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    toast("⚠ El email del remitente no es válido", "warning");
+    return;
+  }
+  if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+    toast("⚠ El email de respuesta no es válido", "warning");
+    return;
+  }
+  localStorage.setItem("crm_brevo", JSON.stringify({ key, name, email, replyTo, address }));
   const msg = $("#brevoSavedMsg");
   if (msg) { msg.style.display = "inline"; setTimeout(() => msg.style.display = "none", 2000); }
   updateBrevoStatus();
@@ -4609,6 +4613,8 @@ function restoreBrevoConfig() {
     if ($("#brevoApiKey"))    $("#brevoApiKey").value    = b.key   || "";
     if ($("#brevoSenderName")) $("#brevoSenderName").value = b.name  || "";
     if ($("#brevoSenderEmail")) $("#brevoSenderEmail").value = b.email || "";
+    if ($("#brevoReplyTo")) $("#brevoReplyTo").value = b.replyTo || b.email || "";
+    if ($("#brevoCompanyAddress")) $("#brevoCompanyAddress").value = b.address || "";
     updateBrevoStatus();
   } catch(e) {}
 }
@@ -4669,37 +4675,123 @@ async function testBrevoConnection() {
   }
 }
 
-// ── Construye el HTML completo del email ──────────────────────────
-function buildEmailHtml({ name, bodyText, headerImage, ctaText, ctaUrl, includeFooter, extraVars = {} }) {
-  const _fechaDef = new Date().toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" });
-  const bodyHtml = bodyText
-    .replace(/\{nombre\}/gi, name).replace(/\{name\}/gi, name)
-    .replace(/\{curso\}/gi,  extraVars.curso  ?? "")
-    .replace(/\{fecha\}/gi,  extraVars.fecha  ?? _fechaDef)
-    .replace(/\{monto\}/gi,  extraVars.monto  ?? "")
-    .replace(/\n/g, "<br>");
-  const imgBlock = headerImage
-    ? `<img src="${headerImage}" alt="Banner" style="width:100%;max-height:280px;object-fit:cover;display:block;border-radius:8px 8px 0 0;">`
+function getEmailComposerState() {
+  let brevo = {};
+  try { brevo = JSON.parse(localStorage.getItem("crm_brevo") || "{}"); } catch(e) {}
+  return {
+    campaignName: $("#emailCampaignName")?.value.trim() || "",
+    tag: ($("#emailTag")?.value.trim() || "crm-dashboard").replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 64),
+    subject: $("#emailSubject")?.value.trim() || "",
+    subjectB: $("#emailSubjectB")?.value.trim() || "",
+    preheader: $("#emailPreheader")?.value.trim() || "",
+    bodyText: $("#emailBody")?.value || "",
+    bodyMode: $("#emailBody")?.dataset.mode || "text",
+    headerImage: $("#emailHeaderImage")?.value.trim() || "",
+    ctaText: $("#ctaText")?.value.trim() || "",
+    ctaUrl: $("#ctaUrl")?.value.trim() || "",
+    includeFooter: $("#includeFooter")?.checked ?? true,
+    accent: $("#emailAccentColor")?.value || "#0092ff",
+    theme: $("#emailTheme")?.value || "light",
+    signature: $("#emailSignature")?.value.trim() || "",
+    senderName: brevo.name || "Cursos Piratas Pro",
+    senderEmail: brevo.email || "",
+    replyTo: brevo.replyTo || brevo.email || "",
+    companyAddress: brevo.address || "CursosPiratasPro.com",
+  };
+}
+
+function emailHtmlToPlainText(html) {
+  const holder = document.createElement("div");
+  holder.innerHTML = String(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n");
+  return (holder.textContent || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function applyEmailVariables(value, name, extraVars = {}) {
+  const fecha = extraVars.fecha || new Date().toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" });
+  return String(value || "")
+    .replace(/\{nombre\}|\{name\}/gi, name || "Cliente")
+    .replace(/\{curso\}/gi, extraVars.curso || "tu próximo curso")
+    .replace(/\{fecha\}/gi, fecha)
+    .replace(/\{monto\}/gi, extraVars.monto || "");
+}
+
+// ── Construye exactamente el HTML que se previsualiza y se envía ──
+function buildEmailHtml({
+  name, bodyText, bodyMode = "text", headerImage, ctaText, ctaUrl,
+  includeFooter, preheader = "", accent = "#0092ff", theme = "light",
+  signature = "", companyAddress = "", extraVars = {}
+}) {
+  const recipientName = String(name || "Cliente");
+  const color = /^#[0-9a-f]{6}$/i.test(accent) ? accent : "#0092ff";
+  const isDark = theme === "dark";
+  const pageBg = isDark ? "#060914" : "#eef2f7";
+  const cardBg = isDark ? "#111827" : "#ffffff";
+  const textColor = isDark ? "#e5e7eb" : "#1f2937";
+  const mutedColor = isDark ? "#94a3b8" : "#6b7280";
+  const borderColor = isDark ? "#253047" : "#e5e7eb";
+  const containsHtml = bodyMode === "html" || /<\/?[a-z][\s\S]*>/i.test(bodyText);
+  const rawBody = applyEmailVariables(bodyText, containsHtml ? esc(recipientName) : recipientName, extraVars);
+  const bodyHtml = containsHtml
+    ? rawBody.replace(/\n/g, "<br>")
+    : esc(rawBody).replace(/\n/g, "<br>");
+  const safePreheader = esc(applyEmailVariables(preheader, recipientName, extraVars));
+  const safeSignature = esc(applyEmailVariables(signature, recipientName, extraVars));
+  const safeImage = esc(headerImage || "");
+  const safeCtaUrl = esc(ctaUrl || "");
+  const safeCtaText = esc(applyEmailVariables(ctaText, recipientName, extraVars));
+  const imgBlock = safeImage
+    ? `<tr><td><img src="${safeImage}" width="600" alt="Imagen principal de la campaña" style="width:100%;max-width:600px;max-height:340px;object-fit:cover;display:block;border:0;"></td></tr>`
     : "";
-  const ctaBlock = (ctaText && ctaUrl)
-    ? `<div style="text-align:center;margin:24px 0"><a href="${ctaUrl}" style="background:#0092ff;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:700">${ctaText}</a></div>`
+  const ctaBlock = (safeCtaText && safeCtaUrl)
+    ? `<table role="presentation" align="center" cellpadding="0" cellspacing="0" style="margin:28px auto"><tr><td bgcolor="${color}" style="border-radius:9px"><a href="${safeCtaUrl}" target="_blank" rel="noopener" style="display:inline-block;background:${color};color:#ffffff;padding:14px 30px;border-radius:9px;text-decoration:none;font-size:16px;font-weight:800">${safeCtaText}</a></td></tr></table>`
     : "";
-  const unsub = getUnsubscribeLink(name);
+  const signatureBlock = safeSignature
+    ? `<p style="margin:26px 0 0;color:${mutedColor};font-size:14px;line-height:1.6">${safeSignature}</p>`
+    : "";
+  const unsub = esc(getUnsubscribeLink(name || "Cliente"));
   const footerBlock = includeFooter
-    ? `<div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center">
-        Cursospirataspro.com · Todos los derechos reservados.<br>
-        <a href="${unsub}" style="color:#9ca3af">Dar de baja</a> de esta lista de correos.
-       </div>`
+    ? `<tr><td style="padding:22px 32px;background:${isDark ? "#0b1220" : "#f8fafc"};border-top:1px solid ${borderColor};text-align:center;color:${mutedColor};font-size:11px;line-height:1.7">
+        ${esc(companyAddress || "CursosPiratasPro.com")}<br>
+        Recibes este correo por tu relación con Cursos Piratas Pro.
+        <a href="${unsub}" style="color:${color};text-decoration:underline">Cancelar suscripción</a>
+       </td></tr>`
     : "";
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:sans-serif">
-<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 16px">
-<table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)">
-<tr><td>${imgBlock}</td></tr>
-<tr><td style="padding:32px 36px;font-size:15px;color:#1f2937;line-height:1.65">${bodyHtml}${ctaBlock}${footerBlock}</td></tr>
-</table>
-</td></tr></table>
-</body></html>`;
+  return `<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>Correo de Cursos Piratas Pro</title>
+</head>
+<body style="margin:0;padding:0;background:${pageBg};font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;color:${textColor}">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent">${safePreheader}${"&nbsp;&zwnj;".repeat(30)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${pageBg}">
+    <tr><td align="center" style="padding:30px 14px">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${cardBg};border:1px solid ${borderColor};border-radius:14px;overflow:hidden">
+        <tr><td style="height:5px;background:${color};font-size:0;line-height:0">&nbsp;</td></tr>
+        <tr><td style="padding:20px 32px 16px;border-bottom:1px solid ${borderColor}">
+          <div style="font-size:18px;font-weight:800;color:${textColor}">Cursos Piratas Pro</div>
+          <div style="font-size:11px;color:${mutedColor};margin-top:3px">Cursos digitales · acceso inmediato</div>
+        </td></tr>
+        ${imgBlock}
+        <tr><td style="padding:34px 36px;font-size:15px;color:${textColor};line-height:1.72;word-break:break-word">
+          ${bodyHtml || `<p style="color:${mutedColor}">Escribe el contenido de tu campaña para verlo aquí.</p>`}
+          ${ctaBlock}
+          ${signatureBlock}
+        </td></tr>
+        ${footerBlock}
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
 
 // ── Enlace de baja (se registra en lista local) ───────────────────
@@ -4719,86 +4811,182 @@ function addToUnsubscribeList(email) {
   }
 }
 
-// ── Envío principal via Brevo ─────────────────────────────────────
-async function sendViaBrevo() {
-  const segment      = $("#emailSegment")?.value || "all";
-  const subject      = $("#emailSubject")?.value.trim();
-  const subjectB     = $("#emailSubjectB")?.value.trim();
-  const bodyText     = $("#emailBody")?.value.trim();
-  const headerImage  = $("#emailHeaderImage")?.value.trim();
-  const ctaText      = $("#ctaText")?.value.trim();
-  const ctaUrl       = $("#ctaUrl")?.value.trim();
-  const includeFooter= $("#includeFooter")?.checked ?? true;
-  const delayMs      = parseInt($("#sendDelay")?.value || "400", 10) || 400;
-  const enableAB     = $("#enableAB")?.checked && subjectB;
-  const excludeConv  = $("#excludeConverted")?.checked ?? false;
+async function sendBrevoMessage({ recipient, subject, htmlContent, textContent, composer, scheduledAt = "" }) {
+  let res, data;
+  const tags = [composer.tag || "crm-dashboard"].filter(Boolean);
+  if (CONFIG.mode === "api") {
+    res = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
+      body: JSON.stringify({
+        to_email: recipient.email,
+        to_name: recipient.name,
+        subject,
+        html_content: htmlContent,
+        text_content: textContent,
+        reply_to: composer.replyTo,
+        tags,
+        scheduled_at: scheduledAt || undefined,
+      })
+    });
+  } else {
+    const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
+    if (!b?.key || !b?.email) throw new Error("Configura la API Key y el email remitente de Brevo");
+    const payload = {
+      sender: { name: b.name || "CRM Dashboard", email: b.email },
+      to: [{ email: recipient.email, name: recipient.name }],
+      subject,
+      htmlContent,
+      textContent,
+      tags,
+    };
+    if (b.replyTo || b.email) payload.replyTo = { email: b.replyTo || b.email, name: b.name || "Soporte" };
+    if (scheduledAt) payload.scheduledAt = scheduledAt;
+    res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "api-key": b.key },
+      body: JSON.stringify(payload)
+    });
+  }
+  try { data = await res.json(); } catch(e) { data = {}; }
+  return { ok: res.ok, status: res.status, data };
+}
 
-  if (!subject || !bodyText) { toast("⚠ Escribe el asunto y el cuerpo del mensaje", "warning"); return; }
+// ── Envío principal vía Brevo; el HTML enviado es el mismo de la vista previa ──
+async function sendViaBrevo(options = {}) {
+  const composer = getEmailComposerState();
+  const segment = $("#emailSegment")?.value || "all";
+  const delayMs = Math.max(0, Math.min(5000, parseInt($("#sendDelay")?.value || "400", 10) || 0));
+  const enableAB = Boolean($("#enableAB")?.checked && composer.subjectB);
+  const excludeConv = $("#excludeConverted")?.checked ?? false;
+  const scheduledAt = options.scheduledAt || "";
+  const isTest = Boolean(options.testRecipient);
 
-  const recipients = getEmailRecipients(segment, excludeConv).filter(r => !getUnsubscribeList().includes(r.email));
-  if (!recipients.length) { toast("⚠ No hay destinatarios para este segmento", "warning"); return; }
+  if (!composer.subject || !composer.bodyText.trim()) {
+    toast("⚠ Escribe el asunto y el cuerpo del mensaje", "warning");
+    return { sent: 0, failed: 0 };
+  }
+  if (composer.ctaUrl && !/^https?:\/\//i.test(composer.ctaUrl)) {
+    toast("⚠ La URL del botón debe comenzar con http:// o https://", "warning");
+    return { sent: 0, failed: 0 };
+  }
+
+  const unsubscribe = getUnsubscribeList().map(v => String(v).toLowerCase());
+  const recipients = isTest
+    ? [{ email: options.testRecipient, name: "Vista previa" }]
+    : getEmailRecipients(segment, excludeConv)
+        .filter(r => r.email && !unsubscribe.includes(String(r.email).toLowerCase()));
+  if (!recipients.length) {
+    toast("⚠ No hay destinatarios válidos para este segmento", "warning");
+    return { sent: 0, failed: 0 };
+  }
+
+  if (!isTest && !options.confirmed) {
+    const action = scheduledAt ? `programar para ${new Date(scheduledAt).toLocaleString()}` : "enviar ahora";
+    const accepted = confirm(
+      `Vas a ${action} esta campaña.\n\n` +
+      `Asunto: ${composer.subject}\nDestinatarios: ${recipients.length}\n` +
+      `Segmento: ${segment}${enableAB ? "\nTest A/B: activo" : ""}\n\n¿Confirmas el envío?`
+    );
+    if (!accepted) return { sent: 0, failed: 0 };
+  }
 
   const progressWrap = $("#brevoProgressWrap");
-  const progressBar  = $("#brevoProgressBar");
-  const progressPct  = $("#brevoProgressPct");
-  const progressLog  = $("#brevoProgressLog");
-  const progressLbl  = $("#brevoProgressLabel");
+  const progressBar = $("#brevoProgressBar");
+  const progressPct = $("#brevoProgressPct");
+  const progressLog = $("#brevoProgressLog");
+  const progressLbl = $("#brevoProgressLabel");
+  const sendBtn = $("#emailSendBrevoBtn");
   if (progressWrap) progressWrap.style.display = "block";
-  if (progressLog)  progressLog.innerHTML = "";
+  if (progressLog) progressLog.innerHTML = "";
+  if (progressBar) progressBar.style.width = "0%";
+  if (progressPct) progressPct.textContent = "0%";
+  if (sendBtn) sendBtn.disabled = true;
 
   let sent = 0, failed = 0;
   const total = recipients.length;
-
-  // Variables dinámicas {curso} {fecha} {monto} personalizadas por destinatario
-  const _crmByEmail = {};
-  Object.values(customerMap(state.filtered)).forEach(c => { if (c.email) _crmByEmail[c.email] = c; });
-  const _varCurso = _smartState.selectedCourse || $("#filterCourse")?.value || "";
-  const _varFecha = new Date().toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" });
+  const crmByEmail = {};
+  Object.values(customerMap(state.filtered)).forEach(c => { if (c.email) crmByEmail[String(c.email).toLowerCase()] = c; });
+  const varCurso = _smartState.selectedCourse || $("#filterCourse")?.value || "";
+  const varFecha = new Date().toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" });
 
   for (let i = 0; i < recipients.length; i++) {
-    const r = recipients[i];
-    // A/B: alternar asunto
-    const chosenSubject = enableAB && i % 2 === 1 ? subjectB : subject;
-    const personalSubject = chosenSubject.replace(/\{nombre\}/gi, r.name).replace(/\{name\}/gi, r.name);
-    const _crmC     = _crmByEmail[r.email] || {};
-    const _extraVars = { curso: _varCurso, fecha: _varFecha, monto: _crmC.revenue ? `$${Number(_crmC.revenue).toFixed(2)}` : "" };
-    const htmlContent = buildEmailHtml({ name: r.name, bodyText, headerImage, ctaText, ctaUrl, includeFooter, extraVars: _extraVars });
+    const recipient = recipients[i];
+    const versionB = enableAB && i % 2 === 1;
+    const chosenSubject = versionB ? composer.subjectB : composer.subject;
+    const personalSubject = applyEmailVariables(chosenSubject, recipient.name, { curso: varCurso, fecha: varFecha });
+    const crmCustomer = crmByEmail[String(recipient.email).toLowerCase()] || {};
+    const extraVars = {
+      curso: varCurso,
+      fecha: varFecha,
+      monto: crmCustomer.revenue ? fmtMoney(Number(crmCustomer.revenue)) : "",
+    };
+    const htmlContent = buildEmailHtml({ name: recipient.name, ...composer, extraVars });
+    const textContent = emailHtmlToPlainText(htmlContent);
+    const requestComposer = { ...composer, tag: `${composer.tag || "crm-dashboard"}${enableAB ? (versionB ? "-b" : "-a") : ""}` };
     try {
-      let res, data;
-      if (CONFIG.mode === "api") {
-        res  = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
-          body: JSON.stringify({ to_email: r.email, to_name: r.name, subject: personalSubject, html_content: htmlContent })
-        });
-        data = await res.json();
+      const result = await sendBrevoMessage({
+        recipient,
+        subject: personalSubject,
+        htmlContent,
+        textContent,
+        composer: requestComposer,
+        scheduledAt,
+      });
+      if (result.ok) {
+        sent++;
+        if (progressLog) progressLog.innerHTML += `<div>✅ ${esc(recipient.email)}${scheduledAt ? " · programado" : ""}</div>`;
       } else {
-        const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
-        if (!b?.key) { toast("⚠ Configura tu API Key de Brevo primero", "warning"); break; }
-        res  = await fetch("https://api.brevo.com/v3/smtp/email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "api-key": b.key },
-          body: JSON.stringify({ sender: { name: b.name, email: b.email }, to: [{ email: r.email, name: r.name }], subject: personalSubject, htmlContent })
-        });
-        data = await res.json();
+        failed++;
+        if (progressLog) progressLog.innerHTML += `<div style="color:var(--danger)">❌ ${esc(recipient.email)} — ${esc(result.data.message || result.data.error || result.status)}</div>`;
       }
-      if (res.ok) { sent++; if (progressLog) progressLog.innerHTML += `<div>✅ ${esc(r.email)}</div>`; }
-      else        { failed++; if (progressLog) progressLog.innerHTML += `<div style="color:var(--danger)">❌ ${esc(r.email)} — ${esc(data.message||res.status)}</div>`; }
     } catch(e) {
       failed++;
-      if (progressLog) progressLog.innerHTML += `<div style="color:var(--danger)">❌ ${esc(r.email)} — ${e.message}</div>`;
+      if (progressLog) progressLog.innerHTML += `<div style="color:var(--danger)">❌ ${esc(recipient.email)} — ${esc(e.message)}</div>`;
     }
     const pct = Math.round(((sent + failed) / total) * 100);
     if (progressBar) progressBar.style.width = pct + "%";
-    if (progressPct) progressPct.textContent  = pct + "%";
-    if (progressLbl) progressLbl.textContent  = `Enviando ${sent + failed} de ${total}...`;
-    if (delayMs > 0 && i < recipients.length - 1) await new Promise(r => setTimeout(r, delayMs));
+    if (progressPct) progressPct.textContent = pct + "%";
+    if (progressLbl) progressLbl.textContent = `${scheduledAt ? "Programando" : "Enviando"} ${sent + failed} de ${total}...`;
+    if (delayMs > 0 && i < recipients.length - 1) await new Promise(resolve => setTimeout(resolve, delayMs));
   }
 
-  saveCampaignToHistory({ segment, subject, total, sent, failed, date: new Date().toISOString() });
-  toast(`📧 Campaña enviada: ${sent} OK, ${failed} fallidos`, sent > 0 ? "success" : "error");
-  if (progressLbl) progressLbl.textContent = `✅ Completado: ${sent} enviados, ${failed} fallidos`;
-  renderCampaignHistory();
+  if (!isTest) {
+    saveCampaignToHistory({
+      segment,
+      campaignName: composer.campaignName,
+      subject: composer.subject,
+      preheader: composer.preheader,
+      total,
+      sent,
+      failed,
+      scheduledAt,
+      status: scheduledAt ? "programada" : "enviada",
+      date: new Date().toISOString()
+    });
+    renderCampaignHistory();
+  }
+  const doneLabel = scheduledAt ? `Programados: ${sent}` : `Enviados: ${sent}`;
+  toast(`${isTest ? "✉ Prueba" : "📧 Campaña"} · ${doneLabel}, ${failed} fallidos`, sent > 0 ? "success" : "error");
+  if (progressLbl) progressLbl.textContent = `✅ ${doneLabel}, ${failed} fallidos`;
+  if (sendBtn) sendBtn.disabled = false;
+  return { sent, failed };
+}
+
+async function sendComposerTest() {
+  const email = $("#emTestRecipient")?.value.trim() || $("#testEmailTo")?.value.trim() || "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    toast("⚠ Escribe un email válido para la prueba", "warning");
+    return;
+  }
+  const btn = $("#emSendTestBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Enviando…"; }
+  try {
+    await sendViaBrevo({ testRecipient: email, confirmed: true });
+    localStorage.setItem("crm_em_test_recipient", email);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "✉ Enviar prueba"; }
+  }
 }
 
 // ── Función global para botones del banner ────────────────────────
@@ -4908,11 +5096,22 @@ function loadTemplate(name) {
   const tpl = templates[name];
   if (!tpl) return;
   if ($("#emailSubject"))      $("#emailSubject").value      = tpl.subject      || "";
-  if ($("#emailBody"))         $("#emailBody").value         = tpl.body         || "";
+  if ($("#emailPreheader"))    $("#emailPreheader").value    = tpl.preheader    || "";
+  if ($("#emailBody")) {
+    $("#emailBody").value = tpl.bodyText ?? tpl.body ?? "";
+    $("#emailBody").dataset.mode = tpl.bodyMode || "text";
+  }
   if ($("#emailHeaderImage"))  $("#emailHeaderImage").value  = tpl.headerImage  || "";
   if ($("#ctaText"))           $("#ctaText").value           = tpl.ctaText      || "";
   if ($("#ctaUrl"))            $("#ctaUrl").value            = tpl.ctaUrl       || "";
+  if ($("#emailAccentColor"))  $("#emailAccentColor").value  = tpl.accent       || "#0092ff";
+  if ($("#emailTheme"))        $("#emailTheme").value        = tpl.theme        || "light";
+  if ($("#emailSignature"))    $("#emailSignature").value    = tpl.signature    || "";
+  if ($("#emailCampaignName")) $("#emailCampaignName").value = tpl.campaignName || name;
+  if ($("#emailTag"))          $("#emailTag").value          = tpl.tag          || "";
+  if ($("#includeFooter"))     $("#includeFooter").checked   = tpl.includeFooter !== false;
   updateSubjectCharCount();
+  scheduleEmailStudioRender(true);
   toast(`📄 Plantilla "${name}" cargada`, "success");
 }
 function deleteTemplate(name) {
@@ -5437,21 +5636,388 @@ function _smartRenderBanner(rows) {
 }
 
 // ── Preview HTML real en iframe ───────────────────────────────────
-function renderEmailPreview() {
+const EMAIL_PREBUILT_TEMPLATES = {
+  lanzamiento: {
+    subject: "🎓 {nombre}, ya puedes acceder a {curso}",
+    preheader: "Nuevo curso disponible · acceso inmediato y de por vida",
+    body: `<h2 style="margin:0 0 16px">Tu próximo nivel empieza hoy</h2>
+Hola {nombre},
+
+Acabamos de publicar <strong>{curso}</strong>, una formación práctica diseñada para ayudarte a avanzar más rápido y con una ruta clara.
+
+<ul>
+<li>Acceso inmediato y de por vida</li>
+<li>Contenido práctico, paso a paso</li>
+<li>Aprende a tu propio ritmo</li>
+</ul>
+
+Nos encantará verte dentro.`,
+    ctaText: "Ver el nuevo curso →",
+    ctaUrl: "https://cursospirataspro.com/",
+  },
+  waitlist: {
+    subject: "🔔 {nombre}, conseguimos el curso que pediste",
+    preheader: "Tu solicitud ya está disponible · entra antes que nadie",
+    body: `<h2 style="margin:0 0 16px">¡Buenas noticias, {nombre}!</h2>
+El curso <strong>{curso}</strong> que solicitaste ya está disponible.
+
+Te avisamos primero porque estabas en la lista de espera. Puedes acceder ahora y comenzar de inmediato.
+
+Gracias por ayudarnos a elegir los próximos cursos.`,
+    ctaText: "Acceder al curso →",
+    ctaUrl: "https://cursospirataspro.com/",
+  },
+  reactivacion: {
+    subject: "{nombre}, guardamos algo especial para tu regreso",
+    preheader: "Retoma tu aprendizaje con una selección pensada para ti",
+    body: `<h2 style="margin:0 0 16px">Nos gustaría verte de vuelta</h2>
+Hola {nombre},
+
+Hace tiempo que no nos visitas y desde entonces hemos sumado nuevos cursos, recursos y rutas de aprendizaje.
+
+Preparamos una selección para que retomes exactamente donde lo dejaste.`,
+    ctaText: "Descubrir novedades →",
+    ctaUrl: "https://cursospirataspro.com/",
+  },
+  carrito: {
+    subject: "{nombre}, tu acceso sigue pendiente",
+    preheader: "Completa tu pedido y comienza hoy mismo",
+    body: `<h2 style="margin:0 0 16px">Tu curso sigue esperándote</h2>
+Hola {nombre},
+
+Vimos que no pudiste terminar tu pedido. Conservamos tu selección para que puedas retomarla sin empezar de nuevo.
+
+Si tuviste algún problema con el pago, responde a este correo y te ayudaremos.`,
+    ctaText: "Completar mi pedido →",
+    ctaUrl: "https://cursospirataspro.com/",
+  },
+  oferta: {
+    subject: "⚡ {nombre}, una oportunidad especial por tiempo limitado",
+    preheader: "Condición especial disponible hasta {fecha}",
+    body: `<h2 style="margin:0 0 16px">Oferta especial para seguir aprendiendo</h2>
+Hola {nombre},
+
+Durante un tiempo limitado puedes acceder a <strong>{curso}</strong> con una condición especial.
+
+La promoción finaliza el {fecha}. Después, el precio volverá a ser el habitual.`,
+    ctaText: "Aprovechar la oferta →",
+    ctaUrl: "https://cursospirataspro.com/",
+  },
+  newsletter: {
+    subject: "📰 Novedades de este mes para ti, {nombre}",
+    preheader: "Cursos nuevos, recomendaciones y recursos seleccionados",
+    body: `<h2 style="margin:0 0 16px">Lo mejor del mes</h2>
+Hola {nombre},
+
+Esta es tu selección mensual de novedades:
+
+<ul>
+<li><strong>Curso destacado:</strong> {curso}</li>
+<li>Nuevos contenidos prácticos</li>
+<li>Recomendaciones basadas en tus intereses</li>
+</ul>
+
+Gracias por formar parte de nuestra comunidad.`,
+    ctaText: "Ver todas las novedades →",
+    ctaUrl: "https://cursospirataspro.com/",
+  },
+  gracias: {
+    subject: "🙌 Gracias por tu compra, {nombre}",
+    preheader: "Tu acceso está listo · estos son los siguientes pasos",
+    body: `<h2 style="margin:0 0 16px">¡Bienvenido, {nombre}!</h2>
+Gracias por confiar en nosotros. Tu acceso a <strong>{curso}</strong> ya está disponible.
+
+Te recomendamos comenzar por el primer módulo y avanzar a tu ritmo. Si necesitas ayuda, responde directamente a este correo.
+
+Esperamos que disfrutes mucho el curso.`,
+    ctaText: "Comenzar ahora →",
+    ctaUrl: "https://cursospirataspro.com/",
+  },
+};
+
+let _emailStudioInitialized = false;
+let _emailPreviewTimer = 0;
+let _emailPreviewMode = "desktop";
+
+function getEmailPreviewHtml() {
+  const composer = getEmailComposerState();
+  return buildEmailHtml({
+    name: "Andrea",
+    ...composer,
+    extraVars: {
+      curso: _smartState.selectedCourse || $("#filterCourse")?.value || "Diseño Digital Profesional",
+      fecha: new Date().toLocaleDateString("es-MX", { day:"numeric", month:"long", year:"numeric" }),
+      monto: fmtMoney(149),
+    }
+  });
+}
+
+function renderEmailAudiencePreview() {
+  const box = $("#emRecipientPreview");
+  if (!box) return;
+  const segment = $("#emailSegment")?.value || "all";
+  const excluded = getUnsubscribeList().map(v => String(v).toLowerCase());
+  const recipients = getEmailRecipients(segment, $("#excludeConverted")?.checked ?? false)
+    .filter(r => r.email && !excluded.includes(String(r.email).toLowerCase()));
+  if (!recipients.length) {
+    box.innerHTML = `<span class="em-audience-empty">⚠ Este segmento no tiene destinatarios válidos.</span>`;
+    return;
+  }
+  const sample = recipients.slice(0, 5);
+  box.innerHTML = `
+    <div class="em-audience-summary">
+      <strong>👥 ${recipients.length} destinatario${recipients.length !== 1 ? "s" : ""}</strong>
+      <span>${excluded.length} exclusión${excluded.length !== 1 ? "es" : ""} en lista negra</span>
+    </div>
+    <div class="em-audience-chips">
+      ${sample.map(r => `<span title="${esc(r.email)}">${esc(r.name || r.email)}</span>`).join("")}
+      ${recipients.length > sample.length ? `<span>+${recipients.length - sample.length} más</span>` : ""}
+    </div>`;
+}
+
+function renderEmailChecklist() {
+  const el = $("#emChecklist");
+  if (!el) return;
+  const c = getEmailComposerState();
+  const recipients = getEmailRecipients($("#emailSegment")?.value || "all", $("#excludeConverted")?.checked ?? false);
+  let brevoReady = CONFIG.mode === "api";
+  if (!brevoReady) {
+    try {
+      const b = JSON.parse(localStorage.getItem("crm_brevo") || "{}");
+      brevoReady = Boolean(b.key && b.email);
+    } catch(e) {}
+  }
+  const checks = [
+    { ok: c.subject.length > 0 && c.subject.length <= 60, label: "Asunto", hint: c.subject.length ? `${c.subject.length}/60` : "obligatorio" },
+    { ok: c.preheader.length >= 20 && c.preheader.length <= 110, label: "Preheader", hint: c.preheader.length ? `${c.preheader.length}/110` : "recomendado" },
+    { ok: emailHtmlToPlainText(c.bodyText).length >= 40, label: "Contenido", hint: `${emailHtmlToPlainText(c.bodyText).length} caracteres` },
+    { ok: !c.ctaText || /^https?:\/\//i.test(c.ctaUrl), label: "Botón CTA", hint: c.ctaText ? "URL revisada" : "opcional" },
+    { ok: c.includeFooter, label: "Baja y legal", hint: c.includeFooter ? "incluido" : "faltante" },
+    { ok: recipients.length > 0, label: "Audiencia", hint: `${recipients.length} contactos` },
+    { ok: brevoReady, label: "Brevo", hint: brevoReady ? "configurado" : "sin configurar" },
+  ];
+  const passed = checks.filter(item => item.ok).length;
+  const score = Math.round((passed / checks.length) * 100);
+  el.innerHTML = `
+    <div class="em-checklist-title">
+      <strong>Checklist previo al envío</strong>
+      <span class="${score === 100 ? "ready" : ""}">${score}% listo</span>
+    </div>
+    <div class="em-checklist-grid">
+      ${checks.map(item => `
+        <div class="em-check ${item.ok ? "ok" : "pending"}">
+          <span>${item.ok ? "✓" : "!"}</span>
+          <div><strong>${item.label}</strong><small>${item.hint}</small></div>
+        </div>`).join("")}
+    </div>`;
+}
+
+function saveEmailDraft() {
+  try {
+    const draft = {
+      ...getEmailComposerState(),
+      segment: $("#emailSegment")?.value || "all",
+      excludeConverted: $("#excludeConverted")?.checked ?? false,
+      enableAB: $("#enableAB")?.checked ?? false,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem("crm_email_draft_v2", JSON.stringify(draft));
+    const status = $("#emAutoSaveStatus");
+    if (status) {
+      status.textContent = "✓ Guardado " + new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+      status.classList.add("saved");
+    }
+  } catch(e) {}
+}
+
+function restoreEmailDraft() {
+  let draft = null;
+  try { draft = JSON.parse(localStorage.getItem("crm_email_draft_v2") || "null"); } catch(e) {}
+  if (!draft) return false;
+  const map = {
+    emailCampaignName: "campaignName",
+    emailTag: "tag",
+    emailSubject: "subject",
+    emailSubjectB: "subjectB",
+    emailPreheader: "preheader",
+    emailBody: "bodyText",
+    emailHeaderImage: "headerImage",
+    ctaText: "ctaText",
+    ctaUrl: "ctaUrl",
+    emailAccentColor: "accent",
+    emailTheme: "theme",
+    emailSignature: "signature",
+  };
+  Object.entries(map).forEach(([id, key]) => {
+    const input = document.getElementById(id);
+    if (input && draft[key] != null) input.value = draft[key];
+  });
+  if ($("#emailBody")) $("#emailBody").dataset.mode = draft.bodyMode || "text";
+  if ($("#emailSegment") && draft.segment) $("#emailSegment").value = draft.segment;
+  if ($("#excludeConverted")) $("#excludeConverted").checked = Boolean(draft.excludeConverted);
+  if ($("#enableAB")) $("#enableAB").checked = Boolean(draft.enableAB);
+  if ($("#includeFooter")) $("#includeFooter").checked = draft.includeFooter !== false;
+  if ($("#abPanel")) $("#abPanel").style.display = draft.enableAB ? "block" : "none";
+  return true;
+}
+
+function applyPrebuiltTemplate(key) {
+  const tpl = EMAIL_PREBUILT_TEMPLATES[key];
+  if (!tpl) {
+    toast("Selecciona una plantilla prediseñada", "warning");
+    return;
+  }
+  if ($("#emailSubject")) $("#emailSubject").value = tpl.subject;
+  if ($("#emailPreheader")) $("#emailPreheader").value = tpl.preheader;
+  if ($("#emailBody")) {
+    $("#emailBody").value = tpl.body;
+    $("#emailBody").dataset.mode = "html";
+  }
+  if ($("#ctaText")) $("#ctaText").value = tpl.ctaText;
+  if ($("#ctaUrl")) $("#ctaUrl").value = tpl.ctaUrl;
+  if ($("#emailCampaignName") && !$("#emailCampaignName").value) {
+    $("#emailCampaignName").value = $("#prebuiltTemplateSelect")?.selectedOptions[0]?.textContent.replace(/^[^\p{L}\p{N}]+/u, "") || key;
+  }
+  scheduleEmailStudioRender(true);
+  toast("✨ Plantilla profesional aplicada", "success");
+}
+
+function renderEmailStudioPreview() {
   const frame = $("#emailPreviewFrame");
-  const box   = $("#emailPreviewBox");
-  if (!frame || !box) return;
-  const name        = "Cliente";
-  const subject     = $("#emailSubject")?.value.trim() || "(sin asunto)";
-  const bodyText    = $("#emailBody")?.value.trim()    || "";
-  const headerImage = $("#emailHeaderImage")?.value.trim();
-  const ctaText     = $("#ctaText")?.value.trim();
-  const ctaUrl      = $("#ctaUrl")?.value.trim();
-  const includeFooter = $("#includeFooter")?.checked ?? true;
-  const html = buildEmailHtml({ name, bodyText, headerImage, ctaText, ctaUrl, includeFooter });
+  const code = $("#emailHtmlCode");
+  const body = $("#emPreviewBody");
+  if (!frame || !code || !body) return;
+  const composer = getEmailComposerState();
+  const html = getEmailPreviewHtml();
+  const bodyEditor = $("#emailBody");
+  const htmlToggle = $("#htmlModeToggle");
+  if (bodyEditor) {
+    const isHtml = bodyEditor.dataset.mode === "html";
+    bodyEditor.style.fontFamily = isHtml ? '"JetBrains Mono", Consolas, monospace' : "";
+    bodyEditor.style.fontSize = isHtml ? "12px" : "";
+    if (htmlToggle) htmlToggle.textContent = isHtml ? "📝 Modo texto" : "</> Modo HTML";
+  }
+  frame.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
   frame.srcdoc = html;
-  box.style.display = "block";
-  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  code.textContent = html;
+  frame.hidden = _emailPreviewMode === "code";
+  code.hidden = _emailPreviewMode !== "code";
+  body.classList.toggle("mobile", _emailPreviewMode === "mobile");
+  body.classList.toggle("code", _emailPreviewMode === "code");
+  document.querySelectorAll(".em-ptab").forEach(btn => btn.classList.toggle("active", btn.dataset.pmode === _emailPreviewMode));
+
+  const from = composer.senderName || "Cursos Piratas Pro";
+  if ($("#emPrevFrom")) $("#emPrevFrom").textContent = from;
+  if ($("#emPrevSubject")) $("#emPrevSubject").textContent = composer.subject || "(sin asunto)";
+  if ($("#emPrevPreheader")) $("#emPrevPreheader").textContent = composer.preheader || "Añade un preheader para mejorar aperturas…";
+  if ($("#emPrevAvatar")) $("#emPrevAvatar").textContent = from.split(/\s+/).map(w => w[0] || "").join("").slice(0, 2).toUpperCase() || "CP";
+  updateSubjectCharCount();
+  renderSpamBadge();
+  renderEmailChecklist();
+  renderEmailAudiencePreview();
+}
+
+function scheduleEmailStudioRender(save = true) {
+  clearTimeout(_emailPreviewTimer);
+  const status = $("#emAutoSaveStatus");
+  if (status && save) {
+    status.textContent = "Guardando…";
+    status.classList.remove("saved");
+  }
+  _emailPreviewTimer = setTimeout(() => {
+    renderEmailStudioPreview();
+    if (save) saveEmailDraft();
+  }, 180);
+}
+
+function downloadEmailHtml() {
+  const blob = new Blob([getEmailPreviewHtml()], { type: "text/html;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  const name = ($("#emailCampaignName")?.value || "campana-email").trim().replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "");
+  link.download = `${name || "campana-email"}.html`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  toast("⬇ HTML del correo descargado", "success");
+}
+
+async function copyEmailHtml() {
+  const html = getEmailPreviewHtml();
+  try {
+    await navigator.clipboard.writeText(html);
+    toast("⧉ HTML copiado al portapapeles", "success");
+  } catch(e) {
+    const area = document.createElement("textarea");
+    area.value = html;
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+    toast("⧉ HTML copiado", "success");
+  }
+}
+
+function initEmailStudio() {
+  if (_emailStudioInitialized) return;
+  _emailStudioInitialized = true;
+  restoreBrevoConfig();
+  const restored = restoreEmailDraft();
+  if (!restored && !$("#emailBody")?.value) applyPrebuiltTemplate("newsletter");
+
+  const liveInputs = [
+    "emailCampaignName", "emailTag", "emailSubject", "emailSubjectB", "emailPreheader",
+    "emailBody", "emailHeaderImage", "ctaText", "ctaUrl", "emailAccentColor",
+    "emailTheme", "emailSignature", "includeFooter", "emailSegment", "excludeConverted",
+    "filterCountry", "filterTicket", "filterCourse", "filterMinAmount",
+    "filterLastPurchaseDays", "filterWaitlistCourse", "filterMultiCountry"
+  ];
+  liveInputs.forEach(id => {
+    const input = document.getElementById(id);
+    input?.addEventListener(input?.tagName === "SELECT" || input?.type === "checkbox" ? "change" : "input", () => scheduleEmailStudioRender(true));
+  });
+
+  document.querySelectorAll(".em-ptab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      _emailPreviewMode = btn.dataset.pmode || "desktop";
+      renderEmailStudioPreview();
+    });
+  });
+  document.querySelectorAll(".em-var-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const area = $("#emailBody");
+      if (!area) return;
+      const start = area.selectionStart ?? area.value.length;
+      const end = area.selectionEnd ?? start;
+      area.value = area.value.slice(0, start) + btn.dataset.var + area.value.slice(end);
+      area.focus();
+      area.selectionStart = area.selectionEnd = start + btn.dataset.var.length;
+      scheduleEmailStudioRender(true);
+    });
+  });
+  $("#prebuiltApplyBtn")?.addEventListener("click", () => applyPrebuiltTemplate($("#prebuiltTemplateSelect")?.value));
+  $("#emCopyHtmlBtn")?.addEventListener("click", copyEmailHtml);
+  $("#emDownloadHtmlBtn")?.addEventListener("click", downloadEmailHtml);
+  $("#emSendTestBtn")?.addEventListener("click", sendComposerTest);
+  $("#emailPreviewBtn")?.addEventListener("click", () => {
+    _emailPreviewMode = "desktop";
+    renderEmailStudioPreview();
+    $("#emLivePreview")?.scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+  $("#htmlModeToggle")?.addEventListener("click", () => setTimeout(() => scheduleEmailStudioRender(true), 0));
+  const savedTest = localStorage.getItem("crm_em_test_recipient") || "";
+  if ($("#emTestRecipient")) $("#emTestRecipient").value = savedTest;
+
+  renderEmailStudioPreview();
+  renderEmailAudiencePreview();
+  renderEmailChecklist();
+  renderCampaignHistory();
+}
+
+function renderEmailPreview() {
+  renderEmailStudioPreview();
+  $("#emLivePreview")?.scrollIntoView({ behavior:"smooth", block:"nearest" });
 }
 
 function saveCampaignToHistory(campaign) {
@@ -5459,9 +6025,14 @@ function saveCampaignToHistory(campaign) {
     // Auto-capturar snapshot del compositor si no viene ya incluido
     if (!campaign.body) {
       campaign.body        = $("#emailBody")?.value        || "";
+      campaign.bodyMode    = $("#emailBody")?.dataset.mode || "text";
+      campaign.preheader   = campaign.preheader || $("#emailPreheader")?.value || "";
       campaign.headerImage = $("#emailHeaderImage")?.value || "";
       campaign.ctaText     = $("#ctaText")?.value          || "";
       campaign.ctaUrl      = $("#ctaUrl")?.value           || "";
+      campaign.accent      = $("#emailAccentColor")?.value || "#0092ff";
+      campaign.theme       = $("#emailTheme")?.value       || "light";
+      campaign.signature   = $("#emailSignature")?.value   || "";
     }
     const history = JSON.parse(localStorage.getItem("crm_campaign_history") || "[]");
     history.unshift(campaign);
@@ -5478,12 +6049,14 @@ function renderCampaignHistory() {
     el.innerHTML = history.map((c, idx) => `
       <div style="padding:8px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
         <div>
-          <strong>${esc(c.subject)}</strong>
+          <strong>${esc(c.campaignName || c.subject)}</strong>
+          ${c.campaignName ? `<span style="color:var(--muted);margin-left:6px">${esc(c.subject)}</span>` : ""}
           <span style="color:var(--muted);margin-left:8px">${new Date(c.date).toLocaleString()}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px">
           <span style="color:var(--good)">✅ ${c.sent} enviados</span>
           ${c.failed ? `<span style="color:var(--danger)">❌ ${c.failed} fallidos</span>` : ""}
+          ${c.scheduledAt ? `<span style="color:var(--accent)">📅 ${new Date(c.scheduledAt).toLocaleString()}</span>` : ""}
           <span style="color:var(--muted)">Segmento: ${esc(c.segment)}</span>
           ${c.body ? `<button onclick="loadCampaignToComposer(${idx})" style="font-size:11px;padding:3px 9px;background:var(--card2);border:1px solid var(--line);border-radius:6px;color:var(--accent);cursor:pointer">↩ Cargar en compositor</button>` : ""}
         </div>
@@ -5505,12 +6078,19 @@ window.loadCampaignToComposer = function(idx) {
     const c = JSON.parse(localStorage.getItem("crm_campaign_history") || "[]")[idx];
     if (!c) return;
     if ($("#emailSubject"))     $("#emailSubject").value     = c.subject     || "";
+    if ($("#emailPreheader"))   $("#emailPreheader").value   = c.preheader   || "";
     if ($("#emailBody"))        $("#emailBody").value        = c.body        || "";
+    if ($("#emailBody"))        $("#emailBody").dataset.mode = c.bodyMode    || "text";
     if ($("#emailHeaderImage")) $("#emailHeaderImage").value = c.headerImage || "";
     if ($("#ctaText"))          $("#ctaText").value          = c.ctaText     || "";
     if ($("#ctaUrl"))           $("#ctaUrl").value           = c.ctaUrl      || "";
+    if ($("#emailAccentColor")) $("#emailAccentColor").value = c.accent      || "#0092ff";
+    if ($("#emailTheme"))       $("#emailTheme").value       = c.theme       || "light";
+    if ($("#emailSignature"))   $("#emailSignature").value   = c.signature   || "";
+    if ($("#emailCampaignName"))$("#emailCampaignName").value= c.campaignName|| "";
     updateSubjectCharCount();
     renderSpamBadge();
+    scheduleEmailStudioRender(true);
     toast(`↩ Campaña "${(c.subject||"sin asunto").slice(0,40)}" cargada en el compositor`, "success");
     $("#emailSubject")?.scrollIntoView({ behavior: "smooth", block: "center" });
   } catch(e) {}
@@ -5611,16 +6191,17 @@ window.showPlainTextPreview = function() {
 // =============================================================
 // PROGRAMAR ENVÍO
 // =============================================================
-function scheduleSend() {
+async function scheduleSend() {
   const dtInput = $("#scheduleSendAt");
   if (!dtInput?.value) { toast("⚠ Selecciona fecha y hora de envío", "warning"); return; }
   const sendAt  = new Date(dtInput.value);
   const msDelay = sendAt - Date.now();
   if (msDelay <= 0) { toast("⚠ La fecha programada ya pasó", "warning"); return; }
-  const mins = Math.round(msDelay / 60000);
-  if (!confirm(`¿Programar envío para ${sendAt.toLocaleString()}? (en ${mins} minuto${mins !== 1 ? "s" : ""})\n\n⚠ Esta pestaña debe permanecer abierta.`)) return;
-  setTimeout(sendViaBrevo, msDelay);
-  toast(`📅 Envío programado para ${sendAt.toLocaleTimeString()} — mantén esta pestaña abierta`, "success");
+  if (msDelay > 72 * 60 * 60 * 1000) {
+    toast("⚠ Brevo permite programar hasta 72 horas en el futuro", "warning");
+    return;
+  }
+  await sendViaBrevo({ scheduledAt: sendAt.toISOString() });
 }
 
 // =============================================================
@@ -6598,10 +7179,12 @@ function previewEmail() {
 
 function exportEmailList() {
   const seg  = $("#emailSegment")?.value || "all";
-  const list = getEmailSegment(seg);
+  const blocked = getUnsubscribeList().map(v => String(v).toLowerCase());
+  const list = getEmailRecipients(seg, $("#excludeConverted")?.checked ?? false)
+    .filter(r => r.email && !blocked.includes(String(r.email).toLowerCase()));
   if (!list.length) { toast("Sin destinatarios en este segmento","error"); return; }
-  const rows = [["Nombre","Email","Total","Pedidos"]];
-  list.forEach(c => rows.push([c.name, c.email, c.total.toFixed(2), c.orders]));
+  const rows = [["Nombre","Email","Segmento"]];
+  list.forEach(c => rows.push([c.name, c.email, seg]));
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
   const a    = document.createElement("a");
@@ -6613,9 +7196,9 @@ function exportEmailList() {
 
 function sendEmailMailto() {
   const subject = encodeURIComponent($("#emailSubject")?.value || "");
-  const body_t  = encodeURIComponent($("#emailBody")?.value || "");
+  const body_t  = encodeURIComponent(emailHtmlToPlainText($("#emailBody")?.value || ""));
   const seg     = $("#emailSegment")?.value || "all";
-  const list    = getEmailSegment(seg);
+  const list    = getEmailRecipients(seg, $("#excludeConverted")?.checked ?? false);
   if (!list.length) { toast("Sin destinatarios","error"); return; }
   // Abrir mailto con primer destinatario como ejemplo
   const email = list[0]?.email || "";

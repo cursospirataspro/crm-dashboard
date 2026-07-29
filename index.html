@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=4">
+  <link rel="stylesheet" href="assets/styles.css?v=5">
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
@@ -527,6 +527,14 @@
                 <input id="brevoSenderEmail" type="email" class="sf-input" placeholder="tucorreo@dominio.com">
               </label>
             </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <label class="sf-label" style="flex:1;min-width:180px">Responder a (reply-to)
+                <input id="brevoReplyTo" type="email" class="sf-input" placeholder="soporte@dominio.com">
+              </label>
+              <label class="sf-label" style="flex:2;min-width:240px">Dirección legal de la empresa
+                <input id="brevoCompanyAddress" type="text" class="sf-input" placeholder="Empresa · Ciudad · País">
+              </label>
+            </div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <button id="brevoSaveBtn" class="btn">💾 Guardar configuración</button>
               <span id="brevoSavedMsg" style="display:none;color:var(--good);font-size:13px">✅ Guardado</span>
@@ -601,6 +609,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
         <div class="panel-head">
           <div><p class="eyebrow">Nueva campaña</p><h2>📧 Compositor de email</h2></div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <span id="emAutoSaveStatus" class="em-save-status">Borrador listo</span>
             <span id="brevoQuotaBar" style="font-size:12px;color:var(--muted)">Cargando cuota...</span>
             <span id="emailCountBadge" class="badge">0 destinatarios</span>
           </div>
@@ -656,6 +665,19 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <label class="sf-label" id="filterMultiCountryWrap" style="flex:2;min-width:200px;display:none">Países (Ctrl+clic para múltiples)
               <select id="filterMultiCountry" class="sf-input" multiple size="4" style="height:auto"></select>
             </label>
+          </div>
+
+          <!-- Identidad y seguimiento de campaña -->
+          <div class="em-meta-grid">
+            <label class="sf-label">Nombre interno de campaña
+              <input id="emailCampaignName" type="text" class="sf-input" placeholder="Ej: Lanzamiento Photoshop · Julio">
+            </label>
+            <label class="sf-label">Etiqueta para métricas
+              <input id="emailTag" type="text" class="sf-input" placeholder="lanzamiento-photoshop">
+            </label>
+          </div>
+          <div id="emRecipientPreview" class="em-recipient-preview">
+            <span>Selecciona un segmento para ver la audiencia.</span>
           </div>
 
           <!-- ── Panel Smart Recomendación por Curso ── -->
@@ -874,6 +896,14 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           </div>
 
           <!-- Botones de acción -->
+          <div class="em-test-send">
+            <div>
+              <strong>Envíate una prueba del correo exacto</strong>
+              <span>Usa la misma versión HTML que recibirá el segmento.</span>
+            </div>
+            <input id="emTestRecipient" type="email" class="sf-input" placeholder="tu@email.com">
+            <button id="emSendTestBtn" class="btn ghost" type="button">✉ Enviar prueba</button>
+          </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
             <button id="emailPreviewBtn" class="btn ghost">👁 Vista previa</button>
             <button id="showPlainTextBtn" class="btn ghost">📝 Texto plano</button>
@@ -1656,6 +1686,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=43"></script>
+<script src="assets/app.js?v=44"></script>
 </body>
 </html>
