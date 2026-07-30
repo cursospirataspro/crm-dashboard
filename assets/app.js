@@ -1685,23 +1685,24 @@ function renderCourses() {
 }
 
 function renderGeoRankings() {
-  const mkRank = (x, i) =>
-    `<div class="rank">
+  const mkRank = (scope) => (x, i) =>
+    `<button type="button" class="rank rank-action" data-scope="${scope}" data-value="${esc(x.name)}" title="Abrir detalle de ${esc(x.name)}">
        <div class="rank-no">${i + 1}</div>
        <div><h3>${esc(x.name)}</h3><p>${x.orders} pedido${x.orders!==1?"s":""}</p></div>
        <strong>${fmtMoney(x.revenue)}</strong>
-     </div>`;
+     </button>`;
 
-  const countries = Object.entries(groupBy(state.filtered, o => o.country || o.country_code))
+  const countries = Object.entries(groupBy(state.filtered, o => o.country || o.country_code || "Sin identificar"))
     .map(([name, arr]) => ({ name, orders: arr.length, revenue: sum(validRevenueOrders(arr), netRev) }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  const cities = Object.entries(groupBy(state.filtered, o => o.city))
+  const cities = Object.entries(groupBy(state.filtered, o => o.city || "Sin identificar"))
     .map(([name, arr]) => ({ name, orders: arr.length, revenue: sum(validRevenueOrders(arr), netRev) }))
     .sort((a, b) => b.revenue - a.revenue).slice(0, 20);
 
-  $("#countryRanking").innerHTML = countries.map(mkRank).join("") || empty("Sin países.");
-  $("#cityRanking").innerHTML    = cities.map(mkRank).join("")    || empty("Sin ciudades.");
+  $("#countryRanking").innerHTML = countries.map(mkRank("country")).join("") || empty("Sin países.");
+  $("#cityRanking").innerHTML    = cities.map(mkRank("city")).join("")    || empty("Sin ciudades.");
+  $$(".rank-action").forEach(btn => btn.addEventListener("click", () => openDataExplorer(btn.dataset.scope, btn.dataset.value)));
 }
 
 // =============================================================
@@ -2838,19 +2839,25 @@ function renderAbandonAnalysis() {
   if (!el) return;
 
   const map = {};
+  const unpaidStatuses = new Set(["pending", "on-hold", "failed", "cancelled"]);
+  const paidStatuses = new Set(["completed", "processing"]);
   state.filtered.forEach(o => {
+    const st = statusNorm(o.status);
+    if (!unpaidStatuses.has(st) && !paidStatuses.has(st)) return;
     (o.products || []).forEach(p => {
       const n = p.name || 'Sin nombre';
-      map[n] ??= { total: 0, cancelled: 0, refunded: 0, revenue: 0 };
+      map[n] ??= { total: 0, unpaid: 0, paid: 0, revenue: 0 };
       map[n].total++;
-      if (statusNorm(o.status) === 'cancelled') map[n].cancelled++;
-      if (statusNorm(o.status) === 'refunded')  map[n].refunded++;
-      if (['completed','processing'].includes(statusNorm(o.status))) map[n].revenue += netRev(o);
+      if (unpaidStatuses.has(st)) map[n].unpaid++;
+      if (paidStatuses.has(st)) {
+        map[n].paid++;
+        map[n].revenue += netRev(o);
+      }
     });
   });
 
   const list = Object.entries(map)
-    .map(([name, d]) => ({ name, ...d, abandonRate: d.total ? (d.cancelled + d.refunded) / d.total * 100 : 0 }))
+    .map(([name, d]) => ({ name, ...d, abandonRate: d.total ? d.unpaid / d.total * 100 : 0 }))
     .filter(x => x.total >= 2)
     .sort((a, b) => b.abandonRate - a.abandonRate)
     .slice(0, 10);
@@ -2861,14 +2868,15 @@ function renderAbandonAnalysis() {
 
   const maxRate = Math.max(...list.map(l => l.abandonRate), 1);
   el.innerHTML = list.map(l => {
-    const pct = Math.max(3, (l.abandonRate / maxRate) * 100);
+    const pct = l.abandonRate === 0 ? 0 : Math.max(3, (l.abandonRate / maxRate) * 100);
     const color = l.abandonRate > 30 ? '#ef233c' : l.abandonRate > 15 ? '#f59e0b' : '#22c55e';
-    return `<div class="pb-row">
+    return `<button type="button" class="pb-row abandon-action" data-course="${esc(l.name)}" title="${l.unpaid} no pagados de ${l.total} intentos válidos">
       <span class="pb-label" title="${esc(l.name)}">${esc(l.name.length > 22 ? l.name.slice(0,22)+'…' : l.name)}</span>
       <div class="pb-track"><div class="pb-fill" style="width:${pct.toFixed(1)}%;background:${color}"></div></div>
       <span class="pb-val" style="color:${color}">${l.abandonRate.toFixed(0)}%</span>
-    </div>`;
+    </button>`;
   }).join('');
+  el.querySelectorAll(".abandon-action").forEach(btn => btn.addEventListener("click", () => openDataExplorer("course-abandon", btn.dataset.course)));
 }
 
 // =============================================================
@@ -3173,8 +3181,15 @@ function updateFollowupBadges() {
 // =============================================================
 function openCustomerModal(emailOrName) {
   const cm = customerMap(state.orders);
-  const c  = cm[emailOrName] || Object.values(cm).find(x => x.email === emailOrName || x.name === emailOrName);
-  if (!c) return;
+  const targetEmail = normalizeEmail(emailOrName);
+  const wlMatch = loadWaitlist().find(w => normalizeEmail(w.email) === targetEmail || w.name === emailOrName);
+  const ppMatch = (window._paypalSearchRows || []).find(t => normalizeEmail(t.payer_info?.email_address) === targetEmail);
+  const c  = cm[emailOrName] || Object.values(cm).find(x => normalizeEmail(x.email) === targetEmail || x.name === emailOrName) || (wlMatch || ppMatch ? {
+    name: wlMatch?.name || ppMatch?.payer_info?.payer_name?.alternate_full_name || emailOrName,
+    email: wlMatch?.email || ppMatch?.payer_info?.email_address || emailOrName,
+    orders: 0, revenue: 0, first: new Date().toISOString(), last: new Date().toISOString(), countries: new Set(), courses: new Set()
+  } : null);
+  if (!c) { toast("No se encontró un perfil asociado", "warning"); return; }
 
   const allCustomers = Object.values(cm);
   const rfm  = rfmScore(c, allCustomers);
@@ -3198,11 +3213,15 @@ function openCustomerModal(emailOrName) {
     })()}`;
 
   const customerOrders = state.orders
-    .filter(o => o.customer_email === (c.email || c.name) || o.customer === c.name)
+    .filter(o => normalizeEmail(o.customer_email) === normalizeEmail(c.email) || o.customer === c.name)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const stIcon = s => ({ completed:'✅', processing:'⏳', pending:'🔔', cancelled:'❌', refunded:'↩' }[s] || '📦');
 
+  const paypalTimeline = (window._paypalSearchRows || []).filter(t => normalizeEmail(t.payer_info?.email_address) === normalizeEmail(c.email)).map(t => {
+    const info = t.transaction_info || {};
+    return `<div class="tl-item"><div class="tl-dot completed"></div><div class="tl-body"><div class="tl-header"><strong>PayPal · ${esc(info.transaction_id || "Transacción")}</strong><span class="tl-status">✅ pago</span><strong class="tl-amount">${esc(info.transaction_amount?.currency_code || "USD")} ${Number(info.transaction_amount?.value || 0).toFixed(2)}</strong><span class="tl-date">${esc((info.transaction_initiation_date || "").slice(0,10))}</span></div><div class="tl-courses">${esc(info.transaction_subject || "Pago PayPal")}</div></div></div>`;
+  });
   $("#modalTimeline").innerHTML = customerOrders.map(o => {
     const st      = statusNorm(o.status);
     const courses = (o.products || []).map(p => p.name).join(', ') || 'Curso';
@@ -3218,7 +3237,7 @@ function openCustomerModal(emailOrName) {
         <div class="tl-courses">${esc(courses.length > 100 ? courses.slice(0,100)+'…' : courses)}</div>
       </div>
     </div>`;
-  }).join('') || `<p style="color:var(--muted)">Sin pedidos registrados.</p>`;
+  }).join('') + paypalTimeline.join('') || `<p style="color:var(--muted)">Sin pedidos registrados.</p>`;
 
   // Cargar nota guardada
   const noteKey = 'crm_note_' + encodeURIComponent(c.email || c.name);
@@ -3935,39 +3954,69 @@ function renderVIPPanel() {
 // =============================================================
 function renderStripeView() {
   const search = ($("#stripeSearch")?.value || "").trim().toLowerCase();
-  const stripeOrders = state.filtered.filter(o => {
+  const source = $("#stripeSource")?.value || "woocommerce";
+  const days = Number($("#stripeDatePreset")?.value || 30);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const stripeOrders = state.orders.filter(o => {
     const pm = (o.payment_method || "").toLowerCase();
-    return pm.includes("stripe") || pm.includes("card") || pm === "wc_stripe";
+    return new Date(o.date) >= cutoff && (pm.includes("stripe") || pm.includes("card") || pm === "wc_stripe");
   });
+  const stateEl = $("#stripeDataState");
+  const statusEl = $("#stripeStatus");
+  const metaEl = $("#stripeSyncMeta");
+  if (source === "api") {
+    if (stateEl) {
+      stateEl.className = "data-state state-not-connected";
+      stateEl.innerHTML = `<strong>Stripe API no conectada</strong><span>Para mostrar comisiones, reembolsos y disputas reales, configura un proxy seguro de Stripe en WordPress. Nunca se expone la clave secreta en este navegador.</span>`;
+    }
+    if (statusEl) statusEl.textContent = "Sin conexión directa · no se muestran estimaciones como datos reales";
+  } else {
+    if (stateEl) {
+      stateEl.className = stripeOrders.length ? "data-state hidden" : "data-state state-empty";
+      stateEl.innerHTML = `<strong>Cero transacciones Stripe</strong><span>La conexión con WooCommerce funciona, pero no hay pedidos Stripe en los últimos ${days} días.</span>`;
+    }
+    if (statusEl) statusEl.textContent = source === "combined"
+      ? "Combinado · API no conectada, usando WooCommerce con comisiones estimadas"
+      : "WooCommerce · cobros reales, comisiones estimadas";
+  }
+  if (metaEl) metaEl.textContent = `Última actualización: ${new Date().toLocaleString("es-PE")} · ${stripeOrders.length} registros · ${days} días · Fuente: ${source}`;
 
+  const visibleSourceOrders = source === "api" ? [] : stripeOrders;
   const filtered = search
-    ? stripeOrders.filter(o =>
+    ? visibleSourceOrders.filter(o =>
         (o.customer || "").toLowerCase().includes(search) ||
         (o.customer_email || "").toLowerCase().includes(search) ||
         (o.products || []).some(p => (p.name || "").toLowerCase().includes(search))
       )
-    : stripeOrders;
+    : visibleSourceOrders;
 
   // KPIs
-  const total  = filtered.reduce((s, o) => s + Number(o.total || 0), 0);
-  const fees   = filtered.reduce((s, o) => s + (Number(o.total || 0) * 0.029 + 0.30), 0);
+  const paid = filtered.filter(o => ["completed", "processing"].includes(statusNorm(o.status)));
+  const total  = paid.reduce((s, o) => s + Number(o.total || 0), 0);
+  const fees   = paid.reduce((s, o) => s + (Number(o.total || 0) * 0.029 + 0.30), 0);
   const net    = total - fees;
-  const count  = filtered.length;
+  const count  = paid.length;
   const avg    = count ? total / count : 0;
+  const refunds = filtered.filter(o => statusNorm(o.status) === "refunded").length;
+  const failed = filtered.filter(o => ["failed", "cancelled"].includes(statusNorm(o.status))).length;
 
   const kpisEl = document.getElementById("stripeKpis");
   if (kpisEl) kpisEl.innerHTML = [
     { label: "Ingresos brutos", val: fmtMoney(total), cls: "" },
-    { label: "Comisiones est. (2.9%+0.30)", val: fmtMoney(fees), cls: "style=\"color:var(--bad)\"" },
-    { label: "Ingresos netos est.", val: fmtMoney(net), cls: "style=\"color:var(--good)\"" },
+    { label: "Comisiones estimadas", val: fmtMoney(fees), cls: "style=\"color:var(--bad)\"", sub: "2.9% + 0.30 · no es dato Stripe" },
+    { label: "Ingresos netos estimados", val: fmtMoney(net), cls: "style=\"color:var(--good)\"", sub: "Bruto menos comisión estimada" },
     { label: "Transacciones", val: count, cls: "" },
-    { label: "Ticket promedio", val: fmtMoney(avg), cls: "" }
-  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p></div>`).join("");
+    { label: "Ticket promedio", val: fmtMoney(avg), cls: "" },
+    { label: "Reembolsos", val: refunds, cls: "" },
+    { label: "Disputas", val: "N/D", cls: "", sub: "Requiere Stripe API" },
+    { label: "Fallidos / cancelados", val: failed, cls: "" }
+  ].map(k => `<div class="kpi-card"><p class="kpi-label">${k.label}</p><p class="kpi-val" ${k.cls}>${k.val}</p>${k.sub ? `<small class="kpi-sub">${k.sub}</small>` : ""}</div>`).join("");
 
   // Transacciones individuales con curso (ordenadas por fecha desc)
   const dayBarsEl = document.getElementById("stripeDayBars");
   if (dayBarsEl) {
-    const txns = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
+    const txns = [...paid].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
     const maxTxn = Math.max(...txns.map(o => Number(o.total || 0)), 1);
     dayBarsEl.innerHTML = txns.map(o => {
       const day  = new Date(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
@@ -3987,7 +4036,7 @@ function renderStripeView() {
 
   // Top productos
   const byProduct = {};
-  filtered.forEach(o => {
+  paid.forEach(o => {
     (o.products || []).forEach(p => {
       const name = p.name || "Producto";
       byProduct[name] = (byProduct[name] || 0) + Number(p.total || p.subtotal || 0);
@@ -4022,7 +4071,7 @@ function renderStripeView() {
       return `<tr>
         <td>${fmtDate(o.date)}</td>
         <td>#${esc(String(o.number || o.id))}</td>
-        <td>${esc(o.customer || "—")}</td>
+        <td><button type="button" class="link-button stripe-customer" data-email="${esc(o.customer_email || o.customer || "")}">${esc(o.customer || "—")}</button><br><small style="color:var(--muted)">${esc(o.customer_email || "")}</small></td>
         <td>${esc(o.country || o.country_code || "—")}</td>
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prod)}</td>
         <td class="text-right">${fmtMoney(gross)}</td>
@@ -4030,6 +4079,7 @@ function renderStripeView() {
         <td class="text-right" style="color:var(--good)">${fmtMoney(net_)}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Sin transacciones Stripe en el periodo.</td></tr>`;
+    tbody.querySelectorAll(".stripe-customer").forEach(btn => btn.addEventListener("click", () => openCustomerModal(btn.dataset.email)));
   }
 }
 
@@ -6598,16 +6648,16 @@ function renderGlobalSearch(q) {
 // Helper switchView
 let _paypalInited = false;
 const VIEW_HERO = {
-  command:       ["Resumen",               "Clientes, ingresos, geografía y alertas operativas en una sola pantalla."],
-  crm:           ["Clientes",              "Segmentación, comportamiento, historial y análisis avanzado de tu base de clientes."],
-  sales:         ["Ventas",                "Pedidos recientes con estado, curso, país y total."],
-  courses:       ["Cursos",                "Rendimiento, comparativa y análisis de precios por curso."],
-  geo:           ["Geografía",             "Ranking de países y ciudades por ventas."],
-  paypal:        ["Pagos · PayPal",        "Ingresos brutos, comisiones, netos y transacciones de PayPal."],
-  stripe:        ["Pagos · Stripe",        "Ingresos, comisiones estimadas y transacciones vía Stripe."],
-  oportunidades: ["Email Marketing",       "Campañas, segmentos, hora óptima de envío y automatizaciones."],
-  waitlist:      ["Solicitudes de cursos", "Lista de espera de clientes interesados en cursos que aún no tienes."],
-  settings:      ["Conexión",             "Integraciones con WordPress, Brevo, GA4 y preferencias del panel."]
+  command:       ["Resumen ejecutivo", "Ingresos, clientes, ventas, geografía y alertas operativas en una sola pantalla.", "CRM GLOBAL · RESUMEN EJECUTIVO"],
+  crm:           ["Clientes y comportamiento", "Consulta compradores, recurrencia, segmentación, historial, valor del cliente y actividad comercial.", "CRM GLOBAL · CLIENTES"],
+  sales:         ["Ventas y pedidos", "Revisa pedidos recientes, estados de pago, importes, productos y compradores.", "CRM GLOBAL · VENTAS"],
+  courses:       ["Rendimiento de cursos", "Analiza ingresos, ventas, compradores, precios y desempeño de cada curso.", "CRM GLOBAL · CURSOS"],
+  geo:           ["Distribución geográfica", "Explora clientes, pedidos e ingresos por país y ciudad.", "CRM GLOBAL · GEOGRAFÍA"],
+  paypal:        ["Pagos por PayPal", "Consulta transacciones, comisiones, ingresos netos, clientes y distribución geográfica de PayPal.", "CRM GLOBAL · PAGOS · PAYPAL"],
+  stripe:        ["Pagos por Stripe", "Analiza cobros, comisiones estimadas, ingresos netos, productos y transacciones procesadas por Stripe.", "CRM GLOBAL · PAGOS · STRIPE"],
+  oportunidades: ["Email Marketing y audiencias", "Crea segmentos, analiza horarios de compra y prepara campañas para tus clientes.", "CRM GLOBAL · EMAIL MARKETING"],
+  waitlist:      ["Solicitudes y lista de espera", "Registra clientes interesados en cursos todavía no disponibles y notifícalos cuando los consigas.", "CRM GLOBAL · SOLICITUDES DE CURSOS"],
+  settings:      ["Integraciones y estado del sistema", "Administra WooCommerce, PayPal, Stripe, servicios de email y sincronización de datos.", "CRM GLOBAL · INTEGRACIONES"]
 };
 function switchView(id) {
   $$(".view").forEach(v => v.classList.remove("active"));
@@ -6615,9 +6665,10 @@ function switchView(id) {
   $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === id));
   const hero = VIEW_HERO[id];
   if (hero) {
-    const t = $("#heroTitle"), c = $("#heroCopy");
+    const t = $("#heroTitle"), c = $("#heroCopy"), e = $("#heroEyebrow");
     if (t) t.textContent = hero[0];
     if (c) c.textContent = hero[1];
+    if (e) e.textContent = hero[2];
   }
   if (id === "paypal") {
     if (!_paypalInited) {
@@ -6630,6 +6681,7 @@ function switchView(id) {
   }
   if (id === "stripe")   renderStripeView();
   if (id === "waitlist") renderWaitlist();
+  if (id === "settings") renderIntegrationDiagnostics();
 }
 
 // =============================================================
@@ -7221,7 +7273,7 @@ function saveGA4Config() {
 }
 
 function loadGA4Config() {
-  const DEFAULT_GA4 = { measurementId: "G-P2915DSRR4", apiSecret: "RzwhQIaYTN27W6Du1p0ttg" };
+  const DEFAULT_GA4 = { measurementId: "G-P2915DSRR4", apiSecret: "" };
   try {
     const stored = JSON.parse(localStorage.getItem("crm_ga4") || "null");
     const cfg = stored?.measurementId ? stored : DEFAULT_GA4;
@@ -7242,7 +7294,7 @@ function getGA4Cfg() {
     const stored = JSON.parse(localStorage.getItem("crm_ga4") || "null");
     if (stored?.measurementId && stored?.apiSecret) return stored;
   } catch(e) {}
-  return { measurementId: "G-P2915DSRR4", apiSecret: "RzwhQIaYTN27W6Du1p0ttg" };
+  return { measurementId: "G-P2915DSRR4", apiSecret: "" };
 }
 
 function getGA4SentIds() {
@@ -7320,14 +7372,14 @@ async function syncOrdersToGA4(orders) {
 // =============================================================
 
 const PP_LIVE = {
-  clientId: "Af20TMRhzlS8DAeDvGzdDzlE4MLKsD4Zx-OYUZi2n3P6-AL6DnHby510QXnytAYQW4bBU8q2GEFdiDTp",
-  secret:   "EPUVbHFgcn3zrHpJtH5HLON7ddBTUpnU1NhA6hpo8rrp4Bt68b0Mz4akSr2D73GS7xocIQUXGHtDLWfT",
+  clientId: "",
+  secret:   "",
   mode:     "live"
 };
 
 const PP_SANDBOX = {
-  clientId: "AZ5wBHR9FYjombGnYkaPLLZLodDCxVFLS8nyFON4S8r-yiUUjZ8CVBU9G4uJPB1IcO8Dh3gHB9fvMaeg",
-  secret:   "EDOqqAcDB6bI9HHsG-GwnJXWhiq5alK8HPf_QKqLuChD5M1bPxiOynaM2_L6aGP85c-AhUPtb6BdYeoV",
+  clientId: "",
+  secret:   "",
   mode:     "sandbox"
 };
 
@@ -7366,6 +7418,9 @@ async function ppGetToken() {
   if (_ppToken && now < _ppTokenExpiry) return _ppToken;
 
   const cfg  = loadPaypalConfig();
+  if (!cfg.clientId || !cfg.secret) {
+    throw new Error("PayPal no conectado. Configura las credenciales de forma segura en WordPress.");
+  }
   const base = cfg.mode === "live"
     ? "https://api-m.paypal.com"
     : "https://api-m.sandbox.paypal.com";
@@ -7393,8 +7448,33 @@ async function ppGetToken() {
 }
 
 async function ppFetchTransactions(from, to, page) {
+  const cfg = loadPaypalConfig();
+  if (CONFIG.mode === "api" && CONFIG.apiBaseUrl && CONFIG.apiToken) {
+    const params = new URLSearchParams({ from, to, page: String(page || 1), mode: cfg.mode || "live" });
+    const res = await fetch(`${CONFIG.apiBaseUrl.replace(/\/$/, "")}/paypal/transactions?${params}`, {
+      headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.code) throw new Error(data?.message || `PayPal proxy HTTP ${res.status}`);
+    const details = (data.transactions || []).map(t => ({
+      transaction_info: {
+        transaction_id: t.id,
+        transaction_initiation_date: t.date,
+        transaction_amount: { value: t.amount, currency_code: t.currency || "USD" },
+        fee_amount: { value: t.fee || 0, currency_code: t.currency || "USD" },
+        transaction_status: t.status,
+        transaction_event_code: t.event_code || "T0006",
+        transaction_subject: t.subject || ""
+      },
+      payer_info: {
+        email_address: t.payer_email || "",
+        payer_name: { alternate_full_name: t.payer_name || t.payer_email || "Desconocido" },
+        address: { country_code: t.country || "" }
+      }
+    }));
+    return { transaction_details: details, total_pages: data.total_pages || 1, total_items: data.total_items || details.length };
+  }
   const token = await ppGetToken();
-  const cfg   = loadPaypalConfig();
   const base  = cfg.mode === "live"
     ? "https://api-m.paypal.com"
     : "https://api-m.sandbox.paypal.com";
@@ -7540,6 +7620,13 @@ function ppRenderAll(txnDetails) {
     const amt  = parseFloat(info.transaction_amount?.value || 0);
     return code.startsWith("T00") && amt > 0;
   });
+  const refunds = txnDetails.filter(t => {
+    const info = t.transaction_info || {};
+    return String(info.transaction_event_code || "").startsWith("T11") || parseFloat(info.transaction_amount?.value || 0) < 0;
+  });
+  const disputes = txnDetails.filter(t => String(t.transaction_info?.transaction_event_code || "").startsWith("T18"));
+  const currencies = [...new Set(txnDetails.map(t => t.transaction_info?.transaction_amount?.currency_code).filter(Boolean))];
+  window._paypalSearchRows = payments;
 
   let gross = 0, fees = 0, count = 0;
   const byCountry  = {};
@@ -7572,6 +7659,9 @@ function ppRenderAll(txnDetails) {
   setEl("ppNet",   fmtUSD(gross - fees));
   setEl("ppCount", count.toLocaleString("es-PE"));
   setEl("ppAvg",   fmtUSD(count ? gross / count : 0));
+  setEl("ppRefunds", refunds.length.toLocaleString("es-PE"));
+  setEl("ppDisputes", disputes.length.toLocaleString("es-PE"));
+  setEl("ppCurrency", currencies.join(", ") || "USD");
 
   // ── Gráfico de barras diarias (SVG) ──────────────────────────
   const dayEl = document.getElementById("paypalDayBars");
@@ -7628,7 +7718,7 @@ function ppRenderAll(txnDetails) {
 
     const bars = sorted.map((c, i) => {
       const pct = Math.round(c.total / maxV * 100);
-      return `<div style="margin-bottom:8px">
+      return `<button type="button" class="paypal-customer-row" data-email="${esc(c.email)}" style="display:block;width:100%;margin-bottom:8px;border:0;background:none;color:inherit;text-align:left;cursor:pointer">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px" title="${esc(c.email)}">
             <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${colors[i]};margin-right:5px"></span>
@@ -7639,7 +7729,7 @@ function ppRenderAll(txnDetails) {
         <div style="height:5px;background:var(--border);border-radius:3px;overflow:hidden">
           <div style="width:${pct}%;height:100%;background:${colors[i]};border-radius:3px"></div>
         </div>
-      </div>`;
+      </button>`;
     }).join("");
 
     custEl.innerHTML = `<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
@@ -7651,6 +7741,7 @@ function ppRenderAll(txnDetails) {
       </svg>
       <div style="flex:1;min-width:200px">${bars}</div>
     </div>`;
+    custEl.querySelectorAll(".paypal-customer-row").forEach(btn => btn.addEventListener("click", () => openCustomerModal(btn.dataset.email)));
   }
 
   // ── Tabla de transacciones ────────────────────────────────────
@@ -7711,6 +7802,14 @@ async function loadPaypalData() {
 
   const from = fromEl.value || new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
   const to   = toEl.value   || new Date().toISOString().slice(0, 10);
+  fromEl.value = from;
+  toEl.value = to;
+  const stateEl = document.getElementById("paypalDataState");
+  const metaEl = document.getElementById("paypalSyncMeta");
+  if (stateEl) {
+    stateEl.className = "data-state state-loading";
+    stateEl.innerHTML = `<span class="state-spinner"></span><strong>Cargando PayPal</strong><span>Consultando el periodo ${from} → ${to}…</span>`;
+  }
 
   if (statusEl) statusEl.textContent = "Conectando con PayPal...";
   if (btn) btn.disabled = true;
@@ -7735,9 +7834,23 @@ async function loadPaypalData() {
 
     ppRenderAll(allTxns);
     if (statusEl) statusEl.textContent = `${allTxns.length} transacciones · ${new Date().toLocaleTimeString("es-PE")}`;
+    if (stateEl) {
+      stateEl.className = allTxns.length ? "data-state hidden" : "data-state state-empty";
+      stateEl.innerHTML = `<strong>Cero transacciones reales</strong><span>La conexión respondió correctamente, pero no hay movimientos en el periodo seleccionado.</span>`;
+    }
+    if (metaEl) metaEl.textContent = `Última sincronización: ${new Date().toLocaleString("es-PE")} · ${allTxns.length} registros · ${from} → ${to} · ${loadPaypalConfig().mode === "live" ? "Live" : "Sandbox"}`;
+    logSync("PayPal", "ok", `${allTxns.length} registros · ${from} → ${to}`);
   } catch(err) {
     const msg = String(err.message || err);
     if (statusEl) { statusEl.innerHTML = "<span style='color:var(--bad)'>" + msg + "</span>"; }
+    const lower = msg.toLowerCase();
+    const type = lower.includes("permiso") || lower.includes("403") ? "state-permission" : lower.includes("no conectado") || lower.includes("configura") ? "state-not-connected" : "state-error";
+    if (stateEl) {
+      stateEl.className = `data-state ${type}`;
+      stateEl.innerHTML = `<strong>${type === "state-permission" ? "Permisos insuficientes" : type === "state-not-connected" ? "PayPal no conectado" : "No se pudo cargar PayPal"}</strong><span>${esc(msg)}</span><button type="button" class="btn ghost" onclick="loadPaypalData()">Reintentar</button>`;
+    }
+    if (metaEl) metaEl.textContent = `Último intento: ${new Date().toLocaleString("es-PE")} · ${from} → ${to} · ${loadPaypalConfig().mode === "live" ? "Live" : "Sandbox"}`;
+    logSync("PayPal", "error", msg);
     toast("PayPal: " + msg.substring(0, 80), "error");
     console.warn("[PayPal]", err);
   } finally {
@@ -7893,8 +8006,9 @@ const WL_STATUS = {
   compro:     { label: "💰 Compró",     cls: "wl-st-compro"     },
   archivado:  { label: "🗄 Archivado",  cls: "wl-st-archivado"  }
 };
-const WL_PRIORITY = { alta: "🔴 Alta", media: "🟡 Media", baja: "🟢 Baja" };
-const WL_SOURCE   = { manual: "Manual", telegram: "Telegram", whatsapp: "WhatsApp", instagram: "Instagram", web: "Web", email: "Email", otro: "Otro" };
+const WL_PRIORITY = { urgente: "🟣 Urgente", alta: "🔴 Alta", media: "🟡 Media", baja: "🟢 Baja" };
+const WL_SOURCE   = { manual: "Manual", telegram: "Telegram", whatsapp: "WhatsApp", instagram: "Instagram", facebook: "Facebook", web: "Web", email: "Email", otro: "Otro" };
+const normalizeEmail = value => String(value || "").trim().toLowerCase();
 
 function loadWaitlist() {
   try { return JSON.parse(localStorage.getItem(WL_KEY) || "[]"); } catch(e) { return []; }
@@ -7923,12 +8037,16 @@ function initWaitlist() {
   $("#wlSearch")?.addEventListener("input", debounce(renderWaitlist, 200));
   $("#wlStatusFilter")?.addEventListener("change", renderWaitlist);
   $("#wlGroupBy")?.addEventListener("change", renderWaitlist);
+  $("#wlPriorityFilter")?.addEventListener("change", renderWaitlist);
+  $("#wlSourceFilter")?.addEventListener("change", renderWaitlist);
+  $("#wlImportBtn")?.addEventListener("click", openWlImportModal);
 
   // Modal
   $("#wlModalClose")?.addEventListener("click", closeWlModal);
   $("#wlCancelBtn")?.addEventListener("click", closeWlModal);
   $("#wlModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeWlModal(); });
   $("#wlSaveBtn")?.addEventListener("click", saveWlFromModal);
+  initWlImporter();
 
   // Acciones masivas
   $("#wlBulkEmail")?.addEventListener("click", wlSendSelectedToEmail);
@@ -7954,6 +8072,13 @@ function openWlModal(id) {
   $("#wlFieldStatus").value   = item?.status || "pendiente";
   $("#wlFieldDate").value     = (item?.date || new Date().toISOString()).slice(0, 10);
   $("#wlFieldNotes").value    = item?.notes || "";
+  $("#wlFieldPhone").value    = item?.phone || "";
+  $("#wlFieldContact").value  = item?.contact || "email";
+  $("#wlFieldUrl").value      = item?.url || "";
+  $("#wlFieldTags").value     = (item?.tags || []).join(", ");
+  $("#wlFieldNotifiedDate").value = item?.notifiedDate || "";
+  $("#wlFieldResponse").value = item?.response || "";
+  $("#wlFieldConsent").checked = Boolean(item?.consent);
 
   // Sugerencias de cursos ya solicitados
   const dl = $("#wlCourseDatalist");
@@ -7969,13 +8094,19 @@ function closeWlModal() { $("#wlModal")?.classList.add("hidden"); }
 
 function saveWlFromModal() {
   const name   = $("#wlFieldName").value.trim();
-  const email  = $("#wlFieldEmail").value.trim();
+  const email  = normalizeEmail($("#wlFieldEmail").value);
   const course = $("#wlFieldCourse").value.trim();
   if (!name || !email || !course) { toast("⚠ Nombre, email y curso son obligatorios", "warning"); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("⚠ Email no válido", "warning"); return; }
 
   const list = loadWaitlist();
-  const id   = $("#wlFieldId").value;
+  let id   = $("#wlFieldId").value;
+  const duplicate = !id && list.find(w => normalizeEmail(w.email) === email && String(w.course || "").trim().toLowerCase() === course.toLowerCase() && w.status !== "archivado");
+  if (duplicate) {
+    const choice = prompt("Ya existe una solicitud activa con este email y curso.\nEscribe 1 para actualizarla, 2 para crear otra, o pulsa Cancelar.", "1");
+    if (choice === null || !["1", "2"].includes(choice.trim())) return;
+    if (choice.trim() === "1") id = duplicate.id;
+  }
   const data = {
     name, email, course,
     category: $("#wlFieldCategory").value.trim(),
@@ -7983,7 +8114,14 @@ function saveWlFromModal() {
     priority: $("#wlFieldPriority").value,
     status:   $("#wlFieldStatus").value,
     date:     $("#wlFieldDate").value || new Date().toISOString().slice(0, 10),
-    notes:    $("#wlFieldNotes").value.trim()
+    notes:    $("#wlFieldNotes").value.trim(),
+    phone:    $("#wlFieldPhone")?.value.trim() || "",
+    contact:  $("#wlFieldContact")?.value || "email",
+    url:      $("#wlFieldUrl")?.value.trim() || "",
+    tags:     ($("#wlFieldTags")?.value || "").split(",").map(x => x.trim()).filter(Boolean),
+    notifiedDate: $("#wlFieldNotifiedDate")?.value || "",
+    response: $("#wlFieldResponse")?.value || "",
+    consent: Boolean($("#wlFieldConsent")?.checked)
   };
   if (id) {
     const idx = list.findIndex(w => w.id === id);
@@ -8052,9 +8190,13 @@ function wlSendSelectedToEmail() {
 function wlFilteredItems() {
   const q      = ($("#wlSearch")?.value || "").trim().toLowerCase();
   const status = $("#wlStatusFilter")?.value || "all";
+  const priority = $("#wlPriorityFilter")?.value || "all";
+  const source = $("#wlSourceFilter")?.value || "all";
   let list = loadWaitlist();
   if (status !== "all") list = list.filter(w => w.status === status);
   else list = list.filter(w => w.status !== "archivado"); // por defecto ocultar archivados
+  if (priority !== "all") list = list.filter(w => w.priority === priority);
+  if (source !== "all") list = list.filter(w => w.source === source);
   if (q) list = list.filter(w =>
     (w.name || "").toLowerCase().includes(q) ||
     (w.email || "").toLowerCase().includes(q) ||
@@ -8074,8 +8216,8 @@ function wlRowHTML(w) {
   return `<div class="wl-row" data-id="${esc(w.id)}">
     <input type="checkbox" class="wl-check" data-id="${esc(w.id)}"${checked}>
     <div class="wl-main">
-      <div class="wl-name">${esc(w.name)} <span class="wl-priority wl-pr-${esc(w.priority || "media")}" title="Prioridad">${WL_PRIORITY[w.priority] || ""}</span></div>
-      <div class="wl-meta">${esc(w.email)} · ${esc(WL_SOURCE[w.source] || w.source || "")} · ${esc((w.date || "").slice(0, 10))}${w.notes ? ` · 📝 ${esc(w.notes.slice(0, 60))}${w.notes.length > 60 ? "…" : ""}` : ""}</div>
+      <div class="wl-name"><button type="button" class="link-button" onclick="openCustomerModal(decodeURIComponent('${encodeURIComponent(w.email || w.name)}'))">${esc(w.name)}</button> <span class="wl-priority wl-pr-${esc(w.priority || "media")}" title="Prioridad">${WL_PRIORITY[w.priority] || ""}</span></div>
+      <div class="wl-meta">${esc(w.email)}${w.phone ? ` · ${esc(w.phone)}` : ""} · ${esc(WL_SOURCE[w.source] || w.source || "")} · ${esc((w.date || "").slice(0, 10))}${w.consent ? " · ✓ consentimiento" : ""}${w.notes ? ` · 📝 ${esc(w.notes.slice(0, 60))}${w.notes.length > 60 ? "…" : ""}` : ""}</div>
     </div>
     <div class="wl-course" title="Curso solicitado">${esc(w.course)}${w.category ? `<small>${esc(w.category)}</small>` : ""}</div>
     <span class="wl-status ${st.cls}">${st.label}</span>
@@ -8103,20 +8245,21 @@ function renderWaitlist() {
     const conseguidos= all.filter(w => w.status === "conseguido").length;
     const compraron  = all.filter(w => w.status === "compro").length;
     const cursos     = new Set(active.map(w => w.course)).size;
-    const conv       = active.length ? (compraron / active.length * 100).toFixed(0) : 0;
+    const notificados = all.filter(w => ["notificado", "compro"].includes(w.status)).length;
+    const conv       = notificados ? (compraron / notificados * 100).toFixed(0) : 0;
     kpis.innerHTML = [
       ["Solicitudes activas", active.length, "Sin contar archivadas"],
       ["Pendientes / buscando", pendientes, "Cursos por conseguir"],
       ["Conseguidos sin notificar", conseguidos, "Listos para avisar"],
       ["Cursos distintos", cursos, "Demanda única"],
-      ["Conversión a compra", conv + "%", `${compraron} compraron`]
+      ["Conversión a compra", conv + "%", `${compraron} compraron de ${notificados} notificados`]
     ].map(([l, v, s]) => `<article class="kpi"><label>${l}</label><strong>${v}</strong><p>${s}</p></article>`).join("");
   }
 
   // ── Lista / agrupada ──
   const groupBy = $("#wlGroupBy")?.value || "none";
   if (!list.length) {
-    box.innerHTML = `<div class="wl-empty">📥 No hay solicitudes${all.length ? " con estos filtros" : ""}.<br><small>Registra el interés de un cliente con «+ Nueva solicitud» y notifícale cuando consigas el curso.</small></div>`;
+    box.innerHTML = `<div class="wl-empty">📥 ${all.length ? "No hay solicitudes con estos filtros." : "No hay solicitudes todavía."}<br><small>Registra el interés de un cliente con «+ Nueva solicitud» y notifícale cuando consigas el curso.</small></div>`;
   } else if (groupBy === "course") {
     const groups = {};
     list.forEach(w => { (groups[w.course] ??= []).push(w); });
@@ -8154,12 +8297,20 @@ function renderWaitlist() {
     const max = Math.max(...entries.map(e => e[1]), 1);
     $("#wlCourseBadge") && ($("#wlCourseBadge").textContent = `${entries.length} cursos`);
     byCourseBox.innerHTML = entries.length ? `<div class="payment-bars">` + entries.map(([course, n]) => `
-      <div class="pb-row">
+      <button type="button" class="pb-row wl-course-action" data-course="${esc(course)}">
         <span class="pb-label" title="${esc(course)}">${esc(course)}</span>
         <div class="pb-track"><div class="pb-fill" style="width:${(n / max * 100).toFixed(1)}%"></div></div>
         <span class="pb-val">${n} interesado${n !== 1 ? "s" : ""}</span>
-      </div>`).join("") + `</div>`
+      </button>`).join("") + `</div>`
       : `<p style="color:var(--muted);font-size:13px">Aún no hay demanda registrada.</p>`;
+    byCourseBox.querySelectorAll(".wl-course-action").forEach(btn => btn.addEventListener("click", () => {
+      const group = $("#wlGroupBy");
+      if (group) group.value = "course";
+      const search = $("#wlSearch");
+      if (search) search.value = btn.dataset.course;
+      renderWaitlist();
+      $("#wlList")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }));
   }
 
   updateWaitlistNavCount();
@@ -8214,9 +8365,280 @@ function wlExportCourse(course) {
   toast(`${list.length} interesados exportados`, "success");
 }
 
+// =============================================================
+// CAPA DE COMPLETITUD OPERATIVA
+// =============================================================
+let _explorerContext = { scope: "", value: "", rows: [] };
+let _wlImportParsed = { valid: [], errors: [] };
+
+function explorerRows(scope, value) {
+  const target = String(value || "").trim().toLowerCase();
+  const unpaid = new Set(["pending", "on-hold", "failed", "cancelled"]);
+  return state.filtered.filter(o => {
+    if (scope === "country") return [o.country, o.country_code].some(v => String(v || "").trim().toLowerCase() === target);
+    if (scope === "city") return String(o.city || "").trim().toLowerCase() === target;
+    if (scope === "course-abandon") {
+      return unpaid.has(statusNorm(o.status)) && (o.products || []).some(p => String(p.name || "").trim().toLowerCase() === target);
+    }
+    return false;
+  });
+}
+
+function openDataExplorer(scope, value) {
+  _explorerContext = { scope, value, rows: explorerRows(scope, value) };
+  $("#explorerEyebrow").textContent = scope === "course-abandon" ? "Abandono por curso" : scope === "country" ? "Detalle por país" : "Detalle por ciudad";
+  $("#explorerTitle").textContent = value || "Sin ubicación";
+  $("#explorerSearch").value = "";
+  $("#explorerStatus").value = "all";
+  renderDataExplorer();
+  $("#dataExplorerModal")?.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeDataExplorer() {
+  $("#dataExplorerModal")?.classList.add("hidden");
+  document.body.style.overflow = "";
+}
+
+function filteredExplorerRows() {
+  const q = ($("#explorerSearch")?.value || "").trim().toLowerCase();
+  const status = $("#explorerStatus")?.value || "all";
+  return _explorerContext.rows.filter(o => {
+    if (status !== "all" && statusNorm(o.status) !== status) return false;
+    const hay = [o.customer, o.customer_email, o.number, o.id, o.country, o.city, ...(o.products || []).map(p => p.name)].join(" ").toLowerCase();
+    return !q || hay.includes(q);
+  });
+}
+
+function renderDataExplorer() {
+  const rows = filteredExplorerRows();
+  const paid = rows.filter(o => ["completed", "processing"].includes(statusNorm(o.status)));
+  const emails = new Set(rows.map(o => normalizeEmail(o.customer_email)).filter(Boolean));
+  const courses = new Set(rows.flatMap(o => (o.products || []).map(p => p.name)).filter(Boolean));
+  $("#explorerMeta").textContent = `${rows.length} pedidos · ${emails.size} clientes únicos · ${courses.size} cursos`;
+  $("#explorerKpis").innerHTML = [
+    ["Pedidos", rows.length], ["Clientes", emails.size], ["Ingresos pagados", fmtMoney(sum(paid, netRev))],
+    ["Cursos", courses.size], ["Pendientes/no pagados", rows.filter(o => ["pending","on-hold","failed","cancelled"].includes(statusNorm(o.status))).length]
+  ].map(([l,v]) => `<div class="kpi-card"><p class="kpi-label">${l}</p><p class="kpi-val">${v}</p></div>`).join("");
+  $("#explorerTable").innerHTML = `<table class="crm-table"><thead><tr><th>Cliente</th><th>Email</th><th>Pedido</th><th>Fecha</th><th>Estado</th><th>Curso</th><th>Ubicación</th><th class="text-right">Total</th></tr></thead><tbody>${
+    rows.map(o => `<tr>
+      <td><button type="button" class="link-button explorer-customer" data-email="${esc(o.customer_email || o.customer)}">${esc(o.customer || "Cliente")}</button></td>
+      <td>${esc(o.customer_email || "—")}</td><td>#${esc(o.number || o.id || "—")}</td><td>${fmtDate(o.date)}</td>
+      <td><span class="status ${statusNorm(o.status)}">${esc(statusNorm(o.status))}</span></td>
+      <td>${esc((o.products || []).map(p => p.name).join(", ") || "—")}</td><td>${esc([o.city,o.country].filter(Boolean).join(", ") || "Sin dato")}</td>
+      <td class="text-right">${fmtMoney(o.total)}</td></tr>`).join("") ||
+      `<tr><td colspan="8">${empty("No hay registros con estos filtros.")}</td></tr>`
+  }</tbody></table>`;
+  $$(".explorer-customer").forEach(btn => btn.addEventListener("click", () => openCustomerModal(btn.dataset.email)));
+}
+
+function explorerExport() {
+  const rows = filteredExplorerRows();
+  const head = ["Cliente","Email","Pedido","Fecha","Estado","Curso","Ciudad","País","Total"];
+  const body = rows.map(o => [o.customer,o.customer_email,o.number||o.id,(o.date||"").slice(0,10),statusNorm(o.status),(o.products||[]).map(p=>p.name).join(" | "),o.city,o.country,o.total]);
+  _wlDownloadCSV([head,...body].map(r => r.map(v => `"${String(v ?? "").replace(/"/g,'""')}"`).join(",")).join("\r\n"), `detalle-${_explorerContext.scope}-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function explorerToEmail() {
+  const seen = new Set();
+  const selection = filteredExplorerRows().filter(o => {
+    const key = normalizeEmail(o.customer_email);
+    if (!key || seen.has(key)) return false;
+    seen.add(key); return true;
+  }).map(o => ({ email: normalizeEmail(o.customer_email), name: o.customer || o.customer_email, course: (o.products || [])[0]?.name || "" }));
+  if (!selection.length) return toast("No hay emails válidos en esta selección", "warning");
+  localStorage.setItem(WL_SEL_KEY, JSON.stringify(selection));
+  closeDataExplorer();
+  switchView("oportunidades");
+  const seg = $("#emailSegment");
+  if (seg) { seg.value = "waitlist"; seg.dispatchEvent(new Event("change")); }
+  toast(`${selection.length} destinatarios enviados a Email Marketing`, "success");
+}
+
+function openWlImportModal() {
+  $("#wlImportModal")?.classList.remove("hidden");
+  $("#wlImportHistory").innerHTML = (JSON.parse(localStorage.getItem("crm_waitlist_import_history") || "[]").slice(0,5).map(h =>
+    `<div class="sync-log-row"><strong>${esc(h.file)}</strong><span>${h.imported} importados · ${h.errors} errores · ${esc(h.date)}</span></div>`).join("")) ||
+    `<p class="panel-help">Todavía no hay importaciones.</p>`;
+}
+function closeWlImportModal() { $("#wlImportModal")?.classList.add("hidden"); }
+
+function initWlImporter() {
+  $("#wlImportClose")?.addEventListener("click", closeWlImportModal);
+  $("#wlImportModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeWlImportModal(); });
+  $("#wlImportFile")?.addEventListener("change", parseWlImportFile);
+  $("#wlImportConfirm")?.addEventListener("click", confirmWlImport);
+  $("#wlImportErrors")?.addEventListener("click", () => {
+    const rows = [["Fila","Error","Datos"], ..._wlImportParsed.errors.map(e => [e.row,e.error,JSON.stringify(e.data)])];
+    _wlDownloadCSV(rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g,'""')}"`).join(",")).join("\r\n"), "errores-importacion-solicitudes.csv");
+  });
+}
+
+function normalizeImportRow(raw, index) {
+  const normalized = {};
+  Object.entries(raw || {}).forEach(([k,v]) => { normalized[String(k).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")] = v; });
+  const pick = (...keys) => keys.map(k => normalized[k]).find(v => v !== undefined && String(v).trim() !== "");
+  const item = {
+    name: String(pick("nombre","name","cliente") || "").trim(),
+    email: normalizeEmail(pick("email","correo","correo electronico")),
+    course: String(pick("curso","course","curso solicitado","producto") || "").trim(),
+    category: String(pick("categoria","category","tipo") || "").trim(),
+    source: String(pick("origen","source","canal") || "manual").trim().toLowerCase(),
+    priority: String(pick("prioridad","priority") || "media").trim().toLowerCase(),
+    status: String(pick("estado","status") || "pendiente").trim().toLowerCase(),
+    date: String(pick("fecha","date","fecha de solicitud") || new Date().toISOString().slice(0,10)).slice(0,10),
+    phone: String(pick("telefono","phone","whatsapp") || "").trim(),
+    notes: String(pick("notas","notes","comentarios") || "").trim(),
+    consent: ["si","sí","yes","true","1"].includes(String(pick("consentimiento","consent") || "").trim().toLowerCase())
+  };
+  const errors = [];
+  if (!item.name) errors.push("Falta nombre");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.email)) errors.push("Email inválido");
+  if (!item.course) errors.push("Falta curso");
+  if (!WL_STATUS[item.status]) errors.push("Estado no reconocido");
+  if (!WL_PRIORITY[item.priority]) errors.push("Prioridad no reconocida");
+  return errors.length ? { row:index + 2, error:errors.join("; "), data:raw } : item;
+}
+
+async function parseWlImportFile(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    if (!window.XLSX) throw new Error("No se pudo cargar el lector XLSX.");
+    const wb = XLSX.read(await file.arrayBuffer(), { type:"array", cellDates:true });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:"" });
+    const parsed = rows.map(normalizeImportRow);
+    _wlImportParsed = { valid: parsed.filter(x => !x.error), errors: parsed.filter(x => x.error), file:file.name };
+    $("#wlImportSummary").className = `data-state ${_wlImportParsed.errors.length ? "state-warning" : "state-success"}`;
+    $("#wlImportSummary").innerHTML = `<strong>${_wlImportParsed.valid.length} filas válidas · ${_wlImportParsed.errors.length} con errores</strong><span>Mapeo detectado: nombre, email, curso, categoría, origen, prioridad, estado, fecha, teléfono, notas y consentimiento.</span>`;
+    $("#wlImportConfirm").disabled = !_wlImportParsed.valid.length;
+    $("#wlImportErrors").disabled = !_wlImportParsed.errors.length;
+    $("#wlImportPreview").innerHTML = `<table class="crm-table"><thead><tr><th>Nombre</th><th>Email</th><th>Curso</th><th>Estado</th><th>Resultado</th></tr></thead><tbody>${
+      parsed.slice(0,20).map(x => x.error ? `<tr><td colspan="4">${esc(JSON.stringify(x.data).slice(0,180))}</td><td style="color:var(--bad)">${esc(x.error)}</td></tr>` :
+      `<tr><td>${esc(x.name)}</td><td>${esc(x.email)}</td><td>${esc(x.course)}</td><td>${esc(x.status)}</td><td style="color:var(--good)">Válida</td></tr>`).join("")
+    }</tbody></table>`;
+  } catch(err) {
+    $("#wlImportSummary").className = "data-state state-error";
+    $("#wlImportSummary").textContent = String(err.message || err);
+  }
+}
+
+function confirmWlImport() {
+  const policy = $("#wlDuplicatePolicy")?.value || "skip";
+  const list = loadWaitlist();
+  let imported = 0;
+  _wlImportParsed.valid.forEach(row => {
+    const idx = list.findIndex(w => normalizeEmail(w.email) === row.email && String(w.course || "").trim().toLowerCase() === row.course.toLowerCase());
+    if (idx >= 0 && policy === "skip") return;
+    if (idx >= 0 && policy === "update") list[idx] = { ...list[idx], ...row, updated:new Date().toISOString() };
+    else list.unshift({ id:"wl_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7), created:new Date().toISOString(), ...row });
+    imported++;
+  });
+  saveWaitlist(list);
+  const history = JSON.parse(localStorage.getItem("crm_waitlist_import_history") || "[]");
+  history.unshift({ file:_wlImportParsed.file || "archivo", imported, errors:_wlImportParsed.errors.length, date:new Date().toLocaleString("es-PE") });
+  localStorage.setItem("crm_waitlist_import_history", JSON.stringify(history.slice(0,20)));
+  closeWlImportModal();
+  renderWaitlist();
+  toast(`${imported} solicitudes importadas`, "success");
+}
+
+function logSync(service, status, detail) {
+  try {
+    const history = JSON.parse(localStorage.getItem("crm_sync_log") || "[]");
+    history.unshift({ service, status, detail:String(detail || "").slice(0,180), date:new Date().toISOString() });
+    localStorage.setItem("crm_sync_log", JSON.stringify(history.slice(0,50)));
+  } catch(e) {}
+}
+
+function renderIntegrationDiagnostics() {
+  const el = $("#integrationDiagnostics");
+  if (!el) return;
+  let brevo = {};
+  try { brevo = JSON.parse(localStorage.getItem("crm_brevo") || "{}"); } catch(e) {}
+  const cards = [
+    { name:"WooCommerce", ok:CONFIG.mode === "api", text:CONFIG.mode === "api" ? "Conectado mediante proxy seguro" : "Modo demostración / sin conexión" },
+    { name:"PayPal Live", ok:CONFIG.mode === "api", text:CONFIG.mode === "api" ? "Proxy disponible; validar credenciales en WordPress" : "Requiere conexión WordPress" },
+    { name:"PayPal Sandbox", ok:CONFIG.mode === "api", text:"Usa credenciales separadas en wp-config.php" },
+    { name:"Stripe", ok:false, text:"WooCommerce disponible; API real pendiente de proxy seguro" },
+    { name:"Email / Brevo", ok:Boolean(brevo.apiKey || brevo.key), text:(brevo.apiKey || brevo.key) ? "Configuración guardada" : "No configurado" },
+    { name:"Google Analytics 4", ok:Boolean(localStorage.getItem("crm_ga4_config")), text:localStorage.getItem("crm_ga4_config") ? "Configuración guardada" : "No configurado" }
+  ];
+  el.innerHTML = cards.map(c => `<article class="diagnostic-card"><span class="diag-dot ${c.ok ? "ok" : "warn"}"></span><div><strong>${c.name}</strong><p>${esc(c.text)}</p></div></article>`).join("");
+  const history = JSON.parse(localStorage.getItem("crm_sync_log") || "[]");
+  $("#syncLog").innerHTML = history.length ? history.slice(0,12).map(h => `<div class="sync-log-row"><strong>${esc(h.service)} · ${h.status === "ok" ? "Correcto" : "Error"}</strong><span>${esc(h.detail)} · ${new Date(h.date).toLocaleString("es-PE")}</span></div>`).join("") : `<p class="panel-help">Aún no hay sincronizaciones registradas.</p>`;
+}
+
+function initCompletionLayer() {
+  $("#explorerClose")?.addEventListener("click", closeDataExplorer);
+  $("#dataExplorerModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeDataExplorer(); });
+  $("#explorerSearch")?.addEventListener("input", debounce(renderDataExplorer, 120));
+  $("#explorerStatus")?.addEventListener("change", renderDataExplorer);
+  $("#explorerExport")?.addEventListener("click", explorerExport);
+  $("#explorerEmail")?.addEventListener("click", explorerToEmail);
+  $("#stripeSource")?.addEventListener("change", renderStripeView);
+  $("#stripeDatePreset")?.addEventListener("change", renderStripeView);
+  $("#runDiagnosticsBtn")?.addEventListener("click", () => { renderIntegrationDiagnostics(); toast("Diagnóstico actualizado", "success"); });
+  document.querySelectorAll("details.acc").forEach((d, i) => {
+    const key = `crm_acc_${d.id || i}`;
+    const saved = localStorage.getItem(key);
+    if (saved !== null) d.open = saved === "1";
+    d.addEventListener("toggle", () => localStorage.setItem(key, d.open ? "1" : "0"));
+  });
+  $("#resetLayoutBtn")?.addEventListener("click", () => {
+    Object.keys(localStorage).filter(k => k.startsWith("crm_acc_")).forEach(k => localStorage.removeItem(k));
+    document.querySelectorAll("details.acc").forEach(d => { d.open = false; });
+    toast("Diseño de bloques restablecido", "success");
+  });
+}
+setTimeout(initCompletionLayer, 0);
+
+// Búsqueda global corregida para el modelo normalizado y ampliada a todos los módulos.
+function renderGlobalSearch(q) {
+  const box = $("#globalSearchResults");
+  if (!box) return;
+  const query = String(q || "").trim().toLowerCase();
+  if (!query) {
+    box.innerHTML = `<div class="gs-empty">Busca por cliente, email, pedido, curso, solicitud, país, ciudad o proveedor de pago…</div>`;
+    return;
+  }
+  const groups = [];
+  const customers = Object.values(customerMap(state.orders)).filter(c => [c.name,c.email].join(" ").toLowerCase().includes(query)).slice(0,5);
+  if (customers.length) groups.push(["👥 Clientes", customers.map(c => ({ type:"customer", key:c.email||c.name, title:c.name, sub:`${c.email || "Sin email"} · ${c.orders} pedidos`, badge:fmtMoney(c.revenue) }))]);
+  const orders = state.orders.filter(o => [o.id,o.number,o.customer,o.customer_email,...(o.products||[]).map(p=>p.name)].join(" ").toLowerCase().includes(query)).slice(0,5);
+  if (orders.length) groups.push(["📦 Pedidos", orders.map(o => ({ type:"order", key:String(o.id||o.number), title:`#${o.number||o.id} · ${(o.products||[]).map(p=>p.name).join(", ") || "Pedido"}`, sub:`${o.customer || ""} · ${fmtDate(o.date)}`, badge:fmtMoney(o.total) }))]);
+  const courseMap = {};
+  state.orders.forEach(o => (o.products||[]).forEach(p => { if ((p.name||"").toLowerCase().includes(query)) courseMap[p.name] = p.name; }));
+  const courses = Object.values(courseMap).slice(0,5);
+  if (courses.length) groups.push(["🎓 Cursos", courses.map(name => ({ type:"course", key:name, title:name, sub:"Abrir rendimiento del curso" }))]);
+  const waits = loadWaitlist().filter(w => [w.name,w.email,w.course,w.phone].join(" ").toLowerCase().includes(query)).slice(0,5);
+  if (waits.length) groups.push(["📥 Solicitudes", waits.map(w => ({ type:"waitlist", key:w.id, title:`${w.name} · ${w.course}`, sub:`${w.email} · ${WL_STATUS[w.status]?.label || w.status}` }))]);
+  const geo = [...new Set(state.orders.flatMap(o => [o.country,o.city]).filter(Boolean))].filter(x => x.toLowerCase().includes(query)).slice(0,6);
+  if (geo.length) groups.push(["🌍 Geografía", geo.map(name => ({ type:"geo", key:name, title:name, sub:state.orders.some(o=>o.city===name) ? "Ciudad" : "País" }))]);
+  const paypal = (window._paypalSearchRows || []).filter(t => JSON.stringify(t).toLowerCase().includes(query)).slice(0,4);
+  if (paypal.length || "paypal".includes(query)) groups.push(["💳 PayPal", paypal.length ? paypal.map(t => ({ type:"paypal", key:t.transaction_info?.transaction_id||"", title:t.payer_info?.payer_name?.alternate_full_name||t.payer_info?.email_address||"Transacción PayPal", sub:t.transaction_info?.transaction_id||"" })) : [{ type:"paypal", key:"", title:"Abrir PayPal", sub:"Buscar transacciones y clientes" }]]);
+  const stripeMatches = state.orders.filter(o => (o.payment_method||"").toLowerCase().includes("stripe") && JSON.stringify(o).toLowerCase().includes(query)).slice(0,4);
+  if (stripeMatches.length || "stripe".includes(query)) groups.push(["💳 Stripe", stripeMatches.length ? stripeMatches.map(o => ({ type:"stripe", key:String(o.id), title:`#${o.number||o.id} · ${o.customer||"Cliente"}`, sub:fmtMoney(o.total) })) : [{ type:"stripe", key:"", title:"Abrir Stripe", sub:"Cobros WooCommerce y estado de API" }]]);
+  box.innerHTML = groups.length ? groups.map(([label,items]) => `<div class="gs-section">${label}</div>${items.map(x => `<button class="gs-item" data-type="${x.type}" data-key="${esc(x.key)}"><span class="gs-item-icon">›</span><span class="gs-item-main"><span class="gs-item-title">${esc(x.title)}</span><span class="gs-item-sub">${esc(x.sub||"")}</span></span>${x.badge?`<span class="gs-item-badge">${x.badge}</span>`:""}</button>`).join("")}`).join("") : `<div class="gs-empty">Sin resultados para “${esc(q)}”.</div>`;
+  box.querySelectorAll(".gs-item").forEach(item => item.addEventListener("click", () => {
+    const type = item.dataset.type, key = item.dataset.key;
+    closeGlobalSearch();
+    if (type === "customer") openCustomerModal(key);
+    else if (type === "order") switchView("sales");
+    else if (type === "course") switchView("courses");
+    else if (type === "waitlist") { switchView("waitlist"); setTimeout(() => openWlModal(key),100); }
+    else if (type === "geo") { switchView("geo"); setTimeout(() => openDataExplorer(state.orders.some(o=>o.city===key)?"city":"country", key),100); }
+    else if (type === "paypal") switchView("paypal");
+    else if (type === "stripe") switchView("stripe");
+  }));
+}
+
 // Exponer funciones usadas en atributos onclick
 window.openWlModal    = openWlModal;
 window.wlSetStatus    = wlSetStatus;
 window.wlDelete       = wlDelete;
 window.wlExportCourse = wlExportCourse;
 window.wlSelectCourse = wlSelectCourse;
+window.openDataExplorer = openDataExplorer;
+window.loadPaypalData = loadPaypalData;
+window.openCustomerModal = openCustomerModal;

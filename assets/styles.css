@@ -3759,3 +3759,50 @@ details.acc > summary:hover { background: var(--soft); }
   .em-preview-body { padding: 8px; min-height: 480px; }
   .em-preview-frame { height: 650px; }
 }
+/* =============================================================
+   COMPLETITUD OPERATIVA · ESTADOS, DETALLES E IMPORTACIÓN
+   ============================================================= */
+.panel-help{margin:-5px 0 12px;color:var(--muted);font-size:12px}
+.rank.rank-action{width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;border:1px solid var(--border);background:var(--surface,#11151e)}
+.rank.rank-action:hover,.rank.rank-action:focus-visible{border-color:rgba(239,35,60,.65);transform:translateY(-1px);outline:none}
+.integration-status{font-size:12px;color:var(--muted);max-width:520px}
+.sync-meta{min-height:18px;margin:7px 2px 0;color:var(--muted);font-size:11px}
+.data-state{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--surface,#11151e);font-size:12px}
+.data-state strong{font-size:13px}.data-state span:not(.state-spinner){color:var(--muted)}
+.data-state.hidden{display:none}
+.state-loading{border-color:rgba(96,165,250,.35)}.state-empty{border-color:rgba(148,163,184,.28)}
+.state-error,.state-permission{border-color:rgba(239,35,60,.45);background:rgba(239,35,60,.06)}
+.state-not-connected,.state-warning{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.state-success{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.06)}
+.state-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.15);border-top-color:#60a5fa;border-radius:50%;animation:stateSpin .7s linear infinite}
+@keyframes stateSpin{to{transform:rotate(360deg)}}
+.kpi-sub{display:block;margin-top:5px;color:var(--muted);font-size:10px;line-height:1.35}
+.pb-row.abandon-action,.pb-row.wl-course-action{width:100%;font:inherit;color:inherit;border:0;background:none;text-align:left;cursor:pointer;border-radius:8px}
+.pb-row.abandon-action:hover,.pb-row.wl-course-action:hover{background:rgba(255,255,255,.035)}
+.explorer-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0}
+.explorer-toolbar .sf-input:first-child{flex:1;min-width:240px}
+.modal-box.modal-wide{width:min(1180px,calc(100vw - 34px));max-width:1180px}
+.link-button{padding:0;border:0;background:none;color:#93c5fd;font:inherit;font-weight:700;cursor:pointer;text-align:left}
+.link-button:hover{text-decoration:underline}
+.consent-check{display:flex;align-items:center;gap:8px;margin:9px 0;color:var(--muted);font-size:12px}
+.import-drop{padding:18px;border:1px dashed rgba(148,163,184,.4);border-radius:12px;background:rgba(255,255,255,.02);text-align:center}
+.import-drop input{max-width:100%}.import-drop p{margin:8px 0 0;color:var(--muted);font-size:12px}
+.diagnostic-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.diagnostic-card{display:flex;align-items:flex-start;gap:10px;padding:13px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.018)}
+.diagnostic-card p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.4}
+.diag-dot{width:9px;height:9px;margin-top:4px;border-radius:50%;background:#f59e0b;box-shadow:0 0 10px rgba(245,158,11,.35)}
+.diag-dot.ok{background:#22c55e;box-shadow:0 0 10px rgba(34,197,94,.35)}
+.sync-log{display:grid;gap:6px}.sync-log-row{display:flex;justify-content:space-between;gap:14px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;font-size:11px}
+.sync-log-row span{color:var(--muted);text-align:right}
+.gs-item{width:100%;border:0;color:inherit;text-align:left}
+details.acc:not([open])>.acc-body{display:none!important}
+details.acc>summary{cursor:pointer}
+@media(max-width:920px){
+  .diagnostic-grid{grid-template-columns:1fr 1fr}
+  .explorer-toolbar>*{width:100%;max-width:none!important}
+}
+@media(max-width:620px){
+  .diagnostic-grid{grid-template-columns:1fr}
+  .sync-log-row{display:block}.sync-log-row span{display:block;margin-top:4px;text-align:left}
+  #resetLayoutBtn{display:none}
+}

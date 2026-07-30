@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=5">
+  <link rel="stylesheet" href="assets/styles.css?v=6">
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
@@ -92,14 +92,15 @@
     <!-- HERO -->
     <header class="hero">
       <div>
-        <p class="eyebrow">CRM Global · Cursos digitales + WooCommerce</p>
-        <h1 id="heroTitle">Resumen</h1>
-        <p class="hero-copy" id="heroCopy">Clientes, ingresos, geografía y alertas operativas en una sola pantalla.</p>
+        <p class="eyebrow" id="heroEyebrow">CRM GLOBAL · RESUMEN EJECUTIVO</p>
+        <h1 id="heroTitle">Resumen ejecutivo</h1>
+        <p class="hero-copy" id="heroCopy">Ingresos, clientes, ventas, geografía y alertas operativas en una sola pantalla.</p>
       </div>
       <div class="hero-actions">
         <button id="refreshBtn" class="btn ghost">↻ Actualizar</button>
         <button id="exportBtn" class="btn primary">Exportar CSV</button>
         <button id="presentationBtn" class="btn ghost" title="Modo presentación">📺</button>
+        <button id="resetLayoutBtn" class="btn ghost" title="Restablecer bloques abiertos y cerrados">↺ Diseño</button>
       </div>
     </header>
 
@@ -1146,6 +1147,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
               <h2>Ranking global</h2>
             </div>
           </div>
+          <p class="panel-help">Selecciona un país para consultar compradores, pedidos, cursos e ingresos.</p>
           <div id="countryRanking" class="ranking"></div>
         </article>
         <article class="panel">
@@ -1155,6 +1157,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
               <h2>Top ciudades</h2>
             </div>
           </div>
+          <p class="panel-help">Selecciona una ciudad para abrir el detalle de clientes y pedidos.</p>
           <div id="cityRanking" class="ranking"></div>
         </article>
       </section>
@@ -1194,7 +1197,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <input id="paypalTo"   type="date" class="sf-input" style="max-width:140px;font-size:13px">
 
           <button id="paypalLoadBtn" class="btn btn-primary" style="font-weight:700">&#x1F504; Cargar datos</button>
-          <span id="paypalStatus" style="font-size:12px;color:var(--muted)"></span>
+          <span id="paypalStatus" class="integration-status" aria-live="polite"></span>
         </div>
 
         <!-- Busqueda en tabla -->
@@ -1202,6 +1205,9 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <input id="ppSearch" type="search" class="sf-input" placeholder="&#x1F50D; Buscar cliente, concepto, ID..." style="width:100%;max-width:400px;font-size:13px">
         </div>
       </article>
+
+      <div id="paypalDataState" class="data-state hidden" role="status"></div>
+      <div id="paypalSyncMeta" class="sync-meta" aria-live="polite"></div>
 
       <!-- Inputs ocultos para las credenciales (usados internamente) -->
       <input id="ppClientId" type="hidden">
@@ -1217,6 +1223,9 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
         <div class="kpi-card"><p class="kpi-label">Ingresos netos</p><p class="kpi-val" id="ppNet" style="color:var(--good)">—</p></div>
         <div class="kpi-card"><p class="kpi-label">Transacciones</p><p class="kpi-val" id="ppCount">—</p></div>
         <div class="kpi-card"><p class="kpi-label">Ticket promedio</p><p class="kpi-val" id="ppAvg">—</p></div>
+        <div class="kpi-card"><p class="kpi-label">Reembolsos</p><p class="kpi-val" id="ppRefunds">—</p></div>
+        <div class="kpi-card"><p class="kpi-label">Disputas</p><p class="kpi-val" id="ppDisputes">—</p></div>
+        <div class="kpi-card"><p class="kpi-label">Moneda</p><p class="kpi-val" id="ppCurrency">—</p></div>
       </div>
 
       <!-- Ingresos por día -->
@@ -1265,13 +1274,25 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
       <article class="panel" style="margin-bottom:14px;padding:14px 20px">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <p class="eyebrow" style="margin:0">&#x1F4B3; Stripe</p>
-          <span id="stripeStatus" style="font-size:12px;color:var(--muted)">Datos desde WooCommerce filtrados por m&#xE9;todo de pago</span>
+          <select id="stripeSource" class="sf-input" style="max-width:210px">
+            <option value="woocommerce">WooCommerce (estimado)</option>
+            <option value="api">Stripe API (real)</option>
+            <option value="combined">Combinado</option>
+          </select>
+          <select id="stripeDatePreset" class="sf-input" style="max-width:160px">
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="90">Últimos 3 meses</option>
+          </select>
+          <span id="stripeStatus" class="integration-status" aria-live="polite">Fuente WooCommerce · comisiones estimadas</span>
           <button id="stripeRefreshBtn" class="btn btn-primary" style="font-weight:700;margin-left:auto">&#x1F504; Actualizar</button>
         </div>
         <div style="margin-top:10px">
           <input id="stripeSearch" type="search" class="sf-input" placeholder="&#x1F50D; Buscar cliente, producto..." style="width:100%;max-width:400px;font-size:13px">
         </div>
       </article>
+      <div id="stripeDataState" class="data-state hidden" role="status"></div>
+      <div id="stripeSyncMeta" class="sync-meta"></div>
 
       <!-- KPIs Stripe -->
       <div id="stripeKpis" class="kpi-grid" style="margin-top:0"></div>
@@ -1325,6 +1346,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <div><p class="eyebrow">Lista de espera</p><h2>Solicitudes de cursos</h2></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button id="wlNewBtn" class="btn primary">+ Nueva solicitud</button>
+            <button id="wlImportBtn" class="btn ghost">⇧ Importar XLSX/CSV</button>
             <button id="wlExportBtn" class="btn ghost">⬇ Exportar CSV</button>
           </div>
         </div>
@@ -1342,6 +1364,24 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <select id="wlGroupBy" class="sf-input" style="min-width:190px">
             <option value="none">Vista: lista</option>
             <option value="course">Vista: agrupar por curso</option>
+          </select>
+          <select id="wlPriorityFilter" class="sf-input" style="min-width:150px">
+            <option value="all">Toda prioridad</option>
+            <option value="urgente">Urgente</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja</option>
+          </select>
+          <select id="wlSourceFilter" class="sf-input" style="min-width:150px">
+            <option value="all">Todo origen</option>
+            <option value="manual">Manual</option>
+            <option value="web">Web</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="telegram">Telegram</option>
+            <option value="instagram">Instagram</option>
+            <option value="facebook">Facebook</option>
+            <option value="email">Email</option>
+            <option value="otro">Otro</option>
           </select>
         </div>
         <!-- Barra de acciones masivas -->
@@ -1440,6 +1480,16 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           </div>
         </article>
       </section>
+
+      <article class="panel" style="margin-top:14px">
+        <div class="panel-head">
+          <div><p class="eyebrow">Diagnóstico</p><h2>Estado de integraciones</h2></div>
+          <button id="runDiagnosticsBtn" class="btn ghost">Ejecutar diagnóstico</button>
+        </div>
+        <div id="integrationDiagnostics" class="diagnostic-grid"></div>
+        <div class="panel-head" style="margin-top:18px"><div><p class="eyebrow">Sincronización</p><h2>Registro reciente</h2></div></div>
+        <div id="syncLog" class="sync-log"></div>
+      </article>
 
       <!-- Umbrales de alertas -->
       <article class="panel" style="margin-top:14px">
@@ -1610,6 +1660,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <option value="telegram">Telegram</option>
             <option value="whatsapp">WhatsApp</option>
             <option value="instagram">Instagram</option>
+            <option value="facebook">Facebook</option>
             <option value="web">Web</option>
             <option value="email">Email</option>
             <option value="otro">Otro</option>
@@ -1619,6 +1670,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <label class="sf-label" style="flex:1;min-width:150px">Prioridad
           <select id="wlFieldPriority" class="sf-input">
+            <option value="urgente">🟣 Urgente</option>
             <option value="alta">🔴 Alta</option>
             <option value="media" selected>🟡 Media</option>
             <option value="baja">🟢 Baja</option>
@@ -1638,6 +1690,35 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <input id="wlFieldDate" type="date" class="sf-input">
         </label>
       </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="sf-label" style="flex:1;min-width:180px">Teléfono
+          <input id="wlFieldPhone" type="tel" class="sf-input" placeholder="+51 999 999 999">
+        </label>
+        <label class="sf-label" style="flex:1;min-width:180px">Canal preferido
+          <select id="wlFieldContact" class="sf-input">
+            <option value="email">Email</option><option value="whatsapp">WhatsApp</option>
+            <option value="telegram">Telegram</option><option value="telefono">Teléfono</option>
+          </select>
+        </label>
+        <label class="sf-label" style="flex:1;min-width:180px">URL / referencia
+          <input id="wlFieldUrl" type="url" class="sf-input" placeholder="https://...">
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label class="sf-label" style="flex:1;min-width:180px">Etiquetas
+          <input id="wlFieldTags" type="text" class="sf-input" placeholder="vip, trading, urgente">
+        </label>
+        <label class="sf-label" style="flex:1;min-width:180px">Fecha de notificación
+          <input id="wlFieldNotifiedDate" type="date" class="sf-input">
+        </label>
+        <label class="sf-label" style="flex:1;min-width:180px">Respuesta
+          <select id="wlFieldResponse" class="sf-input">
+            <option value="">Sin respuesta</option><option value="interesado">Interesado</option>
+            <option value="no_interesado">No interesado</option><option value="comprara">Comprará después</option>
+          </select>
+        </label>
+      </div>
+      <label class="consent-check"><input id="wlFieldConsent" type="checkbox"> El cliente autoriza comunicaciones comerciales.</label>
       <label class="sf-label">Notas internas
         <textarea id="wlFieldNotes" class="sf-input" rows="3" placeholder="Detalles, versión del curso, contexto..."></textarea>
       </label>
@@ -1649,13 +1730,63 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
   </div>
 </div>
 
+<!-- MODAL: Importación de solicitudes -->
+<div id="wlImportModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:900px">
+    <div class="modal-head">
+      <div><p class="eyebrow">Importación segura</p><h2>Importar solicitudes XLSX/CSV</h2></div>
+      <button class="modal-close" id="wlImportClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="import-drop">
+        <input id="wlImportFile" type="file" accept=".xlsx,.xls,.csv,text/csv">
+        <p>Selecciona un archivo. Se validará antes de guardar y podrás revisar una vista previa.</p>
+      </div>
+      <label class="sf-label">Tratamiento de duplicados
+        <select id="wlDuplicatePolicy" class="sf-input">
+          <option value="skip">Omitir duplicados</option>
+          <option value="update">Actualizar existente</option>
+          <option value="create">Crear de todas formas</option>
+        </select>
+      </label>
+      <div id="wlImportSummary" class="data-state">Aún no se ha seleccionado un archivo.</div>
+      <div id="wlImportPreview" class="table-wrap"></div>
+      <div class="sf-actions">
+        <button id="wlImportConfirm" class="btn primary" disabled>Importar registros válidos</button>
+        <button id="wlImportErrors" class="btn ghost" disabled>Descargar errores CSV</button>
+      </div>
+      <div id="wlImportHistory" class="sync-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: explorador de país, ciudad o abandono -->
+<div id="dataExplorerModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <div><p class="eyebrow" id="explorerEyebrow">Detalle</p><h2 id="explorerTitle">—</h2><p id="explorerMeta" class="modal-meta"></p></div>
+      <button class="modal-close" id="explorerClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="explorerKpis" class="kpi-grid"></div>
+      <div class="explorer-toolbar">
+        <input id="explorerSearch" type="search" class="sf-input" placeholder="Buscar cliente, email, pedido o curso…">
+        <select id="explorerStatus" class="sf-input"><option value="all">Todos los estados</option><option value="completed">Completado</option><option value="processing">Procesando</option><option value="pending">Pendiente</option><option value="on-hold">En espera</option><option value="failed">Fallido</option><option value="cancelled">Cancelado</option><option value="refunded">Reembolsado</option></select>
+        <button id="explorerEmail" class="btn ghost">Enviar segmento a Email</button>
+        <button id="explorerExport" class="btn ghost">Exportar CSV</button>
+      </div>
+      <div id="explorerTable" class="table-wrap"></div>
+    </div>
+  </div>
+</div>
+
 <!-- BÚSQUEDA GLOBAL (Ctrl+K) -->
 <div id="globalSearchModal" class="global-search-modal hidden" role="dialog" aria-label="Búsqueda global">
   <div class="global-search-backdrop"></div>
   <div class="global-search-box">
     <div class="global-search-input-wrap">
       <span class="global-search-icon">🔍</span>
-      <input id="globalSearchInput" type="search" placeholder="Buscar clientes, pedidos, cursos..." autocomplete="off" spellcheck="false">
+      <input id="globalSearchInput" type="search" placeholder="Buscar clientes, emails, pedidos, cursos, solicitudes, países, ciudades, PayPal o Stripe..." autocomplete="off" spellcheck="false">
       <kbd class="global-search-esc">ESC</kbd>
     </div>
     <div id="globalSearchResults" class="global-search-results"></div>
@@ -1686,6 +1817,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <div id="toast" class="toast"></div>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
-<script src="assets/app.js?v=44"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/app.js?v=45"></script>
 </body>
 </html>

@@ -208,6 +208,9 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
 // Define en wp-config.php:
 //   define('CPP_PAYPAL_CLIENT_ID',     'TU_CLIENT_ID_LIVE');
 //   define('CPP_PAYPAL_CLIENT_SECRET', 'TU_SECRET_LIVE');
+//   define('CPP_PAYPAL_SANDBOX_CLIENT_ID',     'TU_CLIENT_ID_SANDBOX');
+//   define('CPP_PAYPAL_SANDBOX_CLIENT_SECRET', 'TU_SECRET_SANDBOX');
+// Nunca guardes estas credenciales en el JavaScript público del dashboard.
 // =============================================================
 
 add_action( 'rest_api_init', function () {
@@ -230,21 +233,26 @@ add_action( 'rest_api_init', function () {
             'from' => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
             'to'   => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
             'page' => [ 'required' => false, 'sanitize_callback' => 'absint' ],
+            'mode' => [ 'required' => false, 'sanitize_callback' => 'sanitize_key' ],
         ],
     ] ) );
 } );
 
-function cpp_paypal_get_token() {
-    if ( ! defined('CPP_PAYPAL_CLIENT_ID') || ! defined('CPP_PAYPAL_CLIENT_SECRET') ) {
-        return new WP_Error('paypal_no_config', 'Define CPP_PAYPAL_CLIENT_ID y CPP_PAYPAL_CLIENT_SECRET en wp-config.php');
+function cpp_paypal_get_token( $mode = 'live' ) {
+    $sandbox = $mode === 'sandbox';
+    $client_const = $sandbox ? 'CPP_PAYPAL_SANDBOX_CLIENT_ID' : 'CPP_PAYPAL_CLIENT_ID';
+    $secret_const = $sandbox ? 'CPP_PAYPAL_SANDBOX_CLIENT_SECRET' : 'CPP_PAYPAL_CLIENT_SECRET';
+    if ( ! defined($client_const) || ! defined($secret_const) ) {
+        return new WP_Error('paypal_no_config', 'Configura las credenciales PayPal del entorno seleccionado en wp-config.php');
     }
 
-    $cached = get_transient('cpp_paypal_access_token');
+    $cached = get_transient('cpp_paypal_access_token_' . $mode);
     if ( $cached ) return $cached;
 
-    $response = wp_remote_post( 'https://api-m.paypal.com/v1/oauth2/token', [
+    $base = $sandbox ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
+    $response = wp_remote_post( $base . '/v1/oauth2/token', [
         'headers' => [
-            'Authorization' => 'Basic ' . base64_encode( CPP_PAYPAL_CLIENT_ID . ':' . CPP_PAYPAL_CLIENT_SECRET ),
+            'Authorization' => 'Basic ' . base64_encode( constant($client_const) . ':' . constant($secret_const) ),
             'Content-Type'  => 'application/x-www-form-urlencoded',
         ],
         'body'    => 'grant_type=client_credentials',
@@ -260,12 +268,12 @@ function cpp_paypal_get_token() {
     }
 
     $expires = max(60, intval($body['expires_in'] ?? 3600) - 60);
-    set_transient('cpp_paypal_access_token', $body['access_token'], $expires);
+    set_transient('cpp_paypal_access_token_' . $mode, $body['access_token'], $expires);
     return $body['access_token'];
 }
 
-function cpp_paypal_fetch_transactions( $from, $to, $page = 1 ) {
-    $token = cpp_paypal_get_token();
+function cpp_paypal_fetch_transactions( $from, $to, $page = 1, $mode = 'live' ) {
+    $token = cpp_paypal_get_token($mode);
     if ( is_wp_error($token) ) return $token;
 
     $url = add_query_arg( [
@@ -275,7 +283,7 @@ function cpp_paypal_fetch_transactions( $from, $to, $page = 1 ) {
         'page_size'          => 500,
         'page'               => $page,
         'fields'             => 'all',
-    ], 'https://api-m.paypal.com/v1/reporting/transactions' );
+    ], ($mode === 'sandbox' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com') . '/v1/reporting/transactions' );
 
     $response = wp_remote_get( $url, [
         'headers' => [
@@ -294,8 +302,9 @@ function cpp_paypal_transactions( WP_REST_Request $request ) {
     $from = $request->get_param('from') ?: date('Y-m-d', strtotime('-30 days'));
     $to   = $request->get_param('to')   ?: date('Y-m-d');
     $page = max(1, intval($request->get_param('page') ?: 1));
+    $mode = $request->get_param('mode') === 'sandbox' ? 'sandbox' : 'live';
 
-    $data = cpp_paypal_fetch_transactions( $from, $to, $page );
+    $data = cpp_paypal_fetch_transactions( $from, $to, $page, $mode );
     if ( is_wp_error($data) ) return $data;
 
     $txns = $data['transaction_details'] ?? [];
@@ -314,6 +323,7 @@ function cpp_paypal_transactions( WP_REST_Request $request ) {
             'net'         => $amt - abs($fee),
             'currency'    => $info['transaction_amount']['currency_code']     ?? 'USD',
             'status'      => $info['transaction_status']                      ?? '',
+            'event_code'  => $info['transaction_event_code']                  ?? '',
             'subject'     => $info['transaction_subject']                     ?? '',
             'payer_name'  => $name,
             'payer_email' => $payer['email_address']                          ?? '',
