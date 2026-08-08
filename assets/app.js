@@ -358,7 +358,10 @@ function range() {
     from = new Date(now.getFullYear() - 5, 0, 1, 0, 0, 0); // máximo 5 años atrás
     to   = new Date(now); to.setHours(23,59,59,999);
   } else {
-    from = new Date(now - Number(preset) * 86400000); from.setHours(0,0,0,0);
+    // Un rango de N días incluye hoy, por lo que debe retroceder N-1 días.
+    // Antes "7" producía 8 fechas inclusivas y no coincidía con Analytics.
+    const days = Math.max(1, Number(preset) || 1);
+    from = new Date(now - (days - 1) * 86400000); from.setHours(0,0,0,0);
     to   = new Date(now); to.setHours(23,59,59,999);
   }
   return { from, to, fromISO: localDateStr(from), toISO: localDateStr(to) };
@@ -451,15 +454,18 @@ function applyFilters() {
 // =============================================================
 // Igual que los ajustes actuales de WooCommerce Analytics: pendiente, cancelado
 // y fallido están excluidos; completado, procesando y en espera sí cuentan.
-const WOO_ANALYTICS_REVENUE_STATUSES = new Set(["completed", "processing", "on-hold"]);
+const WOO_ANALYTICS_REVENUE_STATUSES = new Set(["completed", "processing", "on-hold", "refunded"]);
 const isRevenueStatus = status => WOO_ANALYTICS_REVENUE_STATUSES.has(statusNorm(status));
 
 function validRevenueOrders(o) {
   return o.filter(x => isRevenueStatus(x.status));
 }
 
-// Ingresos netos = subtotal - descuentos (sin impuestos ni envío), igual que WooCommerce Net Sales
-function netRev(o) { return o.net_total ?? o.total ?? 0; }
+// Ingresos netos = subtotal - descuentos - devoluciones, igual que WooCommerce Analytics.
+function netRev(o) {
+  const beforeRefunds = Number(o.net_total ?? o.total ?? 0);
+  return Math.max(0, beforeRefunds - Number(o.total_refunded || 0));
+}
 
 function groupBy(arr, fn) {
   return arr.reduce((a, x) => { const k = fn(x) || "Sin dato"; (a[k] ??= []).push(x); return a; }, {});

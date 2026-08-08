@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.2.0
+ * Version:      2.3.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -244,6 +244,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
             'status'         => cpp_crm_normalize_status( $order->get_status() ),
             'total'          => (float) $order->get_total(),
             'net_total'      => (float) ( $order->get_subtotal() - $order->get_discount_total() ),
+            'total_refunded' => (float) $order->get_total_refunded(),
             'payment_method' => $order->get_payment_method_title() ?: (string) $order->get_payment_method(),
             'country_code'   => $country_code,
             'country'        => cpp_crm_country_name( $country_code ),
