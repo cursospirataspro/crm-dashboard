@@ -208,46 +208,88 @@ function demoOrders() {
 // =============================================================
 // API (modo real)
 // =============================================================
-async function fetchApi(r) {
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 30000);
-  try {
-    const base = CONFIG.apiBaseUrl.replace(/\/$/, "") + "/overview";
-    let allOrders = [];
-    let page = 1;
-    let totalPages = 1;
+const API_PAGE_SIZE       = 100;
+const API_PAGE_TIMEOUT_MS = 30000;
+const API_PAGE_RETRIES    = 2;
 
-    do {
-      const url = new URL(base);
-      url.searchParams.set("from",  r.fromISO);
-      url.searchParams.set("to",    r.toISO);
-      url.searchParams.set("page",  String(page));
-      url.searchParams.set("limit", "100");
+let _loadGeneration = 0;
+let _activeLoadController = null;
 
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchApiPage(url, generation) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= API_PAGE_RETRIES; attempt++) {
+    if (generation !== _loadGeneration) {
+      throw new DOMException("Carga reemplazada por un nuevo filtro", "AbortError");
+    }
+
+    const controller = new AbortController();
+    _activeLoadController = controller;
+    const tid = setTimeout(() => controller.abort(), API_PAGE_TIMEOUT_MS);
+
+    try {
       const res = await fetch(url, {
         headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
-        signal:  controller.signal
+        signal: controller.signal
       });
-      if (!res.ok) throw new Error(`Error API ${res.status}: ${res.statusText}`);
-      const data = await res.json();
 
-      allOrders = allOrders.concat(Array.isArray(data.orders) ? data.orders : []);
-      totalPages = data.total_pages || 1;
-
-      // Mostrar progreso si hay múltiples páginas
-      if (totalPages > 1) {
-        const pct = Math.round((page / totalPages) * 100);
-        const lbl = document.getElementById("modeLabel");
-        if (lbl) lbl.textContent = `Cargando datos... ${pct}% (${allOrders.length} / ${data.total_orders || "?"} pedidos)`;
+      if (!res.ok) {
+        const error = new Error(`Error API ${res.status}: ${res.statusText}`);
+        error.status = res.status;
+        throw error;
       }
 
-      page++;
-    } while (page <= totalPages);
+      return await res.json();
+    } catch (error) {
+      if (generation !== _loadGeneration) throw error;
+      lastError = error;
 
-    return allOrders;
-  } finally {
-    clearTimeout(tid);
+      const retryable = error.name === "AbortError" || error.status === 429 || error.status >= 500;
+      if (!retryable || attempt >= API_PAGE_RETRIES) throw error;
+    } finally {
+      clearTimeout(tid);
+      if (_activeLoadController === controller) _activeLoadController = null;
+    }
+
+    await wait(700 * (attempt + 1));
   }
+
+  throw lastError || new Error("No se pudo cargar la página de pedidos");
+}
+
+async function fetchApi(r, generation) {
+  const base = CONFIG.apiBaseUrl.replace(/\/$/, "") + "/overview";
+  let allOrders = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const url = new URL(base);
+    url.searchParams.set("from",  r.fromISO);
+    url.searchParams.set("to",    r.toISO);
+    url.searchParams.set("page",  String(page));
+    url.searchParams.set("limit", String(API_PAGE_SIZE));
+
+    const data = await fetchApiPage(url, generation);
+    allOrders = allOrders.concat(Array.isArray(data.orders) ? data.orders : []);
+    totalPages = Math.max(1, Number(data.total_pages) || 1);
+
+    if (totalPages > 1) {
+      const pct = Math.round((page / totalPages) * 100);
+      const lbl = document.getElementById("modeLabel");
+      if (lbl) lbl.textContent = `Cargando datos... ${pct}% (${allOrders.length} / ${data.total_orders || "?"} pedidos)`;
+    }
+
+    page++;
+  } while (page <= totalPages && generation === _loadGeneration);
+
+  if (generation !== _loadGeneration) {
+    throw new DOMException("Carga reemplazada por un nuevo filtro", "AbortError");
+  }
+
+  return allOrders;
 }
 
 // =============================================================
@@ -313,13 +355,16 @@ function range() {
 let _loadInFlight = false;
 
 async function load() {
-  if (_loadInFlight) return;
+  const generation = ++_loadGeneration;
+  if (_activeLoadController) _activeLoadController.abort();
   _loadInFlight = true;
   setLoading(true);
   const r = range();
   try {
     if (CONFIG.mode === "api") {
-      state.orders = await fetchApi(r);
+      const orders = await fetchApi(r, generation);
+      if (generation !== _loadGeneration) return;
+      state.orders = orders;
       $("#modeLabel").textContent = "WooCommerce API";
       toast("Datos reales cargados desde WooCommerce", "success");
       // Sincronizar pedidos completados → GA4 (solo los que no se han enviado antes)
@@ -330,11 +375,18 @@ async function load() {
       toast("CRM cargado con datos demo");
     }
   } catch (e) {
+    if (generation !== _loadGeneration) return;
     console.error("Error al cargar datos:", e);
-    state.orders = demoOrders();
-    $("#modeLabel").textContent = "Modo demo (respaldo)";
-    toast("Sin conexión a la API — se cargaron datos demo.", "error");
+    if (CONFIG.mode === "api") {
+      $("#modeLabel").textContent = "WooCommerce API (error)";
+      toast("No se completó la carga. Se conservaron los últimos datos reales; pulsa Actualizar para reintentar.", "error");
+    } else {
+      state.orders = demoOrders();
+      $("#modeLabel").textContent = "Modo demo";
+      toast("CRM cargado con datos demo", "error");
+    }
   } finally {
+    if (generation !== _loadGeneration) return;
     setLoading(false);
     _loadInFlight = false;
   }
@@ -3470,7 +3522,12 @@ function bind() {
   });
 
   const debouncedFilter = debounce(applyFilters, 260);
-  ["fromDate","toDate","statusFilter","countryFilter"].forEach(id =>
+  ["fromDate","toDate"].forEach(id =>
+    $("#" + id).addEventListener("change", () => {
+      if (CONFIG.mode === "api") load(); else applyFilters();
+    })
+  );
+  ["statusFilter","countryFilter"].forEach(id =>
     $("#" + id).addEventListener("change", applyFilters)
   );
   $("#searchInput").addEventListener("input", debouncedFilter);
