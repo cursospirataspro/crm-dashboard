@@ -29,7 +29,12 @@ Abre `index.html` en Chrome. Está en modo demo por defecto.
 
 ```php
 define('CPP_CRM_DASHBOARD_TOKEN', 'TOKEN_LARGO_Y_SEGURO');
+define('CPP_CRM_DASHBOARD_ALLOWED_ORIGINS', 'https://crm.tudominio.com');
 ```
+
+Puedes autorizar varios orígenes separándolos por comas. Para la conexión real,
+sirve el dashboard mediante HTTPS desde el origen configurado. Abrir `index.html`
+como `file://` queda reservado al modo demo; no uses `*` en producción.
 
 4. En `assets/app.js` cambia:
 
@@ -43,6 +48,12 @@ const CONFIG = {
 ```
 
 Si quieres soles peruanos, usa `currency: "PEN"`.
+
+El plugin acepta el token únicamente mediante la cabecera
+`X-CPP-CRM-Dashboard-Token`; no lo agregues a la URL. El endpoint de pedidos usa
+páginas de hasta 100 registros, caché de 60 segundos e invalida la caché cuando
+cambia un pedido. La actualización automática está desactivada inicialmente y,
+si se activa, utiliza un intervalo mínimo de 5 minutos.
 
 ## Email Marketing profesional
 

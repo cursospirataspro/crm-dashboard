@@ -32,7 +32,7 @@ const _origFmtMoney = v => {
 };
 
 // =============================================================
-// PAÃ¯Â¿Â½Ã‚ÂSES (lat/lon para el globo 3D)
+// PAÍSES (lat/lon para el globo 3D)
 // =============================================================
 const COUNTRIES = [
   { code:"PE", name:"Perú",                lat: -9.19, lon: -75.02, cities:["Lima","Iquitos","Arequipa","Trujillo","Cusco"] },
@@ -42,7 +42,7 @@ const COUNTRIES = [
   { code:"CL", name:"Chile",               lat:-35.67, lon: -71.54, cities:["Santiago","Valparaíso","Concepción"] },
   { code:"AR", name:"Argentina",           lat:-38.42, lon: -63.62, cities:["Buenos Aires","Córdoba","Rosario"] },
   { code:"ES", name:"España",              lat: 40.46, lon:  -3.75, cities:["Madrid","Barcelona","Valencia","Sevilla"] },
-  { code:"US", name:"Estados Unidos",      lat: 37.09, lon: -95.71, cities:["Miami","New York","Los Ã¯Â¿Â½Ã‚Ângeles","Houston"] },
+  { code:"US", name:"Estados Unidos",      lat: 37.09, lon: -95.71, cities:["Miami","New York","Los Ángeles","Houston"] },
   { code:"BO", name:"Bolivia",             lat:-16.29, lon: -63.59, cities:["La Paz","Santa Cruz","Cochabamba"] },
   { code:"DO", name:"República Dominicana",lat: 18.74, lon: -70.16, cities:["Santo Domingo","Santiago"] },
   { code:"VE", name:"Venezuela",           lat:  6.42, lon: -66.59, cities:["Caracas","Valencia","Maracaibo"] },
@@ -222,7 +222,7 @@ async function fetchApi(r) {
       url.searchParams.set("from",  r.fromISO);
       url.searchParams.set("to",    r.toISO);
       url.searchParams.set("page",  String(page));
-      url.searchParams.set("limit", "500");
+      url.searchParams.set("limit", "100");
 
       const res = await fetch(url, {
         headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
@@ -310,7 +310,11 @@ function range() {
 // =============================================================
 // CARGA DE DATOS
 // =============================================================
+let _loadInFlight = false;
+
 async function load() {
+  if (_loadInFlight) return;
+  _loadInFlight = true;
   setLoading(true);
   const r = range();
   try {
@@ -332,6 +336,7 @@ async function load() {
     toast("Sin conexión a la API — se cargaron datos demo.", "error");
   } finally {
     setLoading(false);
+    _loadInFlight = false;
   }
   $("#lastSync").textContent = "Actualizado: " + new Date().toLocaleString("es-PE");
   populateCountries();
@@ -2667,7 +2672,7 @@ function drawLine(canvas, series) {
     y: h - p - (s.value / max) * (h - p * 2)
   }));
 
-  // Ã¯Â¿Â½Ã‚Ârea rellena
+  // Área rellena
   const grd = ctx.createLinearGradient(0, p, 0, h - p);
   grd.addColorStop(0, "rgba(239,35,60,.30)"); grd.addColorStop(1, "rgba(239,35,60,0)");
   ctx.beginPath();
@@ -2832,7 +2837,7 @@ function renderRfmScatter() {
 }
 
 // =============================================================
-// ANÃ¯Â¿Â½Ã‚ÂLISIS DE ABANDONO
+// ANÁLISIS DE ABANDONO
 // =============================================================
 function renderAbandonAnalysis() {
   const el = $("#abandonList");
@@ -2923,7 +2928,7 @@ function renderCoursesFunnel() {
 }
 
 // =============================================================
-// ANÃ¯Â¿Â½Ã‚ÂLISIS DE PRECIOS
+// ANÁLISIS DE PRECIOS
 // =============================================================
 function renderPriceDistribution() {
   const el = $("#priceDistribution");
@@ -3279,7 +3284,7 @@ function closeCustomerModal() {
 }
 
 // =============================================================
-// MAPA DE CALOR: VENTAS POR HORA Y DÃ¯Â¿Â½Ã‚ÂA
+// MAPA DE CALOR: VENTAS POR HORA Y DÍA
 // =============================================================
 function renderHeatmap() {
   const el = $("#salesHeatmap");
@@ -3309,7 +3314,7 @@ function renderHeatmap() {
 }
 
 // =============================================================
-// ANÃ¯Â¿Â½Ã‚ÂLISIS DE COHORTES
+// ANÁLISIS DE COHORTES
 // =============================================================
 function renderCohorts() {
   const tbl = $("#cohortTable");
@@ -3375,6 +3380,9 @@ function initPolling(minutes) {
   if (_pollingTimer)    { clearInterval(_pollingTimer);    _pollingTimer    = null; }
   if (_pollingCountdown){ clearInterval(_pollingCountdown); _pollingCountdown = null; }
 
+  minutes = Number(minutes) || 0;
+  if (minutes > 0) minutes = Math.max(5, minutes);
+
   const btn    = $("#pollingToggle");
   const status = $("#pollingStatus");
   const cfgInp = $("#cfgPollingInterval");
@@ -3414,10 +3422,9 @@ function initPolling(minutes) {
 
 function autoStartPolling() {
   if (CONFIG.mode !== 'api') return;
-  // Recuperar preferencia guardada, o usar 2 min por defecto
-  const saved = parseInt(localStorage.getItem('crm_polling_min') || '2');
-  const min   = saved > 0 ? saved : 2;
-  initPolling(min);
+  // Solo se activa si el usuario guardó una preferencia explícita.
+  const saved = parseInt(localStorage.getItem('crm_polling_min') || '0');
+  if (saved > 0) initPolling(saved);
 }
 
 // =============================================================
@@ -3517,7 +3524,8 @@ function bind() {
 
   // ── Polling config ──
   $("#cfgPollingSave")?.addEventListener("click", () => {
-    const min = parseInt($("#cfgPollingInterval")?.value || '0');
+    const requested = parseInt($("#cfgPollingInterval")?.value || '0');
+    const min = requested > 0 ? Math.max(5, requested) : 0;
     initPolling(min);
     toast(min > 0 ? `🟢 Live activado: actualización cada ${min} min` : '🔴 Auto-actualización desactivada', min > 0 ? 'success' : 'info');
   });
@@ -3527,8 +3535,8 @@ function bind() {
     if (_pollingTimer) {
       initPolling(0);
     } else {
-      const saved = parseInt(localStorage.getItem('crm_polling_min') || '2');
-      autoStartPolling();
+      const saved = parseInt(localStorage.getItem('crm_polling_min') || '5');
+      initPolling(saved > 0 ? saved : 5);
     }
   });
 
@@ -4573,37 +4581,21 @@ async function sendTestEmail() {
   if (result) { result.style.display = "none"; }
 
   try {
-    let res, data;
-    if (CONFIG.mode === "api") {
-      res = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken
-        },
-        body: JSON.stringify({
-          to_email:     toEmail,
-          to_name:      toName,
-          subject:      subject,
-          html_content: body.replace(/\n/g, "<br>")
-        })
-      });
-      data = await res.json();
-    } else {
-      const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
-      if (!b?.key) { toast("⚠ Configura tu API Key de Brevo primero", "warning"); return; }
-      res = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "api-key": b.key },
-        body: JSON.stringify({
-          sender:      { name: b.name || "CRM", email: b.email },
-          to:          [{ email: toEmail, name: toName }],
-          subject:     subject,
-          htmlContent: body.replace(/\n/g, "<br>")
-        })
-      });
-      data = await res.json();
-    }
+    if (CONFIG.mode !== "api") throw new Error("Brevo requiere la conexión segura con WordPress.");
+    const res = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken
+      },
+      body: JSON.stringify({
+        to_email:     toEmail,
+        to_name:      toName,
+        subject:      subject,
+        html_content: body.replace(/\n/g, "<br>")
+      })
+    });
+    const data = await res.json();
 
     if (res.ok && (data.success || data.messageId)) {
       if (result) {
@@ -4636,7 +4628,6 @@ async function sendTestEmail() {
 }
 
 function saveBrevoConfig() {
-  const key   = $("#brevoApiKey")?.value.trim()   || "";
   const name  = $("#brevoSenderName")?.value.trim() || "";
   const email = $("#brevoSenderEmail")?.value.trim() || "";
   const replyTo = $("#brevoReplyTo")?.value.trim() || email;
@@ -4649,7 +4640,7 @@ function saveBrevoConfig() {
     toast("⚠ El email de respuesta no es válido", "warning");
     return;
   }
-  localStorage.setItem("crm_brevo", JSON.stringify({ key, name, email, replyTo, address }));
+  localStorage.setItem("crm_brevo", JSON.stringify({ name, email, replyTo, address }));
   const msg = $("#brevoSavedMsg");
   if (msg) { msg.style.display = "inline"; setTimeout(() => msg.style.display = "none", 2000); }
   updateBrevoStatus();
@@ -4660,7 +4651,11 @@ function restoreBrevoConfig() {
   try {
     const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
     if (!b) { updateBrevoStatus(); return; }
-    if ($("#brevoApiKey"))    $("#brevoApiKey").value    = b.key   || "";
+    if (b.key || b.apiKey) {
+      delete b.key;
+      delete b.apiKey;
+      localStorage.setItem("crm_brevo", JSON.stringify(b));
+    }
     if ($("#brevoSenderName")) $("#brevoSenderName").value = b.name  || "";
     if ($("#brevoSenderEmail")) $("#brevoSenderEmail").value = b.email || "";
     if ($("#brevoReplyTo")) $("#brevoReplyTo").value = b.replyTo || b.email || "";
@@ -4676,16 +4671,8 @@ function updateBrevoStatus() {
     lbl.style.color = "var(--good)";
     lbl.textContent = "✅ Usando proxy seguro de WordPress (clave en servidor)";
   } else {
-    try {
-      const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
-      if (b?.key) {
-        lbl.style.color = "var(--good)";
-        lbl.textContent = "✅ API Key configurada (modo demo)";
-      } else {
-        lbl.style.color = "var(--muted)";
-        lbl.textContent = "No configurado — haz clic en ⚙ Configurar";
-      }
-    } catch(e) {}
+    lbl.style.color = "var(--muted)";
+    lbl.textContent = "Conecta WordPress para usar Brevo de forma segura";
   }
 }
 
@@ -4693,30 +4680,20 @@ async function testBrevoConnection() {
   const btn = $("#brevoTestBtn");
   if (btn) btn.disabled = true;
   try {
-    if (CONFIG.mode === "api") {
-      const res = await fetch(`${CONFIG.apiBaseUrl}/brevo/test`, {
-        headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const left  = data.creditsLeft  ?? "?";
-        const total = data.credits      ?? "?";
-        const used  = data.creditsUsed  ?? "?";
-        const quota = $("#brevoQuotaBar");
-        if (quota) quota.textContent = `📩 Cuota Brevo: ${used} enviados / ${total} — disponibles: ${left}`;
-        toast(`✅ Brevo OK — ${data.account || "conectado"} | ${left} créditos disponibles`, "success");
-      } else {
-        toast(`❌ Error: ${data.message || res.status}`, "error");
-      }
+    if (CONFIG.mode !== "api") throw new Error("Brevo requiere la conexión segura con WordPress.");
+    const res = await fetch(`${CONFIG.apiBaseUrl}/brevo/test`, {
+      headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken }
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const left  = data.creditsLeft  ?? "?";
+      const total = data.credits      ?? "?";
+      const used  = data.creditsUsed  ?? "?";
+      const quota = $("#brevoQuotaBar");
+      if (quota) quota.textContent = `📩 Cuota Brevo: ${used} enviados / ${total} — disponibles: ${left}`;
+      toast(`✅ Brevo OK — ${data.account || "conectado"} | ${left} créditos disponibles`, "success");
     } else {
-      const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
-      if (!b?.key) { toast("⚠ Configura tu API Key primero", "warning"); return; }
-      const res = await fetch("https://api.brevo.com/v3/account", {
-        headers: { "api-key": b.key }
-      });
-      const data = await res.json();
-      if (res.ok) toast(`✅ Brevo OK — ${data.email || "cuenta verificada"}`, "success");
-      else toast(`❌ Error Brevo: ${data.message || res.status}`, "error");
+      toast(`❌ Error: ${data.message || res.status}`, "error");
     }
   } catch(e) {
     toast(`❌ Error de conexión: ${e.message}`, "error");
@@ -4862,42 +4839,23 @@ function addToUnsubscribeList(email) {
 }
 
 async function sendBrevoMessage({ recipient, subject, htmlContent, textContent, composer, scheduledAt = "" }) {
-  let res, data;
+  if (CONFIG.mode !== "api") throw new Error("Brevo requiere la conexión segura con WordPress.");
+  let data;
   const tags = [composer.tag || "crm-dashboard"].filter(Boolean);
-  if (CONFIG.mode === "api") {
-    res = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
-      body: JSON.stringify({
-        to_email: recipient.email,
-        to_name: recipient.name,
-        subject,
-        html_content: htmlContent,
-        text_content: textContent,
-        reply_to: composer.replyTo,
-        tags,
-        scheduled_at: scheduledAt || undefined,
-      })
-    });
-  } else {
-    const b = JSON.parse(localStorage.getItem("crm_brevo") || "null");
-    if (!b?.key || !b?.email) throw new Error("Configura la API Key y el email remitente de Brevo");
-    const payload = {
-      sender: { name: b.name || "CRM Dashboard", email: b.email },
-      to: [{ email: recipient.email, name: recipient.name }],
+  const res = await fetch(`${CONFIG.apiBaseUrl}/brevo/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken },
+    body: JSON.stringify({
+      to_email: recipient.email,
+      to_name: recipient.name,
       subject,
-      htmlContent,
-      textContent,
+      html_content: htmlContent,
+      text_content: textContent,
+      reply_to: composer.replyTo,
       tags,
-    };
-    if (b.replyTo || b.email) payload.replyTo = { email: b.replyTo || b.email, name: b.name || "Soporte" };
-    if (scheduledAt) payload.scheduledAt = scheduledAt;
-    res = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "api-key": b.key },
-      body: JSON.stringify(payload)
-    });
-  }
+      scheduled_at: scheduledAt || undefined,
+    })
+  });
   try { data = await res.json(); } catch(e) { data = {}; }
   return { ok: res.ok, status: res.status, data };
 }
@@ -5830,13 +5788,7 @@ function renderEmailChecklist() {
   if (!el) return;
   const c = getEmailComposerState();
   const recipients = getEmailRecipients($("#emailSegment")?.value || "all", $("#excludeConverted")?.checked ?? false);
-  let brevoReady = CONFIG.mode === "api";
-  if (!brevoReady) {
-    try {
-      const b = JSON.parse(localStorage.getItem("crm_brevo") || "{}");
-      brevoReady = Boolean(b.key && b.email);
-    } catch(e) {}
-  }
+  const brevoReady = CONFIG.mode === "api";
   const checks = [
     { ok: c.subject.length > 0 && c.subject.length <= 60, label: "Asunto", hint: c.subject.length ? `${c.subject.length}/60` : "obligatorio" },
     { ok: c.preheader.length >= 20 && c.preheader.length <= 110, label: "Preheader", hint: c.preheader.length ? `${c.preheader.length}/110` : "recomendado" },
@@ -6930,7 +6882,7 @@ function renderPeriodComparison() {
 }
 
 // =============================================================
-// HORA ÓPTIMA DE ENVÃ¯Â¿Â½Ã‚ÂO
+// HORA ÓPTIMA DE ENVÍO
 // =============================================================
 function renderOptimalSendTime() {
   const chart  = $("#optimalTimeChart");
@@ -7038,7 +6990,7 @@ function detectDuplicates() {
 // MODO PRESENTACIÓN
 // =============================================================
 const PRES_VIEWS = [
-  { id: "command",      label: "� Resumen" },
+  { id: "command",      label: "📊 Resumen" },
   { id: "crm",          label: "👥 Clientes" },
   { id: "oportunidades",label: "✉️ Email Marketing" },
   { id: "sales",        label: "🧾 Ventas" },
@@ -7130,7 +7082,7 @@ function updatePresTimer() {
 // =============================================================
 const WIDGET_DEFS = [
   { id: "kpiGrid",       label: "📊 KPIs principales",     sub: "Ingresos, pedidos, clientes" },
-  { id: "view-command",  label: "� Resumen",              sub: "Globo + ventas + feed" },
+  { id: "view-command",  label: "📊 Resumen",              sub: "Globo + ventas + feed" },
   { id: "view-crm",      label: "👥 Clientes",             sub: "Segmentos, tabla, heatmap" },
   { id: "view-oportunidades",label: "✉️ Email Marketing",  sub: "Campañas, segmentos, envíos" },
   { id: "view-courses",  label: "🎓 Cursos",               sub: "Rendimiento y comparativa" },
@@ -7366,147 +7318,52 @@ async function syncOrdersToGA4(orders) {
 }
 
 // =============================================================
-// PAYPAL — API directa desde el browser (sin proxy WordPress)
-// PP_LIVE = credenciales producción | PP_SANDBOX = entorno de prueba
-// El usuario puede cambiar entre ambas con los botones rápidos.
+// PAYPAL — siempre mediante el proxy seguro de WordPress.
+// Las credenciales privadas viven exclusivamente en wp-config.php.
 // =============================================================
-
-const PP_LIVE = {
-  clientId: "",
-  secret:   "",
-  mode:     "live"
-};
-
-const PP_SANDBOX = {
-  clientId: "",
-  secret:   "",
-  mode:     "sandbox"
-};
-
-// Por defecto usa Live (tiene permisos de Reporting habilitados)
-const PP_DEFAULT = PP_LIVE;
 
 function loadPaypalConfig() {
   try {
-    const s = JSON.parse(localStorage.getItem("crm_paypal") || "null");
-    if (s && s.clientId) return s;
-    // Si no hay nada, guardar Live por defecto
-    try { localStorage.setItem("crm_paypal", JSON.stringify(PP_LIVE)); } catch(e) {}
-    return PP_LIVE;
-  } catch(e) { return PP_LIVE; }
-}
-
-function savePaypalConfig() {
-  const cid = (document.getElementById("ppClientId")?.value || "").trim();
-  const sec = (document.getElementById("ppSecret")?.value   || "").trim();
-  const mode = document.getElementById("ppMode")?.value || "sandbox";
-  if (!cid || !sec) { toast("Ingresa Client ID y Secret de PayPal", "error"); return; }
-  try { localStorage.setItem("crm_paypal", JSON.stringify({ clientId: cid, secret: sec, mode })); } catch(e) {}
-  _ppToken = null;
-  _ppTokenExpiry = 0;
-  const msg = document.getElementById("ppSavedMsg");
-  if (msg) { msg.style.display = "inline"; setTimeout(() => msg.style.display = "none", 2000); }
-  toast("Credenciales PayPal guardadas", "success");
-}
-
-// Cache del access token en memoria (se pierde al recargar la p�gina, no en disco)
-let _ppToken = null;
-let _ppTokenExpiry = 0;
-
-async function ppGetToken() {
-  const now = Date.now();
-  if (_ppToken && now < _ppTokenExpiry) return _ppToken;
-
-  const cfg  = loadPaypalConfig();
-  if (!cfg.clientId || !cfg.secret) {
-    throw new Error("PayPal no conectado. Configura las credenciales de forma segura en WordPress.");
+    let mode = localStorage.getItem("crm_paypal_mode") || "";
+    const legacy = JSON.parse(localStorage.getItem("crm_paypal") || "null");
+    if (!mode && legacy?.mode) mode = legacy.mode;
+    localStorage.removeItem("crm_paypal"); // elimina posibles secretos guardados por versiones anteriores
+    mode = mode === "sandbox" ? "sandbox" : "live";
+    localStorage.setItem("crm_paypal_mode", mode);
+    return { mode };
+  } catch(e) {
+    return { mode: "live" };
   }
-  const base = cfg.mode === "live"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com";
-  const creds = btoa(cfg.clientId + ":" + cfg.secret);
-
-  const res = await fetch(`${base}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Basic ${creds}`,
-      "Content-Type":  "application/x-www-form-urlencoded"
-    },
-    body: "grant_type=client_credentials"
-  });
-
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try { const e = await res.json(); msg = e.error_description || e.message || msg; } catch(_) {}
-    throw new Error(msg + " � verifica tu Client ID y Secret de PayPal");
-  }
-
-  const data     = await res.json();
-  _ppToken       = data.access_token;
-  _ppTokenExpiry = now + Math.max(60, (data.expires_in || 3600) - 60) * 1000;
-  return _ppToken;
 }
 
 async function ppFetchTransactions(from, to, page) {
   const cfg = loadPaypalConfig();
-  if (CONFIG.mode === "api" && CONFIG.apiBaseUrl && CONFIG.apiToken) {
-    const params = new URLSearchParams({ from, to, page: String(page || 1), mode: cfg.mode || "live" });
-    const res = await fetch(`${CONFIG.apiBaseUrl.replace(/\/$/, "")}/paypal/transactions?${params}`, {
-      headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken }
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data?.code) throw new Error(data?.message || `PayPal proxy HTTP ${res.status}`);
-    const details = (data.transactions || []).map(t => ({
-      transaction_info: {
-        transaction_id: t.id,
-        transaction_initiation_date: t.date,
-        transaction_amount: { value: t.amount, currency_code: t.currency || "USD" },
-        fee_amount: { value: t.fee || 0, currency_code: t.currency || "USD" },
-        transaction_status: t.status,
-        transaction_event_code: t.event_code || "T0006",
-        transaction_subject: t.subject || ""
-      },
-      payer_info: {
-        email_address: t.payer_email || "",
-        payer_name: { alternate_full_name: t.payer_name || t.payer_email || "Desconocido" },
-        address: { country_code: t.country || "" }
-      }
-    }));
-    return { transaction_details: details, total_pages: data.total_pages || 1, total_items: data.total_items || details.length };
+  if (CONFIG.mode !== "api" || !CONFIG.apiBaseUrl || !CONFIG.apiToken) {
+    throw new Error("PayPal requiere la conexión segura con WordPress.");
   }
-  const token = await ppGetToken();
-  const base  = cfg.mode === "live"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com";
-
-  const params = new URLSearchParams({
-    start_date:         from + "T00:00:00.000Z",
-    end_date:           to   + "T23:59:59.000Z",
-    transaction_status: "S",
-    page_size:          "500",
-    page:               String(page || 1),
-    fields:             "all"
+  const params = new URLSearchParams({ from, to, page: String(page || 1), mode: cfg.mode || "live" });
+  const res = await fetch(`${CONFIG.apiBaseUrl.replace(/\/$/, "")}/paypal/transactions?${params}`, {
+    headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken }
   });
-
-  const res = await fetch(`${base}/v1/reporting/transactions?${params}`, {
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
-  });
-
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    let errJson = null;
-    try { errJson = await res.json(); msg = errJson.message || errJson.error_description || msg; } catch(_) {}
-    if (res.status === 403) {
-      throw new Error(
-        "Permiso insuficiente (403). " +
-        "Ve a developer.paypal.com → My Apps → tu App → Editar → activa 'Transaction Search' en los permisos. " +
-        "Si ves esto en Sandbox, crea una app con ese permiso o usa credenciales Live."
-      );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.code) throw new Error(data?.message || `PayPal proxy HTTP ${res.status}`);
+  const details = (data.transactions || []).map(t => ({
+    transaction_info: {
+      transaction_id: t.id,
+      transaction_initiation_date: t.date,
+      transaction_amount: { value: t.amount, currency_code: t.currency || "USD" },
+      fee_amount: { value: t.fee || 0, currency_code: t.currency || "USD" },
+      transaction_status: t.status,
+      transaction_event_code: t.event_code || "T0006",
+      transaction_subject: t.subject || ""
+    },
+    payer_info: {
+      email_address: t.payer_email || "",
+      payer_name: { alternate_full_name: t.payer_name || t.payer_email || "Desconocido" },
+      address: { country_code: t.country || "" }
     }
-    throw new Error(msg);
-  }
-
-  return res.json();
+  }));
+  return { transaction_details: details, total_pages: data.total_pages || 1, total_items: data.total_items || details.length };
 }
 
 const PP_COUNTRIES = {
@@ -7859,14 +7716,10 @@ async function loadPaypalData() {
 }
 
 function ppSetMode(mode) {
-  const preset = mode === "live" ? PP_LIVE : PP_SANDBOX;
-  _ppToken = null;
-  _ppTokenExpiry = 0;
-  try { localStorage.setItem("crm_paypal", JSON.stringify(preset)); } catch(e) {}
+  mode = mode === "sandbox" ? "sandbox" : "live";
+  try { localStorage.setItem("crm_paypal_mode", mode); } catch(e) {}
   const el = id => document.getElementById(id);
-  if (el("ppClientId")) el("ppClientId").value = preset.clientId;
-  if (el("ppSecret"))   el("ppSecret").value   = preset.secret;
-  if (el("ppMode"))     el("ppMode").value      = preset.mode;
+  if (el("ppMode")) el("ppMode").value = mode;
   const liveBtn = el("ppModeLive");
   const sandBtn = el("ppModeSandbox");
   const label   = el("ppModeLabel");
@@ -7916,7 +7769,7 @@ function initPaypalView() {
   const sandBtn  = document.getElementById("ppModeSandbox");
 
   // Establecer modo guardado (o Live por defecto)
-  const savedMode = (() => { try { const s = JSON.parse(localStorage.getItem("crm_paypal")||"null"); return s?.mode||"live"; } catch(e){return "live";} })();
+  const savedMode = loadPaypalConfig().mode;
   ppSetMode(savedMode);
 
   // Fechas por defecto: últimos 30 días
@@ -8554,14 +8407,12 @@ function logSync(service, status, detail) {
 function renderIntegrationDiagnostics() {
   const el = $("#integrationDiagnostics");
   if (!el) return;
-  let brevo = {};
-  try { brevo = JSON.parse(localStorage.getItem("crm_brevo") || "{}"); } catch(e) {}
   const cards = [
     { name:"WooCommerce", ok:CONFIG.mode === "api", text:CONFIG.mode === "api" ? "Conectado mediante proxy seguro" : "Modo demostración / sin conexión" },
     { name:"PayPal Live", ok:CONFIG.mode === "api", text:CONFIG.mode === "api" ? "Proxy disponible; validar credenciales en WordPress" : "Requiere conexión WordPress" },
     { name:"PayPal Sandbox", ok:CONFIG.mode === "api", text:"Usa credenciales separadas en wp-config.php" },
     { name:"Stripe", ok:false, text:"WooCommerce disponible; API real pendiente de proxy seguro" },
-    { name:"Email / Brevo", ok:Boolean(brevo.apiKey || brevo.key), text:(brevo.apiKey || brevo.key) ? "Configuración guardada" : "No configurado" },
+    { name:"Email / Brevo", ok:CONFIG.mode === "api", text:CONFIG.mode === "api" ? "Proxy disponible; validar credenciales en WordPress" : "Requiere conexión WordPress" },
     { name:"Google Analytics 4", ok:Boolean(localStorage.getItem("crm_ga4_config")), text:localStorage.getItem("crm_ga4_config") ? "Configuración guardada" : "No configurado" }
   ];
   el.innerHTML = cards.map(c => `<article class="diagnostic-card"><span class="diag-dot ${c.ok ? "ok" : "warn"}"></span><div><strong>${c.name}</strong><p>${esc(c.text)}</p></div></article>`).join("");

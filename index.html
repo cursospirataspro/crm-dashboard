@@ -517,9 +517,7 @@
         <!-- Panel de config (oculto por defecto) -->
         <div id="brevoConfigPanel" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
           <div class="email-compose" style="gap:10px">
-            <label class="sf-label" style="max-width:480px">API Key de Brevo
-              <input id="brevoApiKey" type="password" class="sf-input" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxx...">
-            </label>
+            <p class="panel-help">La API Key y el remitente se configuran de forma privada en <code>wp-config.php</code>; nunca se guardan en el navegador.</p>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <label class="sf-label" style="flex:1;min-width:180px">Nombre del remitente
                 <input id="brevoSenderName" type="text" class="sf-input" placeholder="Tu nombre o empresa">
@@ -1209,12 +1207,8 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
       <div id="paypalDataState" class="data-state hidden" role="status"></div>
       <div id="paypalSyncMeta" class="sync-meta" aria-live="polite"></div>
 
-      <!-- Inputs ocultos para las credenciales (usados internamente) -->
-      <input id="ppClientId" type="hidden">
-      <input id="ppSecret"   type="hidden">
+      <!-- El modo se envía al proxy; las credenciales permanecen en wp-config.php -->
       <input id="ppMode"     type="hidden" value="live">
-      <span  id="ppSaveBtn"  style="display:none"></span>
-      <span  id="ppSavedMsg" style="display:none"></span>
 
       <!-- KPIs PayPal -->
       <div id="paypalKpis" class="kpi-grid" style="margin-top:14px">
@@ -1557,8 +1551,8 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
       <article class="panel" style="margin-top:14px">
         <div class="panel-head"><div><p class="eyebrow">Tiempo real</p><h2>Actualización automática</h2></div></div>
         <div class="alert-config" style="grid-template-columns:1fr">
-          <label class="sf-label">Intervalo de actualización (minutos — 0 = desactivado)
-            <input id="cfgPollingInterval" type="number" class="sf-input" value="0" min="0" max="60" style="max-width:120px">
+          <label class="sf-label">Intervalo de actualización (minutos — 0 = desactivado; mínimo activo = 5)
+            <input id="cfgPollingInterval" type="number" class="sf-input" value="0" min="0" max="60" step="5" style="max-width:120px">
           </label>
           <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
             <button id="cfgPollingSave" class="btn">Guardar intervalo</button>
@@ -1818,6 +1812,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=45"></script>
+<script src="assets/app.js?v=46"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.1.0
+ * Version:      2.2.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -25,30 +25,69 @@ add_action( 'before_woocommerce_init', function () {
 } );
 
 // ─────────────────────────────────────────────────────────────
-// Cabeceras CORS — permite peticiones desde cualquier origen
-// (necesario para abrir el dashboard como archivo local)
+// CORS limitado a estas rutas y a los orígenes configurados.
+// Define CPP_CRM_DASHBOARD_ALLOWED_ORIGINS en wp-config.php.
 // ─────────────────────────────────────────────────────────────
-// Manejo preflight OPTIONS (debe ir ANTES de rest_api_init)
-add_action( 'init', function () {
-    if ( $_SERVER['REQUEST_METHOD'] === 'OPTIONS' ) {
-        header( 'Access-Control-Allow-Origin: *' );
-        header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
-        header( 'Access-Control-Allow-Headers: X-CPP-CRM-Dashboard-Token, Content-Type, Authorization' );
-        header( 'Access-Control-Max-Age: 86400' );
-        status_header( 200 );
-        exit;
-    }
-} );
+function cpp_crm_dashboard_allowed_origins() {
+    $configured = defined( 'CPP_CRM_DASHBOARD_ALLOWED_ORIGINS' )
+        ? CPP_CRM_DASHBOARD_ALLOWED_ORIGINS
+        : home_url();
 
-add_action( 'rest_api_init', function () {
-    remove_filter( 'rest_pre_serve_request', 'rest_send_cors_headers' );
-    add_filter( 'rest_pre_serve_request', function ( $value ) {
-        header( 'Access-Control-Allow-Origin: *' );
+    $origins = is_array( $configured ) ? $configured : explode( ',', (string) $configured );
+    $origins = array_values( array_filter( array_map( function ( $origin ) {
+        return rtrim( trim( (string) $origin ), '/' );
+    }, $origins ) ) );
+
+    return apply_filters( 'cpp_crm_dashboard_allowed_origins', $origins );
+}
+
+function cpp_crm_dashboard_request_origin() {
+    return isset( $_SERVER['HTTP_ORIGIN'] )
+        ? rtrim( sanitize_text_field( wp_unslash( $_SERVER['HTTP_ORIGIN'] ) ), '/' )
+        : '';
+}
+
+function cpp_crm_dashboard_origin_is_allowed( $origin ) {
+    if ( '' === $origin ) {
+        return true;
+    }
+    $allowed = cpp_crm_dashboard_allowed_origins();
+    return in_array( '*', $allowed, true ) || in_array( $origin, $allowed, true );
+}
+
+add_filter( 'rest_pre_dispatch', function ( $result, $server, $request ) {
+    if ( 0 !== strpos( $request->get_route(), '/cpp-crm-dashboard/v1/' ) ) {
+        return $result;
+    }
+
+    $origin = cpp_crm_dashboard_request_origin();
+    if ( ! cpp_crm_dashboard_origin_is_allowed( $origin ) ) {
+        return new WP_Error( 'cors_forbidden', 'Origen no autorizado.', [ 'status' => 403 ] );
+    }
+
+    return $result;
+}, 10, 3 );
+
+add_filter( 'rest_pre_serve_request', function ( $served, $result, $request, $server ) {
+    if ( 0 !== strpos( $request->get_route(), '/cpp-crm-dashboard/v1/' ) ) {
+        return $served;
+    }
+
+    header_remove( 'Access-Control-Allow-Origin' );
+    header_remove( 'Access-Control-Allow-Credentials' );
+
+    $origin = cpp_crm_dashboard_request_origin();
+    if ( $origin && cpp_crm_dashboard_origin_is_allowed( $origin ) ) {
+        $allowed = cpp_crm_dashboard_allowed_origins();
+        header( 'Access-Control-Allow-Origin: ' . ( in_array( '*', $allowed, true ) ? '*' : $origin ) );
         header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
         header( 'Access-Control-Allow-Headers: X-CPP-CRM-Dashboard-Token, Content-Type, Authorization' );
-        return $value;
-    } );
-}, 15 );
+        header( 'Access-Control-Max-Age: 600' );
+        header( 'Vary: Origin', false );
+    }
+
+    return $served;
+}, 20, 4 );
 
 // ─────────────────────────────────────────────────────────────
 // Registro de la ruta REST
@@ -80,9 +119,6 @@ function cpp_crm_dashboard_check_token( WP_REST_Request $request ) {
     }
 
     $incoming = $request->get_header( 'x-cpp-crm-dashboard-token' );
-    if ( ! $incoming ) {
-        $incoming = $request->get_param( 'token' );
-    }
 
     if ( ! $incoming || ! hash_equals( (string) CPP_CRM_DASHBOARD_TOKEN, (string) $incoming ) ) {
         return new WP_Error( 'forbidden', 'Token inválido.', [ 'status' => 403 ] );
@@ -107,6 +143,19 @@ function cpp_crm_normalize_status( $status ) {
     return preg_replace( '/^wc-/', '', (string) $status );
 }
 
+function cpp_crm_dashboard_cache_version() {
+    return (string) get_option( 'cpp_crm_dashboard_cache_version', '1' );
+}
+
+function cpp_crm_dashboard_bump_cache_version() {
+    update_option( 'cpp_crm_dashboard_cache_version', (string) microtime( true ), false );
+}
+
+add_action( 'woocommerce_new_order', 'cpp_crm_dashboard_bump_cache_version' );
+add_action( 'woocommerce_update_order', 'cpp_crm_dashboard_bump_cache_version' );
+add_action( 'woocommerce_delete_order', 'cpp_crm_dashboard_bump_cache_version' );
+add_action( 'woocommerce_refund_created', 'cpp_crm_dashboard_bump_cache_version' );
+
 // ─────────────────────────────────────────────────────────────
 // Endpoint principal
 // ─────────────────────────────────────────────────────────────
@@ -118,36 +167,51 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     // Parámetros de fecha y paginación
     $from     = sanitize_text_field( $request->get_param( 'from' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) ) );
     $to       = sanitize_text_field( $request->get_param( 'to' )   ?: gmdate( 'Y-m-d' ) );
-    $limit    = $request->get_param( 'limit' ) ? min( absint( $request->get_param( 'limit' ) ), 500 ) : 500;
+    $limit    = $request->get_param( 'limit' ) ? min( absint( $request->get_param( 'limit' ) ), 100 ) : 50;
     $page     = $request->get_param( 'page' )  ? max( 1, absint( $request->get_param( 'page' ) ) ) : 1;
 
     // Validar formato de fecha
     if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $from ) ) $from = gmdate( 'Y-m-d', strtotime( '-30 days' ) );
     if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $to ) )   $to   = gmdate( 'Y-m-d' );
 
+    if ( $from > $to ) {
+        return new WP_Error( 'invalid_date_range', 'La fecha inicial no puede ser posterior a la fecha final.', [ 'status' => 400 ] );
+    }
+
     // Rango de fechas inclusivo (inicio del día "from" → final del día "to")
     $date_range = $from . 'T00:00:00' . '...' . $to . 'T23:59:59';
 
-    // Contar total de pedidos en el rango (para paginación)
-    $total_count = wc_get_orders( [
-        'limit'        => -1,
-        'return'       => 'ids',
-        'status'       => [ 'completed', 'processing', 'pending', 'cancelled', 'refunded', 'on-hold' ],
-        'date_created' => $date_range,
-        'count_total'  => true,
-    ] );
-    $total_orders = is_array( $total_count ) ? count( $total_count ) : 0;
-    $total_pages  = $limit > 0 ? (int) ceil( $total_orders / $limit ) : 1;
+    $cache_key = 'cpp_crm_overview_' . md5( implode( '|', [
+        $from,
+        $to,
+        (string) $limit,
+        (string) $page,
+        cpp_crm_dashboard_cache_version(),
+    ] ) );
+    $cached = get_transient( $cache_key );
+    if ( false !== $cached && is_array( $cached ) ) {
+        return rest_ensure_response( $cached );
+    }
 
-    $orders = wc_get_orders( [
+    // Una sola consulta paginada obtiene los pedidos y el total.
+    $query = wc_get_orders( [
         'limit'        => $limit,
-        'paged'        => $page,
+        'page'         => $page,
+        'paginate'     => true,
         'orderby'      => 'date',
         'order'        => 'DESC',
         'status'       => [ 'completed', 'processing', 'pending', 'cancelled', 'refunded', 'on-hold' ],
         'date_created' => $date_range,
         'return'       => 'objects',
     ] );
+
+    if ( ! is_object( $query ) || ! isset( $query->orders ) ) {
+        return new WP_Error( 'orders_query_failed', 'No se pudieron consultar los pedidos.', [ 'status' => 500 ] );
+    }
+
+    $orders       = $query->orders;
+    $total_orders = isset( $query->total ) ? (int) $query->total : count( $orders );
+    $total_pages  = isset( $query->max_num_pages ) ? (int) $query->max_num_pages : 1;
 
     $normalized = [];
 
@@ -188,7 +252,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         ];
     }
 
-    return rest_ensure_response( [
+    $response_data = [
         'site'         => get_bloginfo( 'name' ),
         'from'         => $from,
         'to'           => $to,
@@ -199,7 +263,10 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         'per_page'     => $limit,
         'orders'       => $normalized,
         'generated_at' => gmdate( 'c' ),
-    ] );
+    ];
+
+    set_transient( $cache_key, $response_data, MINUTE_IN_SECONDS );
+    return rest_ensure_response( $response_data );
 }
 
 // =============================================================
@@ -224,6 +291,7 @@ add_action( 'rest_api_init', function () {
         'args'     => [
             'from' => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
             'to'   => [ 'required' => false, 'sanitize_callback' => 'sanitize_text_field' ],
+            'mode' => [ 'required' => false, 'sanitize_callback' => 'sanitize_key' ],
         ],
     ] ) );
 
@@ -256,7 +324,7 @@ function cpp_paypal_get_token( $mode = 'live' ) {
             'Content-Type'  => 'application/x-www-form-urlencoded',
         ],
         'body'    => 'grant_type=client_credentials',
-        'timeout' => 15,
+        'timeout' => 10,
         'sslverify' => true,
     ] );
 
@@ -273,6 +341,12 @@ function cpp_paypal_get_token( $mode = 'live' ) {
 }
 
 function cpp_paypal_fetch_transactions( $from, $to, $page = 1, $mode = 'live' ) {
+    $cache_key = 'cpp_crm_paypal_' . md5( implode( '|', [ $mode, $from, $to, (string) $page ] ) );
+    $cached = get_transient( $cache_key );
+    if ( false !== $cached && is_array( $cached ) ) {
+        return $cached;
+    }
+
     $token = cpp_paypal_get_token($mode);
     if ( is_wp_error($token) ) return $token;
 
@@ -280,7 +354,7 @@ function cpp_paypal_fetch_transactions( $from, $to, $page = 1, $mode = 'live' ) 
         'start_date'         => $from . 'T00:00:00-0000',
         'end_date'           => $to   . 'T23:59:59-0000',
         'transaction_status' => 'S',
-        'page_size'          => 500,
+        'page_size'          => 100,
         'page'               => $page,
         'fields'             => 'all',
     ], ($mode === 'sandbox' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com') . '/v1/reporting/transactions' );
@@ -290,12 +364,23 @@ function cpp_paypal_fetch_transactions( $from, $to, $page = 1, $mode = 'live' ) 
             'Authorization' => 'Bearer ' . $token,
             'Content-Type'  => 'application/json',
         ],
-        'timeout'   => 20,
+        'timeout'   => 10,
         'sslverify' => true,
     ] );
 
     if ( is_wp_error($response) ) return $response;
-    return json_decode( wp_remote_retrieve_body($response), true );
+    $body = json_decode( wp_remote_retrieve_body($response), true );
+    $code = wp_remote_retrieve_response_code($response);
+    if ( $code >= 400 || ! is_array( $body ) ) {
+        return new WP_Error(
+            'paypal_api_error',
+            is_array( $body ) && ! empty( $body['message'] ) ? $body['message'] : 'PayPal devolvió una respuesta no válida.',
+            [ 'status' => 502 ]
+        );
+    }
+
+    set_transient( $cache_key, $body, 5 * MINUTE_IN_SECONDS );
+    return $body;
 }
 
 function cpp_paypal_transactions( WP_REST_Request $request ) {
@@ -342,8 +427,9 @@ function cpp_paypal_transactions( WP_REST_Request $request ) {
 function cpp_paypal_summary( WP_REST_Request $request ) {
     $from = $request->get_param('from') ?: date('Y-m-d', strtotime('-30 days'));
     $to   = $request->get_param('to')   ?: date('Y-m-d');
+    $mode = $request->get_param('mode') === 'sandbox' ? 'sandbox' : 'live';
 
-    $data = cpp_paypal_fetch_transactions( $from, $to, 1 );
+    $data = cpp_paypal_fetch_transactions( $from, $to, 1, $mode );
     if ( is_wp_error($data) ) return $data;
 
     $txns = $data['transaction_details'] ?? [];
@@ -436,12 +522,16 @@ function cpp_brevo_test( WP_REST_Request $request ) {
     if ( empty($cfg['api_key']) ) {
         return new WP_Error( 'brevo_no_key', 'CPP_BREVO_API_KEY no definida en wp-config.php', [ 'status' => 500 ] );
     }
+    $cached = get_transient( 'cpp_crm_brevo_account' );
+    if ( false !== $cached && is_array( $cached ) ) {
+        return rest_ensure_response( $cached );
+    }
     $response = wp_remote_get( 'https://api.brevo.com/v3/account', [
         'headers' => [
             'api-key' => $cfg['api_key'],
             'Accept'  => 'application/json',
         ],
-        'timeout' => 15,
+        'timeout' => 10,
     ] );
     if ( is_wp_error($response) ) {
         return new WP_Error( 'brevo_error', $response->get_error_message(), [ 'status' => 502 ] );
@@ -451,14 +541,16 @@ function cpp_brevo_test( WP_REST_Request $request ) {
     if ( $code !== 200 ) {
         return new WP_Error( 'brevo_error', $body['message'] ?? 'Error desconocido', [ 'status' => $code ] );
     }
-    return rest_ensure_response( [
+    $data = [
         'success'      => true,
         'account'      => $body['email'] ?? '',
         'plan'         => $body['plan'][0]['type'] ?? '',
         'credits'      => $body['plan'][0]['credits'] ?? 0,
         'creditsUsed'  => $body['plan'][0]['creditsUsed'] ?? 0,
         'creditsLeft'  => max(0, ($body['plan'][0]['credits'] ?? 0) - ($body['plan'][0]['creditsUsed'] ?? 0)),
-    ] );
+    ];
+    set_transient( 'cpp_crm_brevo_account', $data, MINUTE_IN_SECONDS );
+    return rest_ensure_response( $data );
 }
 
 function cpp_brevo_send( WP_REST_Request $request ) {
@@ -512,7 +604,7 @@ function cpp_brevo_send( WP_REST_Request $request ) {
             'Accept'       => 'application/json',
         ],
         'body'    => wp_json_encode($payload),
-        'timeout' => 20,
+        'timeout' => 10,
     ] );
 
     if ( is_wp_error($response) ) {
@@ -568,9 +660,13 @@ function cpp_brevo_events( WP_REST_Request $request ) {
     if ( empty($cfg['api_key']) ) {
         return new WP_Error( 'brevo_no_key', 'CPP_BREVO_API_KEY no definida', [ 'status' => 500 ] );
     }
+    $cached = get_transient( 'cpp_crm_brevo_events' );
+    if ( false !== $cached && is_array( $cached ) ) {
+        return rest_ensure_response( $cached );
+    }
     $response = wp_remote_get( 'https://api.brevo.com/v3/smtp/statistics/events?limit=20&sort=desc', [
         'headers' => [ 'api-key' => $cfg['api_key'], 'Accept' => 'application/json' ],
-        'timeout' => 15,
+        'timeout' => 10,
     ] );
     if ( is_wp_error($response) ) {
         return new WP_Error( 'brevo_error', $response->get_error_message(), [ 'status' => 502 ] );
@@ -580,6 +676,7 @@ function cpp_brevo_events( WP_REST_Request $request ) {
     if ( $code >= 400 ) {
         return new WP_Error( 'brevo_error', $body['message'] ?? 'Error', [ 'status' => $code ] );
     }
+    set_transient( 'cpp_crm_brevo_events', $body, MINUTE_IN_SECONDS );
     return rest_ensure_response( $body );
 }
 
@@ -588,9 +685,13 @@ function cpp_brevo_senders( WP_REST_Request $request ) {
     if ( empty($cfg['api_key']) ) {
         return new WP_Error( 'brevo_no_key', 'CPP_BREVO_API_KEY no definida', [ 'status' => 500 ] );
     }
+    $cached = get_transient( 'cpp_crm_brevo_senders' );
+    if ( false !== $cached && is_array( $cached ) ) {
+        return rest_ensure_response( $cached );
+    }
     $response = wp_remote_get( 'https://api.brevo.com/v3/senders', [
         'headers' => [ 'api-key' => $cfg['api_key'], 'Accept' => 'application/json' ],
-        'timeout' => 15,
+        'timeout' => 10,
     ] );
     if ( is_wp_error($response) ) {
         return new WP_Error( 'brevo_error', $response->get_error_message(), [ 'status' => 502 ] );
@@ -600,5 +701,6 @@ function cpp_brevo_senders( WP_REST_Request $request ) {
     if ( $code >= 400 ) {
         return new WP_Error( 'brevo_error', $body['message'] ?? 'Error', [ 'status' => $code ] );
     }
+    set_transient( 'cpp_crm_brevo_senders', $body, 5 * MINUTE_IN_SECONDS );
     return rest_ensure_response( $body );
 }
