@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.3.0
+ * Version:      2.4.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -151,6 +151,42 @@ function cpp_crm_dashboard_bump_cache_version() {
     update_option( 'cpp_crm_dashboard_cache_version', (string) microtime( true ), false );
 }
 
+/**
+ * Obtiene los mismos totales que usa WooCommerce Analytics.
+ * Los objetos WC_Order no reproducen con exactitud algunos reembolsos y
+ * pedidos históricos, por lo que los KPIs deben usar el almacén de reportes.
+ */
+function cpp_crm_get_analytics_totals( $from, $to ) {
+    $query_class = '\\Automattic\\WooCommerce\\Admin\\API\\Reports\\Revenue\\Query';
+    if ( ! class_exists( $query_class ) ) return null;
+
+    try {
+        $report = new $query_class( [
+            'after'    => $from . ' 00:00:00',
+            'before'   => $to   . ' 23:59:59',
+            'interval' => 'day',
+            'page'     => 1,
+            'per_page' => 1,
+        ] );
+        $data = $report->get_data();
+        $totals = is_object( $data ) && isset( $data->totals )
+            ? $data->totals
+            : ( is_array( $data ) && isset( $data['totals'] ) ? $data['totals'] : null );
+        if ( ! $totals ) return null;
+
+        $totals = (array) $totals;
+        return [
+            'orders_count' => (int) ( $totals['orders_count'] ?? 0 ),
+            'net_revenue'  => (float) ( $totals['net_revenue'] ?? 0 ),
+            'refunds'      => (float) ( $totals['refunds'] ?? 0 ),
+            'gross_sales'  => (float) ( $totals['gross_sales'] ?? 0 ),
+            'coupons'      => (float) ( $totals['coupons'] ?? 0 ),
+        ];
+    } catch ( Throwable $error ) {
+        return null;
+    }
+}
+
 add_action( 'woocommerce_new_order', 'cpp_crm_dashboard_bump_cache_version' );
 add_action( 'woocommerce_update_order', 'cpp_crm_dashboard_bump_cache_version' );
 add_action( 'woocommerce_delete_order', 'cpp_crm_dashboard_bump_cache_version' );
@@ -167,7 +203,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     // Parámetros de fecha y paginación
     $from     = sanitize_text_field( $request->get_param( 'from' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) ) );
     $to       = sanitize_text_field( $request->get_param( 'to' )   ?: gmdate( 'Y-m-d' ) );
-    $limit    = $request->get_param( 'limit' ) ? min( absint( $request->get_param( 'limit' ) ), 100 ) : 50;
+    $limit    = $request->get_param( 'limit' ) ? min( absint( $request->get_param( 'limit' ) ), 200 ) : 50;
     $page     = $request->get_param( 'page' )  ? max( 1, absint( $request->get_param( 'page' ) ) ) : 1;
 
     // Validar formato de fecha
@@ -182,6 +218,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     $date_range = $from . 'T00:00:00' . '...' . $to . 'T23:59:59';
 
     $cache_key = 'cpp_crm_overview_' . md5( implode( '|', [
+        '2.4.0',
         $from,
         $to,
         (string) $limit,
@@ -263,6 +300,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         'current_page' => $page,
         'per_page'     => $limit,
         'orders'       => $normalized,
+        'analytics'    => 1 === $page ? cpp_crm_get_analytics_totals( $from, $to ) : null,
         'generated_at' => gmdate( 'c' ),
     ];
 

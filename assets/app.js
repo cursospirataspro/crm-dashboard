@@ -55,6 +55,7 @@ const COUNTRIES = [
 const state = {
   orders:   [],
   filtered: [],
+  analytics: null,
   loading:  false,
   selectedCountry: "all",
   globe: {
@@ -223,7 +224,7 @@ function demoOrders() {
 // =============================================================
 // API (modo real)
 // =============================================================
-const API_PAGE_SIZE       = 100;
+const API_PAGE_SIZE       = 200;
 const API_PAGE_TIMEOUT_MS = 30000;
 const API_PAGE_RETRIES    = 2;
 
@@ -277,6 +278,7 @@ async function fetchApiPage(url, generation) {
 async function fetchApi(r, generation) {
   const base = CONFIG.apiBaseUrl.replace(/\/$/, "") + "/overview";
   let allOrders = [];
+  let analytics = null;
   let page = 1;
   let totalPages = 1;
 
@@ -289,6 +291,7 @@ async function fetchApi(r, generation) {
 
     const data = await fetchApiPage(url, generation);
     allOrders = allOrders.concat(Array.isArray(data.orders) ? data.orders : []);
+    if (page === 1 && data.analytics) analytics = data.analytics;
     totalPages = Math.max(1, Number(data.total_pages) || 1);
 
     if (totalPages > 1) {
@@ -304,7 +307,7 @@ async function fetchApi(r, generation) {
     throw new DOMException("Carga reemplazada por un nuevo filtro", "AbortError");
   }
 
-  return allOrders;
+  return { orders: allOrders, analytics };
 }
 
 // =============================================================
@@ -380,9 +383,10 @@ async function load() {
   const r = range();
   try {
     if (CONFIG.mode === "api") {
-      const orders = await fetchApi(r, generation);
+      const result = await fetchApi(r, generation);
       if (generation !== _loadGeneration) return;
-      state.orders = orders;
+      state.orders = result.orders;
+      state.analytics = result.analytics;
       $("#modeLabel").textContent = "WooCommerce API";
       toast("Datos reales cargados desde WooCommerce", "success");
       // Sincronizar pedidos completados → GA4 (solo los que no se han enviado antes)
@@ -400,6 +404,7 @@ async function load() {
       toast("No se completó la carga. Se conservaron los últimos datos reales; pulsa Actualizar para reintentar.", "error");
     } else {
       state.orders = demoOrders();
+      state.analytics = null;
       $("#modeLabel").textContent = "Modo demo";
       toast("CRM cargado con datos demo", "error");
     }
@@ -562,6 +567,15 @@ function renderAll() {
 
 function renderKPIs() {
   const m = metrics(state.filtered);
+  const exactAnalytics = state.analytics
+    && $("#statusFilter").value === "all"
+    && $("#countryFilter").value === "all"
+    && !$("#searchInput").value.trim();
+  if (exactAnalytics) {
+    m.revenue = Number(state.analytics.net_revenue || 0);
+    m.orders  = Number(state.analytics.orders_count || 0);
+    m.avg     = m.orders ? m.revenue / m.orders : 0;
+  }
 
   // ── Período anterior para comparativa ──
   const r   = range();
