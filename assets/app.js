@@ -72,9 +72,24 @@ const $$ = s => Array.from(document.querySelectorAll(s));
 
 const fmtMoney = v => _origFmtMoney(v);
 
+// WooCommerce agrupa sus informes por la fecha/hora de la tienda. El ISO que
+// entrega la API puede incluir una zona distinta a la del navegador; usar
+// new Date(iso) directamente puede mover un pedido al día anterior.
+function siteDate(v) {
+  if (v instanceof Date) return new Date(v.getTime());
+  const raw = String(v || "");
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?/);
+  if (!m) return new Date(v);
+  return new Date(
+    Number(m[1]), Number(m[2]) - 1, Number(m[3]),
+    Number(m[4] || 0), Number(m[5] || 0), Number(m[6] || 0),
+    Number(String(m[7] || "0").padEnd(3, "0"))
+  );
+}
+
 const fmtDate = v =>
   new Intl.DateTimeFormat("es-PE", { year:"numeric", month:"short", day:"2-digit" })
-    .format(new Date(v));
+    .format(siteDate(v));
 
 const statusNorm = s => String(s || "").replace(/^wc-/, "").toLowerCase();
 
@@ -421,7 +436,7 @@ function applyFilters() {
 
   state.selectedCountry = country;
   state.filtered = state.orders.filter(o => {
-    const d   = new Date(o.date);
+    const d   = siteDate(o.date);
     const hay = [o.number, o.customer, o.customer_email, o.status, o.payment_method,
                  o.country, o.country_code, o.city, ...(o.products||[]).map(p=>p.name)]
                 .join(" ").toLowerCase();
@@ -434,9 +449,13 @@ function applyFilters() {
   renderAll();
 }
 // =============================================================
-// Igual que WooCommerce Analytics: solo completed + processing cuentan como venta válida
+// Igual que los ajustes actuales de WooCommerce Analytics: pendiente, cancelado
+// y fallido están excluidos; completado, procesando y en espera sí cuentan.
+const WOO_ANALYTICS_REVENUE_STATUSES = new Set(["completed", "processing", "on-hold"]);
+const isRevenueStatus = status => WOO_ANALYTICS_REVENUE_STATUSES.has(statusNorm(status));
+
 function validRevenueOrders(o) {
-  return o.filter(x => ["completed","processing"].includes(statusNorm(x.status)));
+  return o.filter(x => isRevenueStatus(x.status));
 }
 
 // Ingresos netos = subtotal - descuentos (sin impuestos ni envío), igual que WooCommerce Net Sales
@@ -469,7 +488,7 @@ function customerMap(orders) {
     // Actualizar teléfono si aún no tenemos uno
     if (!map[key].phone && resolvedPhone) map[key].phone = resolvedPhone;
     map[key].orders++;
-    if (["completed","processing"].includes(statusNorm(o.status))) map[key].revenue += netRev(o);
+    if (isRevenueStatus(o.status)) map[key].revenue += netRev(o);
     map[key].countries.add(o.country || o.country_code || o.billing?.country || "");
     (o.products||[]).forEach(p => map[key].courses.add(p.name));
     if (new Date(o.date) > new Date(map[key].last)) map[key].last = o.date;
@@ -543,7 +562,7 @@ function renderKPIs() {
   const dur = r.to.getTime() - r.from.getTime();
   const prevFrom = new Date(r.from.getTime() - dur);
   const prevTo   = new Date(r.from.getTime() - 1);
-  const prevOrds = state.orders.filter(o => { const d = new Date(o.date); return d >= prevFrom && d <= prevTo; });
+  const prevOrds = state.orders.filter(o => { const d = siteDate(o.date); return d >= prevFrom && d <= prevTo; });
   const mp = metrics(prevOrds);
 
   const chg = (cur, prev) => {
@@ -641,7 +660,7 @@ function renderFunnel() {
     ["Visitantes estimados",  Math.round(total * 7.8), "Tráfico aproximado según pedidos"],
     ["Carritos / intención",  Math.round(total * 2.4), "Prospectos con intención de compra"],
     ["Pedidos creados",       total,                   "Órdenes registradas"],
-    ["Pagos válidos",         validRevenueOrders(orders).length, "Completados / procesando"],
+    ["Pagos válidos",         validRevenueOrders(orders).length, "Completados / procesando / en espera"],
     ["Clientes recurrentes",  metrics(orders).repeat,  "Compradores con más de 1 pedido"]
   ];
   const max = rows[0][1] || 1;
@@ -747,7 +766,7 @@ function renderWeekdayChart() {
   const totals = [0,0,0,0,0,0,0];
   const counts = [0,0,0,0,0,0,0];
   validRevenueOrders(state.filtered).forEach(o => {
-    const d = new Date(o.date);
+    const d = siteDate(o.date);
     if (!isNaN(d)) { totals[d.getDay()] += Number(o.total||0); counts[d.getDay()]++; }
   });
   const series = days.map((label, i) => ({ label, value: totals[i], count: counts[i] }));
@@ -2772,7 +2791,7 @@ function renderForecast() {
   if (!el) return;
 
   const g = groupBy(state.orders.filter(o => {
-    const d = new Date(o.date); const now = new Date();
+    const d = siteDate(o.date); const now = new Date();
     const from = new Date(now); from.setDate(now.getDate() - 90);
     return d >= from && d <= now;
   }), o => String(o.date).slice(0, 10));
@@ -3378,14 +3397,14 @@ function renderCohorts() {
   Object.values(cm).forEach(c => {
     const cOrders = state.orders
       .filter(o => o.customer_email === (c.email || c.name) || o.customer === c.name)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort((a, b) => siteDate(a.date) - siteDate(b.date));
     if (!cOrders.length) return;
-    const firstD   = new Date(cOrders[0].date);
+    const firstD   = siteDate(cOrders[0].date);
     const key      = `${firstD.getFullYear()}-${String(firstD.getMonth()+1).padStart(2,'0')}`;
     cohorts[key] ??= { total: 0, months: {} };
     cohorts[key].total++;
     cOrders.forEach(o => {
-      const d = new Date(o.date);
+      const d = siteDate(o.date);
       const mDiff = (d.getFullYear() - firstD.getFullYear()) * 12 + d.getMonth() - firstD.getMonth();
       if (mDiff > 0 && mDiff <= 6) cohorts[key].months[mDiff] = (cohorts[key].months[mDiff] || 0) + 1;
     });
@@ -4353,11 +4372,11 @@ function updateGoalBar() {
   const goal = loadMonthlyGoal();
   const now  = new Date();
   const thisMonthOrders = state.orders.filter(o => {
-    const d = new Date(o.date);
+    const d = siteDate(o.date);
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
   const current = thisMonthOrders
-    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
+    .filter(o => isRevenueStatus(o.status))
     .reduce((s, o) => s + Number(o.total || 0), 0);
   const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
 
@@ -4486,11 +4505,11 @@ function renderRevenuePrediction() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const thisMonthOrders = state.orders.filter(o => {
-    const d = new Date(o.date);
+    const d = siteDate(o.date);
     return d.getFullYear() === year && d.getMonth() === month;
   });
   const current = thisMonthOrders
-    .filter(o => ["completed", "processing"].includes(statusNorm(o.status)))
+    .filter(o => isRevenueStatus(o.status))
     .reduce((s, o) => s + Number(o.total || 0), 0);
 
   const dailyRate = dayOfMonth > 0 ? current / dayOfMonth : 0;
@@ -6822,7 +6841,8 @@ function renderLTV() {
     const k = o.customer_email || o.customer_name || "desconocido";
     if (!map[k]) map[k] = { name: o.customer_name || k, total: 0, months: new Set() };
     map[k].total += Number(o.total || 0);
-    const m = (new Date(o.date)).toISOString().slice(0,7);
+    const d = siteDate(o.date);
+    const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     map[k].months.add(m);
   });
 
@@ -6859,7 +6879,7 @@ function getPeriodOrders(key) {
   const all = state.orders; // usamos todos los pedidos sin filtrar
   function filter(from, to) {
     return all.filter(o => {
-      const d = new Date(o.date);
+      const d = siteDate(o.date);
       return d >= from && d <= to;
     });
   }
