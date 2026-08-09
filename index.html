@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=9">
+  <link rel="stylesheet" href="assets/styles.css?v=10">
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
@@ -742,6 +742,58 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
               <p style="font-size:11px;color:var(--muted);margin-top:8px">* Score = cursos en común con compradores del curso objetivo / total cursos del cliente</p>
             </div>
           </div>
+
+          <section id="emailAutomationPanel" class="em-automation-panel" aria-labelledby="emailAutomationTitle">
+            <div class="em-automation-head">
+              <div>
+                <span class="em-automation-kicker">AUTOMATIZACIÓN DE LANZAMIENTOS</span>
+                <h3 id="emailAutomationTitle">Envíos automáticos por curso</h3>
+                <p>Encuentra compradores relacionados, respeta la cuota de Brevo y continúa siempre con correos nuevos.</p>
+              </div>
+              <span id="emailAutomationStateBadge" class="badge">Pausada por seguridad</span>
+            </div>
+
+            <div class="em-automation-grid">
+              <label class="sf-label em-auto-wide">Curso nuevo o lanzamiento
+                <div class="em-auto-inline">
+                  <input id="emailAutomationCourse" type="text" class="sf-input" placeholder="Ej: Trading institucional 2026">
+                  <button id="emailAutomationAnalyzeBtn" type="button" class="btn ghost">🤖 Buscar relacionados</button>
+                </div>
+              </label>
+              <label class="sf-label">Frecuencia
+                <select id="emailAutomationCadence" class="sf-input">
+                  <option value="daily">Todos los días</option>
+                  <option value="two_days">Cada 2 días</option>
+                  <option value="custom">Personalizada</option>
+                </select>
+              </label>
+              <label id="emailAutomationCustomWrap" class="sf-label" hidden>Intervalo personalizado (horas)
+                <input id="emailAutomationCustomHours" type="number" class="sf-input" value="24" min="1" max="720">
+              </label>
+              <label class="sf-label">Correos por lote
+                <input id="emailAutomationBatchSize" type="number" class="sf-input" value="300" min="1" max="1000">
+                <small id="emailAutomationQuotaHint">Se limitará automáticamente a la cuota disponible.</small>
+              </label>
+              <label class="sf-label">Primer envío automático
+                <input id="emailAutomationNextRun" type="datetime-local" class="sf-input">
+              </label>
+            </div>
+
+            <div class="em-automation-options">
+              <label><input id="emailAutomationIncludeSent" type="checkbox"> Permitir también correos enviados anteriormente</label>
+              <label><input id="emailAutomationEnabled" type="checkbox"> Activar automatización al guardar</label>
+            </div>
+            <p class="em-auto-note">Por defecto se excluyen todos los correos registrados en el historial. La siguiente selección continúa donde terminó el lote anterior.</p>
+
+            <div class="em-automation-actions">
+              <button id="emailAutomationSelectNextBtn" type="button" class="btn ghost">✓ Seleccionar siguiente lote nuevo</button>
+              <button id="emailAutomationSaveBtn" type="button" class="btn">💾 Guardar automatización</button>
+              <button id="emailAutomationNewBtn" type="button" class="btn ghost">＋ Nueva</button>
+              <button id="emailAutomationDeleteBtn" type="button" class="btn ghost" disabled>🗑 Eliminar</button>
+            </div>
+            <div id="emailAutomationStatus" class="em-automation-status" role="status">Aún no hay una automatización seleccionada.</div>
+            <div id="emailAutomationList" class="em-automation-list"></div>
+          </section>
 
           <!-- Excluir ya convertidos + mejor horario -->
           <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:-4px">
@@ -1812,6 +1864,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=52"></script>
+<script src="assets/app.js?v=53"></script>
 </body>
 </html>

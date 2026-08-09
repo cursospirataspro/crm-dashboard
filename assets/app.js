@@ -3788,6 +3788,30 @@ function bind() {
   $("#emailExportBtn")?.addEventListener("click", exportEmailList);
   $("#emailSendBtn")?.addEventListener("click", sendEmailMailto);
 
+  // ── Automatizaciones de lanzamientos (servidor + historial) ──
+  $("#emailAutomationCadence")?.addEventListener("change", event => {
+    if ($("#emailAutomationCustomWrap")) $("#emailAutomationCustomWrap").hidden = event.currentTarget.value !== "custom";
+  });
+  $("#emailAutomationAnalyzeBtn")?.addEventListener("click", () => {
+    const course = $("#emailAutomationCourse")?.value.trim() || "";
+    if (!course) { toast("⚠ Escribe el nombre del curso nuevo", "warning"); return; }
+    if ($("#emailSegment")) $("#emailSegment").value = "smart_course";
+    renderEmailMarketing();
+    if ($("#smartCourseSearch")) $("#smartCourseSearch").value = course;
+    if ($("#smartCourseSelect")) {
+      const exact = Array.from($("#smartCourseSelect").options).find(option => option.value.toLowerCase() === course.toLowerCase());
+      $("#smartCourseSelect").value = exact?.value || "";
+    }
+    $("#smartCourseAnalyzeBtn")?.click();
+  });
+  $("#emailAutomationSaveBtn")?.addEventListener("click", async () => {
+    try { await saveEmailAutomation(); } catch(e) { toast(`⚠ ${e.message}`, "warning"); }
+  });
+  $("#emailAutomationSelectNextBtn")?.addEventListener("click", selectNextEmailAutomationBatch);
+  $("#emailAutomationNewBtn")?.addEventListener("click", newEmailAutomation);
+  $("#emailAutomationDeleteBtn")?.addEventListener("click", deleteEmailAutomation);
+  setTimeout(loadEmailAutomations, 0);
+
   // ── Brevo ──
   $("#brevoConfigToggle")?.addEventListener("click", () => {
     const panel = $("#brevoConfigPanel");
@@ -4974,12 +4998,30 @@ async function sendViaBrevo(options = {}) {
     return { sent: 0, failed: 0 };
   }
 
-  const recipients = isTest
+  let recipients = isTest
     ? [{ email: options.testRecipient, name: "Vista previa" }]
     : getChosenEmailRecipients(segment, excludeConv);
   if (!recipients.length) {
     toast("⚠ No hay destinatarios válidos para este segmento", "warning");
     return { sent: 0, failed: 0 };
+  }
+
+  if (!isTest) {
+    try {
+      const quotaData = await emailAutomationApi("/brevo/test");
+      const available = Math.max(0, Number(quotaData.creditsLeft ?? quotaData.credits ?? 0));
+      if (available <= 0) {
+        toast("⚠ Brevo no tiene cuota disponible en este momento", "warning");
+        return { sent: 0, failed: 0 };
+      }
+      if (recipients.length > available) {
+        recipients = recipients.slice(0, available);
+        toast(`Brevo permite ${available} correos ahora; el envío se limitó automáticamente.`, "warning");
+      }
+    } catch(e) {
+      toast(`⚠ No se pudo comprobar la cuota de Brevo: ${e.message}`, "warning");
+      return { sent: 0, failed: 0 };
+    }
   }
 
   if (!isTest && !options.confirmed) {
@@ -5005,6 +5047,7 @@ async function sendViaBrevo(options = {}) {
   if (sendBtn) sendBtn.disabled = true;
 
   let sent = 0, failed = 0;
+  const sentEmails = [];
   const total = recipients.length;
   const crmByEmail = {};
   Object.values(customerMap(state.filtered)).forEach(c => { if (c.email) crmByEmail[String(c.email).toLowerCase()] = c; });
@@ -5036,6 +5079,7 @@ async function sendViaBrevo(options = {}) {
       });
       if (result.ok) {
         sent++;
+        sentEmails.push(recipient.email);
         if (progressLog) progressLog.innerHTML += `<div>✅ ${esc(recipient.email)}${scheduledAt ? " · programado" : ""}</div>`;
       } else {
         failed++;
@@ -5066,6 +5110,7 @@ async function sendViaBrevo(options = {}) {
       date: new Date().toISOString()
     });
     renderCampaignHistory();
+    if (sentEmails.length) await markEmailAutomationSent(sentEmails);
   }
   const doneLabel = scheduledAt ? `Programados: ${sent}` : `Enviados: ${sent}`;
   toast(`${isTest ? "✉ Prueba" : "📧 Campaña"} · ${doneLabel}, ${failed} fallidos`, sent > 0 ? "success" : "error");
@@ -5087,6 +5132,264 @@ async function sendComposerTest() {
     localStorage.setItem("crm_em_test_recipient", email);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "✉ Enviar prueba"; }
+  }
+}
+
+// ── Automatizaciones persistentes de lanzamiento ─────────────────
+const _emailAutomationState = {
+  items: [],
+  currentId: "",
+  quota: null,
+};
+
+async function emailAutomationApi(path, options = {}) {
+  if (CONFIG.mode !== "api") throw new Error("Las automatizaciones requieren la conexión segura con WordPress.");
+  const response = await fetch(`${CONFIG.apiBaseUrl}${path}`, {
+    method: options.method || "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken,
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+  let data = {};
+  try { data = await response.json(); } catch(e) {}
+  if (!response.ok) throw new Error(data.message || data.error || `Error HTTP ${response.status}`);
+  return data;
+}
+
+function tokenizeEmailAutomationValue(value) {
+  return String(value || "")
+    .replace(/\{nombre\}|\{name\}/gi, "{{nombre}}")
+    .replace(/\{curso\}/gi, "{{curso}}")
+    .replace(/\{fecha\}/gi, "{{fecha}}")
+    .replace(/\{monto\}/gi, "{{monto}}");
+}
+
+function buildEmailAutomationTemplate(composer) {
+  const sentinels = {
+    name: "CPP_AUTO_RECIPIENT_NAME_TOKEN",
+    course: "CPP_AUTO_COURSE_TOKEN",
+    date: "CPP_AUTO_DATE_TOKEN",
+    amount: "CPP_AUTO_AMOUNT_TOKEN",
+  };
+  let html = buildEmailHtml({
+    name: sentinels.name,
+    ...composer,
+    extraVars: { curso: sentinels.course, fecha: sentinels.date, monto: sentinels.amount },
+  });
+  const replacements = [
+    [sentinels.name, "{{nombre}}"],
+    [sentinels.course, "{{curso}}"],
+    [sentinels.date, "{{fecha}}"],
+    [sentinels.amount, "{{monto}}"],
+  ];
+  replacements.forEach(([from, to]) => { html = html.split(from).join(to); });
+  return html;
+}
+
+function emailAutomationCurrentItem() {
+  return _emailAutomationState.items.find(item => item.id === _emailAutomationState.currentId) || null;
+}
+
+function emailAutomationFormatDate(value) {
+  if (!value) return "Sin fecha programada";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Sin fecha programada" : date.toLocaleString();
+}
+
+function emailAutomationToLocalInput(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function renderEmailAutomationList() {
+  const list = $("#emailAutomationList");
+  const status = $("#emailAutomationStatus");
+  const quotaHint = $("#emailAutomationQuotaHint");
+  const badge = $("#emailAutomationStateBadge");
+  const quota = Number(_emailAutomationState.quota?.creditsLeft ?? 0);
+  if (quotaHint) quotaHint.textContent = _emailAutomationState.quota
+    ? `Brevo permite ahora ${quota} correo${quota !== 1 ? "s" : ""}; el lote nunca superará ese límite.`
+    : "La cuota se comprobará de nuevo justo antes de cada lote.";
+  const current = emailAutomationCurrentItem();
+  if (badge) {
+    badge.textContent = current?.enabled ? "Automática activa" : "Pausada por seguridad";
+    badge.style.color = current?.enabled ? "var(--good)" : "var(--muted)";
+  }
+  if (status && current) {
+    status.innerHTML = `<strong>${esc(current.last_status || "Nunca ejecutada")}</strong> · ` +
+      `${current.sent_count || 0} enviados · ${current.pending_count || 0} nuevos pendientes · ` +
+      `próximo: ${esc(emailAutomationFormatDate(current.next_run_at))}`;
+  }
+  if (!list) return;
+  if (!_emailAutomationState.items.length) {
+    list.innerHTML = `<span style="color:var(--muted);font-size:11px">No hay automatizaciones guardadas. La primera se creará pausada salvo que marques “Activar”.</span>`;
+    return;
+  }
+  list.innerHTML = _emailAutomationState.items.map(item => `
+    <button type="button" class="em-automation-item ${item.id === _emailAutomationState.currentId ? "active" : ""}" data-automation-id="${esc(item.id)}">
+      <span><strong>${esc(item.name || item.course_name || "Automatización")}</strong><small>${esc(item.course_name || "Sin curso")} · ${item.sent_count || 0} enviados · ${item.pending_count || 0} pendientes</small></span>
+      <span class="badge" style="color:${item.enabled ? "var(--good)" : "var(--muted)"}">${item.enabled ? "Activa" : "Pausada"}</span>
+    </button>`).join("");
+  $$(".em-automation-item").forEach(button => {
+    button.addEventListener("click", () => selectEmailAutomation(button.dataset.automationId));
+  });
+}
+
+function selectEmailAutomation(id) {
+  const item = _emailAutomationState.items.find(entry => entry.id === id);
+  if (!item) return;
+  _emailAutomationState.currentId = item.id;
+  if ($("#emailAutomationCourse")) $("#emailAutomationCourse").value = item.course_name || "";
+  if ($("#emailAutomationCadence")) $("#emailAutomationCadence").value = item.cadence || "daily";
+  if ($("#emailAutomationCustomHours")) $("#emailAutomationCustomHours").value = item.interval_hours || 24;
+  if ($("#emailAutomationBatchSize")) $("#emailAutomationBatchSize").value = item.batch_size || 300;
+  if ($("#emailAutomationIncludeSent")) $("#emailAutomationIncludeSent").checked = Boolean(item.include_previously_sent);
+  if ($("#emailAutomationEnabled")) $("#emailAutomationEnabled").checked = Boolean(item.enabled);
+  if ($("#emailAutomationNextRun")) $("#emailAutomationNextRun").value = emailAutomationToLocalInput(item.next_run_at);
+  if ($("#emailAutomationCustomWrap")) $("#emailAutomationCustomWrap").hidden = item.cadence !== "custom";
+  if ($("#emailAutomationDeleteBtn")) $("#emailAutomationDeleteBtn").disabled = false;
+  renderEmailAutomationList();
+}
+
+async function loadEmailAutomations() {
+  if (!$("#emailAutomationPanel") || CONFIG.mode !== "api") return;
+  try {
+    const data = await emailAutomationApi("/email-automations");
+    _emailAutomationState.items = Array.isArray(data.automations) ? data.automations : [];
+    _emailAutomationState.quota = data.quota || null;
+    if (_emailAutomationState.currentId && !_emailAutomationState.items.some(item => item.id === _emailAutomationState.currentId)) {
+      _emailAutomationState.currentId = "";
+    }
+    renderEmailAutomationList();
+  } catch(e) {
+    const status = $("#emailAutomationStatus");
+    if (status) status.textContent = `No se pudieron cargar las automatizaciones: ${e.message}`;
+  }
+}
+
+function buildEmailAutomationPayload({ enabledOverride } = {}) {
+  const composer = getEmailComposerState();
+  const existing = emailAutomationCurrentItem();
+  const segment = $("#emailSegment")?.value || "all";
+  const recipients = existing?.recipients?.length
+    ? existing.recipients
+    : getChosenEmailRecipients(segment, $("#excludeConverted")?.checked ?? false);
+  const courseName = $("#emailAutomationCourse")?.value.trim() || _smartState.selectedCourse || $("#filterCourse")?.value || "";
+  const nextRunValue = $("#emailAutomationNextRun")?.value || "";
+  return {
+    id: existing?.id || "",
+    name: composer.campaignName || `Lanzamiento · ${courseName || "curso"}`,
+    course_name: courseName,
+    enabled: enabledOverride ?? Boolean($("#emailAutomationEnabled")?.checked),
+    cadence: $("#emailAutomationCadence")?.value || "daily",
+    interval_hours: Math.max(1, Math.min(720, Number($("#emailAutomationCustomHours")?.value || 24))),
+    batch_size: Math.max(1, Math.min(1000, Number($("#emailAutomationBatchSize")?.value || 300))),
+    include_previously_sent: Boolean($("#emailAutomationIncludeSent")?.checked),
+    next_run_at: nextRunValue ? new Date(nextRunValue).toISOString() : "",
+    subject_template: existing?.subject_template || tokenizeEmailAutomationValue(composer.subject),
+    html_template: existing?.html_template || buildEmailAutomationTemplate(composer),
+    text_template: existing?.text_template || emailHtmlToPlainText(buildEmailAutomationTemplate(composer)),
+    reply_to: existing?.reply_to || composer.replyTo,
+    tags: existing?.tags?.length ? existing.tags : [composer.tag || "crm-dashboard"],
+    recipients,
+  };
+}
+
+async function saveEmailAutomation({ silent = false, enabledOverride } = {}) {
+  const composer = getEmailComposerState();
+  const payload = buildEmailAutomationPayload({ enabledOverride });
+  if (!payload.course_name) throw new Error("Escribe el nombre del curso o lanzamiento.");
+  if (!payload.subject_template || !composer.bodyText.trim() && !emailAutomationCurrentItem()) {
+    throw new Error("Completa primero el asunto y el cuerpo del correo.");
+  }
+  if (!payload.recipients.length) throw new Error("La audiencia no tiene correos seleccionados.");
+  const saveButton = $("#emailAutomationSaveBtn");
+  if (saveButton) saveButton.disabled = true;
+  try {
+    const data = await emailAutomationApi("/email-automations/save", { method: "POST", body: payload });
+    const saved = data.automation;
+    const index = _emailAutomationState.items.findIndex(item => item.id === saved.id);
+    if (index >= 0) _emailAutomationState.items[index] = saved;
+    else _emailAutomationState.items.push(saved);
+    _emailAutomationState.currentId = saved.id;
+    selectEmailAutomation(saved.id);
+    if (!silent) toast(saved.enabled ? "✅ Automatización guardada y activa" : "💾 Automatización guardada en pausa", "success");
+    return saved;
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
+}
+
+async function selectNextEmailAutomationBatch() {
+  try {
+    if (!emailAutomationCurrentItem()) await saveEmailAutomation({ silent: true, enabledOverride: false });
+    else await saveEmailAutomation({ silent: true });
+    const requested = Math.max(1, Math.min(1000, Number($("#emailAutomationBatchSize")?.value || 300)));
+    const data = await emailAutomationApi("/email-automations/select-next", {
+      method: "POST",
+      body: { id: _emailAutomationState.currentId, amount: requested },
+    });
+    const segment = $("#emailSegment")?.value || "all";
+    const selectable = getSelectableEmailRecipients(segment, $("#excludeConverted")?.checked ?? false);
+    const exclusions = getRecipientManualExclusions(segment);
+    selectable.forEach(recipient => exclusions.add(recipientEmailKey(recipient.email)));
+    (data.selected || []).forEach(recipient => exclusions.delete(recipientEmailKey(recipient.email)));
+    renderEmailAudiencePreview();
+    _emailAutomationState.quota = data.quota || _emailAutomationState.quota;
+    const status = $("#emailAutomationStatus");
+    if (status) status.innerHTML = `<strong>${data.selectedCount} correos nuevos seleccionados</strong> de ${requested} solicitados · cuota actual: ${data.quota?.creditsLeft ?? 0}.`;
+    renderEmailAutomationList();
+    toast(`✓ Siguiente lote: ${data.selectedCount} correos nuevos`, data.selectedCount ? "success" : "warning");
+  } catch(e) {
+    toast(`⚠ ${e.message}`, "warning");
+  }
+}
+
+async function markEmailAutomationSent(emails) {
+  if (!_emailAutomationState.currentId || !emails.length) return;
+  try {
+    await emailAutomationApi("/email-automations/mark-sent", {
+      method: "POST",
+      body: { id: _emailAutomationState.currentId, emails },
+    });
+    await loadEmailAutomations();
+  } catch(e) {
+    console.warn("No se pudo registrar el historial de automatización", e);
+    toast("⚠ Los correos salieron, pero no se pudo actualizar el historial automático.", "warning");
+  }
+}
+
+function newEmailAutomation() {
+  _emailAutomationState.currentId = "";
+  if ($("#emailAutomationCourse")) $("#emailAutomationCourse").value = _smartState.selectedCourse || "";
+  if ($("#emailAutomationCadence")) $("#emailAutomationCadence").value = "daily";
+  if ($("#emailAutomationCustomHours")) $("#emailAutomationCustomHours").value = 24;
+  if ($("#emailAutomationBatchSize")) $("#emailAutomationBatchSize").value = Math.min(300, Number(_emailAutomationState.quota?.creditsLeft || 300));
+  if ($("#emailAutomationIncludeSent")) $("#emailAutomationIncludeSent").checked = false;
+  if ($("#emailAutomationEnabled")) $("#emailAutomationEnabled").checked = false;
+  if ($("#emailAutomationNextRun")) $("#emailAutomationNextRun").value = "";
+  if ($("#emailAutomationCustomWrap")) $("#emailAutomationCustomWrap").hidden = true;
+  if ($("#emailAutomationDeleteBtn")) $("#emailAutomationDeleteBtn").disabled = true;
+  const status = $("#emailAutomationStatus");
+  if (status) status.textContent = "Nueva automatización: se guardará pausada salvo que marques Activar.";
+  renderEmailAutomationList();
+}
+
+async function deleteEmailAutomation() {
+  const current = emailAutomationCurrentItem();
+  if (!current || !confirm(`¿Eliminar la automatización “${current.name}”? El historial asociado también se eliminará.`)) return;
+  try {
+    await emailAutomationApi("/email-automations/delete", { method: "POST", body: { id: current.id } });
+    _emailAutomationState.items = _emailAutomationState.items.filter(item => item.id !== current.id);
+    newEmailAutomation();
+    toast("🗑 Automatización eliminada", "success");
+  } catch(e) {
+    toast(`⚠ ${e.message}`, "warning");
   }
 }
 

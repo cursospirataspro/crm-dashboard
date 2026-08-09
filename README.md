@@ -74,6 +74,20 @@ define('CPP_BREVO_SENDER_EMAIL', 'correo-verificado@tudominio.com');
 El dashboard enviará la clave únicamente desde WordPress; no es necesario
 publicarla en el JavaScript del sitio.
 
+### Automatizaciones por lanzamiento
+
+El compositor permite guardar campañas automáticas asociadas a un curso nuevo.
+Cada automatización puede ejecutarse diariamente, cada dos días o con un
+intervalo personalizado. WordPress mantiene el historial de destinatarios,
+excluye correos ya enviados por defecto y calcula cada lote con la cuota actual
+de Brevo. La opción “Permitir también correos enviados anteriormente” es la
+única que habilita repeticiones.
+
+Las automatizaciones nuevas se guardan pausadas salvo que se marque
+explícitamente “Activar automatización al guardar”. La cola se revisa mediante
+WP-Cron cada cinco minutos y los lotes usan una clave de idempotencia para
+protegerse frente a solicitudes duplicadas.
+
 ## Nota sobre el globo
 
 WooCommerce normalmente guarda país y ciudad de facturación, pero no latitud/longitud exacta. Esta versión usa coordenadas por país. Si luego quieres precisión por ciudad, se puede ampliar con geocoding o una tabla de coordenadas.
