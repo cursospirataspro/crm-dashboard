@@ -3792,9 +3792,20 @@ function bind() {
   $("#emailAutomationCadence")?.addEventListener("change", event => {
     if ($("#emailAutomationCustomWrap")) $("#emailAutomationCustomWrap").hidden = event.currentTarget.value !== "custom";
   });
-  $("#emailAutomationAnalyzeBtn")?.addEventListener("click", () => {
+  $("#emailAutomationAnalyzeBtn")?.addEventListener("click", async () => {
     const course = $("#emailAutomationCourse")?.value.trim() || "";
     if (!course) { toast("⚠ Escribe el nombre del curso nuevo", "warning"); return; }
+    if (CONFIG.mode === "api" && $("#rangePreset")?.value !== "all") {
+      $("#rangePreset").value = "all";
+      $$(".custom-date").forEach(element => element.classList.add("hidden"));
+      toast("Cargando el historial completo para encontrar todos los relacionados…", "info");
+      try {
+        await load();
+      } catch(e) {
+        toast(`⚠ No se pudo cargar todo el historial: ${e.message}`, "warning");
+        return;
+      }
+    }
     if ($("#emailSegment")) $("#emailSegment").value = "smart_course";
     renderEmailMarketing();
     if ($("#smartCourseSearch")) $("#smartCourseSearch").value = course;
