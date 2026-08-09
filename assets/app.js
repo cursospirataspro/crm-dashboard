@@ -1101,7 +1101,6 @@ function renderOportunidades() {
 function updateEmailCountBadge() {
   const seg   = $('#emailSegment')?.value || 'all';
   const excl  = $('#excludeConverted')?.checked ?? false;
-  const unsub = getUnsubscribeList();
 
   // Mostrar/ocultar filtros avanzados según segmento
   if ($('#filterCountryWrap'))     $('#filterCountryWrap').style.display     = seg === 'country'       ? '' : 'none';
@@ -1119,7 +1118,7 @@ function updateEmailCountBadge() {
   // Si es smart_course, el conteo lo actualiza renderSmartCourseResults
   if (seg === 'smart_course') return;
 
-  const count = getEmailRecipients(seg, excl).filter(r => !unsub.includes(r.email)).length;
+  const count = getChosenEmailRecipients(seg, excl).length;
   const badge = $('#emailCountBadge');
   if (badge) badge.textContent = count + ' destinatarios';
 }
@@ -4975,11 +4974,9 @@ async function sendViaBrevo(options = {}) {
     return { sent: 0, failed: 0 };
   }
 
-  const unsubscribe = getUnsubscribeList().map(v => String(v).toLowerCase());
   const recipients = isTest
     ? [{ email: options.testRecipient, name: "Vista previa" }]
-    : getEmailRecipients(segment, excludeConv)
-        .filter(r => r.email && !unsubscribe.includes(String(r.email).toLowerCase()));
+    : getChosenEmailRecipients(segment, excludeConv);
   if (!recipients.length) {
     toast("⚠ No hay destinatarios válidos para este segmento", "warning");
     return { sent: 0, failed: 0 };
@@ -5095,6 +5092,7 @@ async function sendComposerTest() {
 
 // ── Función global para botones del banner ────────────────────────
 window.smartSelectAll = function(select) {
+  _smartState.selectionInitialized = true;
   if (select) {
     _smartState.allRows.forEach(r => _smartState.selectedEmails.add(r.email));
   } else {
@@ -5108,12 +5106,6 @@ function getEmailRecipients(segment, excludeConverted = false) {
   // ── Segmento Smart Course: usa emails marcados con checkbox ──
   if (segment === "smart_course") {
     const sel = _smartState.selectedEmails;
-    if (!sel.size) {
-      // fallback: todos los rows
-      return _smartState.allRows
-        .filter(r => r.email)
-        .map(r => ({ email: r.email, name: r.name || r.email }));
-    }
     return _smartState.allRows
       .filter(r => sel.has(r.email))
       .map(r => ({ email: r.email, name: r.name || r.email }));
@@ -5183,6 +5175,53 @@ function getEmailRecipients(segment, excludeConverted = false) {
   }
 
   return list.filter(c => c.email).map(c => ({ email: c.email, name: c.name || c.email }));
+}
+
+// ── Selección manual final de destinatarios ─────────────────────
+// Cada segmento parte con todos marcados. Solo guardamos los correos que el
+// usuario desmarca, de modo que nuevos contactos se incluyan automáticamente.
+const _emailRecipientExclusions = new Map();
+
+function recipientEmailKey(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function getSelectableEmailRecipients(segment = "all", excludeConverted = false) {
+  const blocked = new Set(getUnsubscribeList().map(recipientEmailKey));
+  const seen = new Set();
+  return getEmailRecipients(segment, excludeConverted).filter(recipient => {
+    const key = recipientEmailKey(recipient.email);
+    if (!key || blocked.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getRecipientManualExclusions(segment = "all") {
+  if (!_emailRecipientExclusions.has(segment)) {
+    _emailRecipientExclusions.set(segment, new Set());
+  }
+  return _emailRecipientExclusions.get(segment);
+}
+
+function getChosenEmailRecipients(segment = "all", excludeConverted = false) {
+  const excluded = getRecipientManualExclusions(segment);
+  return getSelectableEmailRecipients(segment, excludeConverted)
+    .filter(recipient => !excluded.has(recipientEmailKey(recipient.email)));
+}
+
+function refreshEmailRecipientSelectionCounters() {
+  const segment = $("#emailSegment")?.value || "all";
+  const excludeConverted = $("#excludeConverted")?.checked ?? false;
+  const total = getSelectableEmailRecipients(segment, excludeConverted).length;
+  const selected = getChosenEmailRecipients(segment, excludeConverted).length;
+  const badge = $("#emailCountBadge");
+  const summary = $("#emAudienceSelectedSummary");
+  const pickerCount = $("#emRecipientPickerCount");
+  if (badge) badge.textContent = `${selected} destinatario${selected !== 1 ? "s" : ""}`;
+  if (summary) summary.textContent = `👥 ${selected} de ${total} seleccionado${selected !== 1 ? "s" : ""}`;
+  if (pickerCount) pickerCount.textContent = `${selected} / ${total}`;
+  renderEmailChecklist();
 }
 
 // ── Plantillas (localStorage) ─────────────────────────────────────
@@ -5289,6 +5328,7 @@ const _smartState = {
   similar: [],
   relatedCourses: [],
   selectedEmails: new Set(),        // emails marcados con checkbox
+  selectionInitialized: false,      // distingue primer análisis de "quitar todos"
   allRows: [],                      // todos los rows actuales para select-all
   selectedRelatedCourses: new Set(),// chips de cursos relacionados activados manualmente
   prospectionMode: false,           // true cuando el curso no existe en catálogo
@@ -5388,6 +5428,8 @@ function runSmartCourseAnalysis(courseName) {
   _smartState.similar = similar;
   _smartState.relatedCourses = relatedCourses;
   _smartState.selectedEmails = new Set();
+  _smartState.selectionInitialized = false;
+  _emailRecipientExclusions.delete("smart_course");
   _smartState.allRows = [];
   _smartState.prospectionMode = false;
   _smartState.selectedRelatedCourses = new Set();
@@ -5427,6 +5469,8 @@ function runSmartProspectionAnalysis(query, baseCourses) {
   _smartState.similar = prospects;
   _smartState.relatedCourses = relatedCourses;
   _smartState.selectedEmails = new Set();
+  _smartState.selectionInitialized = false;
+  _emailRecipientExclusions.delete("smart_course");
   _smartState.allRows = [];
   _smartState.prospectionMode = true;
   _smartState.prospectionQuery = query;
@@ -5470,8 +5514,9 @@ function renderSmartCourseResults() {
 
   // Guardar en estado + seleccionar todos por defecto en el primer análisis
   _smartState.allRows = rows;
-  if (_smartState.selectedEmails.size === 0) {
+  if (!_smartState.selectionInitialized) {
     rows.forEach(r => _smartState.selectedEmails.add(r.email));
+    _smartState.selectionInitialized = true;
   } else {
     // Mantener solo los que siguen en la lista actual
     const currentEmails = new Set(rows.map(r => r.email));
@@ -5672,6 +5717,9 @@ function _smartUpdateCounters() {
     selectAll.checked       = allChecked;
     selectAll.indeterminate = someChecked && !allChecked;
   }
+  if ($("#emailSegment")?.value === "smart_course") {
+    renderEmailAudiencePreview();
+  }
 }
 
 // Renderizar solo el banner de confirmación
@@ -5860,30 +5908,80 @@ function renderEmailAudiencePreview() {
   const box = $("#emRecipientPreview");
   if (!box) return;
   const segment = $("#emailSegment")?.value || "all";
-  const excluded = getUnsubscribeList().map(v => String(v).toLowerCase());
-  const recipients = getEmailRecipients(segment, $("#excludeConverted")?.checked ?? false)
-    .filter(r => r.email && !excluded.includes(String(r.email).toLowerCase()));
+  const excludeConverted = $("#excludeConverted")?.checked ?? false;
+  const wasOpen = $("#emRecipientPicker")?.open ?? false;
+  const recipients = getSelectableEmailRecipients(segment, excludeConverted);
+  const manualExclusions = getRecipientManualExclusions(segment);
+  const selectedCount = recipients.filter(r => !manualExclusions.has(recipientEmailKey(r.email))).length;
+  const blacklistCount = getUnsubscribeList().length;
   if (!recipients.length) {
     box.innerHTML = `<span class="em-audience-empty">⚠ Este segmento no tiene destinatarios válidos.</span>`;
+    const badge = $("#emailCountBadge");
+    if (badge) badge.textContent = "0 destinatarios";
     return;
   }
-  const sample = recipients.slice(0, 5);
   box.innerHTML = `
     <div class="em-audience-summary">
-      <strong>👥 ${recipients.length} destinatario${recipients.length !== 1 ? "s" : ""}</strong>
-      <span>${excluded.length} exclusión${excluded.length !== 1 ? "es" : ""} en lista negra</span>
+      <strong id="emAudienceSelectedSummary">👥 ${selectedCount} de ${recipients.length} seleccionado${selectedCount !== 1 ? "s" : ""}</strong>
+      <span>${blacklistCount} ${blacklistCount === 1 ? "exclusión" : "exclusiones"} en lista negra</span>
     </div>
-    <div class="em-audience-chips">
-      ${sample.map(r => `<span title="${esc(r.email)}">${esc(r.name || r.email)}</span>`).join("")}
-      ${recipients.length > sample.length ? `<span>+${recipients.length - sample.length} más</span>` : ""}
-    </div>`;
+    <details id="emRecipientPicker" class="em-recipient-picker" ${wasOpen ? "open" : ""}>
+      <summary>
+        <span>📬 Ver y elegir todos los correos</span>
+        <strong id="emRecipientPickerCount">${selectedCount} / ${recipients.length}</strong>
+      </summary>
+      <div class="em-recipient-picker-body">
+        <div class="em-recipient-toolbar">
+          <input id="emRecipientSearch" type="search" class="sf-input" placeholder="Buscar nombre o correo…" aria-label="Buscar destinatarios">
+          <button id="emRecipientSelectAll" type="button" class="btn ghost">✓ Seleccionar todos</button>
+          <button id="emRecipientSelectNone" type="button" class="btn ghost">✕ Quitar todos</button>
+        </div>
+        <div id="emRecipientList" class="em-recipient-list" role="group" aria-label="Correos destinatarios">
+          ${recipients.map(recipient => {
+            const emailKey = recipientEmailKey(recipient.email);
+            const checked = !manualExclusions.has(emailKey);
+            const searchText = `${recipient.name || ""} ${recipient.email}`.toLowerCase();
+            return `<label class="em-recipient-row" data-search="${esc(searchText)}">
+              <input type="checkbox" class="em-recipient-check" data-email="${esc(emailKey)}" ${checked ? "checked" : ""}>
+              <span><strong>${esc(recipient.name || recipient.email)}</strong><small>${esc(recipient.email)}</small></span>
+            </label>`;
+          }).join("")}
+        </div>
+      </div>
+    </details>`;
+
+  $("#emRecipientSearch")?.addEventListener("input", event => {
+    const query = event.currentTarget.value.trim().toLowerCase();
+    $$("#emRecipientList .em-recipient-row").forEach(row => {
+      row.hidden = Boolean(query && !String(row.dataset.search || "").includes(query));
+    });
+  });
+  $$("#emRecipientList .em-recipient-check").forEach(input => {
+    input.addEventListener("change", () => {
+      const key = recipientEmailKey(input.dataset.email);
+      if (input.checked) manualExclusions.delete(key);
+      else manualExclusions.add(key);
+      refreshEmailRecipientSelectionCounters();
+    });
+  });
+  $("#emRecipientSelectAll")?.addEventListener("click", () => {
+    recipients.forEach(recipient => manualExclusions.delete(recipientEmailKey(recipient.email)));
+    $$("#emRecipientList .em-recipient-check").forEach(input => { input.checked = true; });
+    refreshEmailRecipientSelectionCounters();
+  });
+  $("#emRecipientSelectNone")?.addEventListener("click", () => {
+    recipients.forEach(recipient => manualExclusions.add(recipientEmailKey(recipient.email)));
+    $$("#emRecipientList .em-recipient-check").forEach(input => { input.checked = false; });
+    refreshEmailRecipientSelectionCounters();
+  });
+  refreshEmailRecipientSelectionCounters();
 }
 
 function renderEmailChecklist() {
   const el = $("#emChecklist");
   if (!el) return;
   const c = getEmailComposerState();
-  const recipients = getEmailRecipients($("#emailSegment")?.value || "all", $("#excludeConverted")?.checked ?? false);
+  const recipients = getChosenEmailRecipients($("#emailSegment")?.value || "all", $("#excludeConverted")?.checked ?? false);
   const brevoReady = CONFIG.mode === "api";
   const checks = [
     { ok: c.subject.length > 0 && c.subject.length <= 60, label: "Asunto", hint: c.subject.length ? `${c.subject.length}/60` : "obligatorio" },
@@ -7263,15 +7361,16 @@ function getEmailSegment(key) {
 
 function renderEmailMarketing() {
   const seg  = $("#emailSegment")?.value || "all";
-  const unsub = getUnsubscribeList();
   const excl  = $("#excludeConverted")?.checked ?? false;
-  const list = getEmailRecipients(seg, excl).filter(r => !unsub.includes(r.email));
+  const list = getChosenEmailRecipients(seg, excl);
   const badge = $("#emailCountBadge");
   if (badge) badge.textContent = `${list.length} destinatarios`;
   populateAdvancedFilters();
   renderTemplateSelect();
   renderBestSendHour();
   updateSubjectCharCount();
+  renderEmailAudiencePreview();
+  renderEmailChecklist();
 }
 
 function previewEmail() {
@@ -7280,9 +7379,7 @@ function previewEmail() {
 
 function exportEmailList() {
   const seg  = $("#emailSegment")?.value || "all";
-  const blocked = getUnsubscribeList().map(v => String(v).toLowerCase());
-  const list = getEmailRecipients(seg, $("#excludeConverted")?.checked ?? false)
-    .filter(r => r.email && !blocked.includes(String(r.email).toLowerCase()));
+  const list = getChosenEmailRecipients(seg, $("#excludeConverted")?.checked ?? false);
   if (!list.length) { toast("Sin destinatarios en este segmento","error"); return; }
   const rows = [["Nombre","Email","Segmento"]];
   list.forEach(c => rows.push([c.name, c.email, seg]));
@@ -7299,7 +7396,7 @@ function sendEmailMailto() {
   const subject = encodeURIComponent($("#emailSubject")?.value || "");
   const body_t  = encodeURIComponent(emailHtmlToPlainText($("#emailBody")?.value || ""));
   const seg     = $("#emailSegment")?.value || "all";
-  const list    = getEmailRecipients(seg, $("#excludeConverted")?.checked ?? false);
+  const list    = getChosenEmailRecipients(seg, $("#excludeConverted")?.checked ?? false);
   if (!list.length) { toast("Sin destinatarios","error"); return; }
   // Abrir mailto con primer destinatario como ejemplo
   const email = list[0]?.email || "";
