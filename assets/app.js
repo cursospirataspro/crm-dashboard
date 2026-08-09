@@ -3875,6 +3875,7 @@ function bind() {
       return;
     }
     runSmartProspectionAnalysis(searchText, similar);
+    if ($("#smartModeSimilar")) $("#smartModeSimilar").checked = true;
     renderSmartCourseResults();
     toast(`🔭 Modo Prospección: "${searchText.slice(0, 35)}" — usando ${similar.length} cursos similares`, "success");
   });
@@ -5845,7 +5846,7 @@ function renderSmartCourseResults() {
     ? [
         { label: "Compradores base", value: buyers.length,         icon: "🛒", color: "var(--muted)"   },
         { label: "Prospectos potenciales", value: similar.length,  icon: "🔍", color: "var(--accent)" },
-        { label: "Cursos similares usados", value: relatedCourses.length, icon: "🔗", color: "var(--warn)" },
+        { label: "Cursos similares usados", value: _smartState.prospectionBaseCourses.length, icon: "🔗", color: "var(--warn)" },
         { label: "Seleccionados",    value: selCount,              icon: "☑️", color: "var(--good)"   },
       ]
     : [
