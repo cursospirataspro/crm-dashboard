@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/styles.css?v=6">
+  <link rel="stylesheet" href="assets/styles.css?v=7">
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
@@ -1346,19 +1346,15 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           </div>
         </div>
         <div class="wl-toolbar">
-          <input id="wlSearch" type="search" class="sf-input" placeholder="🔍 Nombre, email o curso..." style="flex:2;min-width:200px">
+          <input id="wlSearch" type="search" class="sf-input" placeholder="🔍 Buscar curso, cliente o email..." style="flex:2;min-width:240px">
           <select id="wlStatusFilter" class="sf-input" style="min-width:170px">
             <option value="all">Todos los estados</option>
             <option value="pendiente">⏳ Pendiente</option>
             <option value="buscando">🔎 Buscando</option>
             <option value="conseguido">✅ Conseguido</option>
-            <option value="notificado">🔔 Notificado</option>
-            <option value="compro">💰 Compró</option>
+            <option value="notificando">🔔 Notificando</option>
+            <option value="completado">✓ Completado</option>
             <option value="archivado">🗄 Archivado</option>
-          </select>
-          <select id="wlGroupBy" class="sf-input" style="min-width:190px">
-            <option value="none">Vista: lista</option>
-            <option value="course">Vista: agrupar por curso</option>
           </select>
           <select id="wlPriorityFilter" class="sf-input" style="min-width:150px">
             <option value="all">Toda prioridad</option>
@@ -1369,22 +1365,28 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           </select>
           <select id="wlSourceFilter" class="sf-input" style="min-width:150px">
             <option value="all">Todo origen</option>
-            <option value="manual">Manual</option>
-            <option value="web">Web</option>
-            <option value="whatsapp">WhatsApp</option>
             <option value="telegram">Telegram</option>
-            <option value="instagram">Instagram</option>
-            <option value="facebook">Facebook</option>
-            <option value="email">Email</option>
-            <option value="otro">Otro</option>
+            <option value="web">Web</option>
+            <option value="competencia">Clientes de la competencia</option>
+            <option value="701">701</option>
+            <option value="toulh">Toulh</option>
+            <option value="lux">Lux</option>
+          </select>
+          <select id="wlSort" class="sf-input" style="min-width:190px">
+            <option value="most">Más interesados</option>
+            <option value="least">Menos interesados</option>
+            <option value="recent">Solicitudes recientes</option>
+            <option value="oldest">Solicitudes antiguas</option>
+            <option value="priority">Prioridad</option>
+            <option value="alpha">Alfabético</option>
           </select>
         </div>
         <!-- Barra de acciones masivas -->
         <div id="wlBulkBar" class="wl-bulk hidden">
           <span id="wlBulkCount" class="wl-bulk-count">0 seleccionados</span>
           <button id="wlBulkEmail" class="chip">✉ Enviar a Email Marketing</button>
-          <button id="wlBulkNotified" class="chip">🔔 Marcar notificado</button>
-          <button id="wlBulkArchive" class="chip">🗄 Archivar</button>
+          <button id="wlBulkCopy" class="chip">⧉ Copiar correos</button>
+          <button id="wlBulkExport" class="chip">⬇ Exportar interesados</button>
           <button id="wlBulkDelete" class="chip" style="color:var(--accent2)">🗑 Eliminar</button>
         </div>
         <div id="wlList" class="wl-list"></div>
@@ -1623,7 +1625,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 
 <!-- MODAL: Solicitud de curso (lista de espera) -->
 <div id="wlModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
-  <div class="modal-box" style="max-width:600px">
+  <div class="modal-box wl-request-modal">
     <div class="modal-head">
       <div>
         <p class="eyebrow">Lista de espera</p>
@@ -1633,94 +1635,92 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
     </div>
     <div class="modal-body">
       <input type="hidden" id="wlFieldId">
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <label class="sf-label" style="flex:1;min-width:200px">Nombre del cliente *
-          <input id="wlFieldName" type="text" class="sf-input" placeholder="Ej: Ana Torres">
-        </label>
-        <label class="sf-label" style="flex:1;min-width:200px">Email *
-          <input id="wlFieldEmail" type="email" class="sf-input" placeholder="cliente@correo.com">
-        </label>
-      </div>
-      <label class="sf-label">Curso solicitado *
-        <input id="wlFieldCourse" type="text" class="sf-input" placeholder="Ej: Carolina Mata 2026" list="wlCourseDatalist">
-        <datalist id="wlCourseDatalist"></datalist>
+      <input type="hidden" id="wlFieldCourseKey">
+      <label class="sf-label">Tipo de identificación *
+        <select id="wlFieldIdentityType" class="sf-input">
+          <option value="name">Nombre del cliente</option>
+          <option value="telegram">Usuario de Telegram</option>
+        </select>
       </label>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <label class="sf-label" style="flex:1;min-width:160px">Categoría / tipo
-          <input id="wlFieldCategory" type="text" class="sf-input" placeholder="Ej: Trading, Marketing...">
-        </label>
-        <label class="sf-label" style="flex:1;min-width:150px">Origen del lead
-          <select id="wlFieldSource" class="sf-input">
-            <option value="manual">Manual</option>
-            <option value="telegram">Telegram</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="instagram">Instagram</option>
-            <option value="facebook">Facebook</option>
-            <option value="web">Web</option>
-            <option value="email">Email</option>
-            <option value="otro">Otro</option>
-          </select>
-        </label>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <label class="sf-label" style="flex:1;min-width:150px">Prioridad
-          <select id="wlFieldPriority" class="sf-input">
-            <option value="urgente">🟣 Urgente</option>
-            <option value="alta">🔴 Alta</option>
-            <option value="media" selected>🟡 Media</option>
-            <option value="baja">🟢 Baja</option>
-          </select>
-        </label>
-        <label class="sf-label" style="flex:1;min-width:150px">Estado
-          <select id="wlFieldStatus" class="sf-input">
-            <option value="pendiente">⏳ Pendiente</option>
-            <option value="buscando">🔎 Buscando</option>
-            <option value="conseguido">✅ Conseguido</option>
-            <option value="notificado">🔔 Notificado</option>
-            <option value="compro">💰 Compró</option>
-            <option value="archivado">🗄 Archivado</option>
-          </select>
-        </label>
-        <label class="sf-label" style="flex:1;min-width:160px">Fecha de solicitud
-          <input id="wlFieldDate" type="date" class="sf-input">
-        </label>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <label class="sf-label" style="flex:1;min-width:180px">Teléfono
-          <input id="wlFieldPhone" type="tel" class="sf-input" placeholder="+51 999 999 999">
-        </label>
-        <label class="sf-label" style="flex:1;min-width:180px">Canal preferido
-          <select id="wlFieldContact" class="sf-input">
-            <option value="email">Email</option><option value="whatsapp">WhatsApp</option>
-            <option value="telegram">Telegram</option><option value="telefono">Teléfono</option>
-          </select>
-        </label>
-        <label class="sf-label" style="flex:1;min-width:180px">URL / referencia
-          <input id="wlFieldUrl" type="url" class="sf-input" placeholder="https://...">
-        </label>
-      </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <label class="sf-label" style="flex:1;min-width:180px">Etiquetas
-          <input id="wlFieldTags" type="text" class="sf-input" placeholder="vip, trading, urgente">
-        </label>
-        <label class="sf-label" style="flex:1;min-width:180px">Fecha de notificación
-          <input id="wlFieldNotifiedDate" type="date" class="sf-input">
-        </label>
-        <label class="sf-label" style="flex:1;min-width:180px">Respuesta
-          <select id="wlFieldResponse" class="sf-input">
-            <option value="">Sin respuesta</option><option value="interesado">Interesado</option>
-            <option value="no_interesado">No interesado</option><option value="comprara">Comprará después</option>
-          </select>
-        </label>
-      </div>
-      <label class="consent-check"><input id="wlFieldConsent" type="checkbox"> El cliente autoriza comunicaciones comerciales.</label>
+      <label class="sf-label"><span id="wlIdentityLabel">Nombre del cliente *</span>
+        <input id="wlFieldName" type="text" class="sf-input" placeholder="Ej: Juan Pérez" autocomplete="off">
+      </label>
+      <label class="sf-label">Email *
+        <input id="wlFieldEmail" type="email" class="sf-input" placeholder="juan@gmail.com" autocomplete="email">
+      </label>
+      <label class="sf-label wl-course-picker">Curso solicitado *
+        <input id="wlFieldCourse" type="text" class="sf-input" placeholder="Buscar o crear curso..." autocomplete="off">
+        <div id="wlCourseSuggestions" class="wl-course-suggestions hidden"></div>
+        <small id="wlCourseHint" class="wl-field-hint">Escribe para buscar entre los cursos ya solicitados.</small>
+      </label>
+      <label class="sf-label">Origen *
+        <select id="wlFieldSource" class="sf-input">
+          <option value="telegram">Telegram</option>
+          <option value="web">Web</option>
+          <option value="competencia">Clientes de la competencia</option>
+          <option value="701">701</option>
+          <option value="toulh">Toulh</option>
+          <option value="lux">Lux</option>
+        </select>
+      </label>
       <label class="sf-label">Notas internas
-        <textarea id="wlFieldNotes" class="sf-input" rows="3" placeholder="Detalles, versión del curso, contexto..."></textarea>
+        <textarea id="wlFieldNotes" class="sf-input" rows="2" placeholder="Información opcional..."></textarea>
       </label>
       <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap">
         <button id="wlSaveBtn" class="btn primary">💾 Guardar solicitud</button>
         <button id="wlCancelBtn" class="btn ghost">Cancelar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: interesado duplicado -->
+<div id="wlDuplicateModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-head"><div><p class="eyebrow">Registro existente</p><h2>Interesado duplicado</h2></div><button class="modal-close" id="wlDuplicateClose">✕</button></div>
+    <div class="modal-body">
+      <p id="wlDuplicateMessage" class="panel-help"></p>
+      <div class="sf-actions">
+        <button id="wlDuplicateOpen" class="btn primary">Abrir registro</button>
+        <button id="wlDuplicateUpdate" class="btn ghost">Actualizar información</button>
+        <button id="wlDuplicateCancel" class="btn ghost">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PANEL: detalle de un curso y sus interesados -->
+<div id="wlCourseModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box modal-wide wl-course-modal">
+    <div class="modal-head">
+      <div><p class="eyebrow">Curso solicitado</p><h2 id="wlCourseModalTitle">—</h2><p id="wlCourseModalMeta" class="modal-meta"></p></div>
+      <button class="modal-close" id="wlCourseModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="wlCourseModalKey">
+      <div class="wl-course-settings">
+        <label class="sf-label">Prioridad
+          <select id="wlCoursePriority" class="sf-input"><option value="baja">🟢 Baja</option><option value="media">🟡 Media</option><option value="alta">🔴 Alta</option><option value="urgente">🟣 Urgente</option></select>
+        </label>
+        <label class="sf-label">Estado
+          <select id="wlCourseStatus" class="sf-input"><option value="pendiente">⏳ Pendiente</option><option value="buscando">🔎 Buscando</option><option value="conseguido">✅ Conseguido</option><option value="notificando">🔔 Notificando</option><option value="completado">✓ Completado</option><option value="archivado">🗄 Archivado</option></select>
+        </label>
+        <label class="sf-label wl-course-notes">Notas generales del curso
+          <input id="wlCourseNotes" class="sf-input" type="text" placeholder="Contexto general opcional...">
+        </label>
+      </div>
+      <div class="wl-detail-toolbar">
+        <label class="wl-select-all"><input id="wlCourseSelectAll" type="checkbox"> Seleccionar todos</label>
+        <div><button id="wlCourseAddPerson" class="btn primary">+ Añadir interesado</button><button id="wlCoursePrepare" class="btn ghost hidden">Preparar campaña</button></div>
+      </div>
+      <div id="wlCourseBulk" class="wl-bulk hidden">
+        <span id="wlCourseBulkCount" class="wl-bulk-count">0 seleccionados</span>
+        <button id="wlCourseBulkExport" class="chip">⬇ Exportar interesados</button>
+        <button id="wlCourseBulkCopy" class="chip">⧉ Copiar correos</button>
+        <button id="wlCourseBulkEmail" class="chip">✉ Enviar a Email Marketing</button>
+        <button id="wlCourseBulkDelete" class="chip wl-del">🗑 Eliminar seleccionados</button>
+      </div>
+      <div id="wlCoursePeople" class="wl-people-list"></div>
     </div>
   </div>
 </div>
@@ -1741,7 +1741,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
         <select id="wlDuplicatePolicy" class="sf-input">
           <option value="skip">Omitir duplicados</option>
           <option value="update">Actualizar existente</option>
-          <option value="create">Crear de todas formas</option>
         </select>
       </label>
       <div id="wlImportSummary" class="data-state">Aún no se ha seleccionado un archivo.</div>
@@ -1813,6 +1812,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=50"></script>
+<script src="assets/app.js?v=51"></script>
 </body>
 </html>

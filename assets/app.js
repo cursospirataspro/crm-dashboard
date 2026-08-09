@@ -7946,35 +7946,107 @@ function initAccordions() {
 // =============================================================
 const WL_KEY     = "crm_waitlist";
 const WL_SEL_KEY = "crm_waitlist_email_selection";
-let _wlSelected  = new Set();   // ids seleccionados en la tabla
+const WL_COURSE_KEY = "crm_waitlist_courses_v2";
+let _wlSelected  = new Set();
+let _wlOpenCourseKey = "";
+let _wlPendingDuplicate = null;
 
 const WL_STATUS = {
   pendiente:  { label: "⏳ Pendiente",  cls: "wl-st-pendiente"  },
   buscando:   { label: "🔎 Buscando",   cls: "wl-st-buscando"   },
   conseguido: { label: "✅ Conseguido", cls: "wl-st-conseguido" },
-  notificado: { label: "🔔 Notificado", cls: "wl-st-notificado" },
-  compro:     { label: "💰 Compró",     cls: "wl-st-compro"     },
+  notificando:{ label: "🔔 Notificando",cls: "wl-st-notificando"},
+  completado: { label: "✓ Completado", cls: "wl-st-completado" },
   archivado:  { label: "🗄 Archivado",  cls: "wl-st-archivado"  }
 };
 const WL_PRIORITY = { urgente: "🟣 Urgente", alta: "🔴 Alta", media: "🟡 Media", baja: "🟢 Baja" };
-const WL_SOURCE   = { manual: "Manual", telegram: "Telegram", whatsapp: "WhatsApp", instagram: "Instagram", facebook: "Facebook", web: "Web", email: "Email", otro: "Otro" };
+const WL_SOURCE = { telegram:"Telegram", web:"Web", competencia:"Clientes de la competencia", "701":"701", toulh:"Toulh", lux:"Lux" };
 const normalizeEmail = value => String(value || "").trim().toLowerCase();
+const normalizeCourseTitle = value => String(value || "").trim().replace(/\s+/g, " ");
+const normalizeCourseKey = value => normalizeCourseTitle(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const normalizeWlStatus = value => value === "notificado" ? "notificando" : value === "compro" ? "completado" : (WL_STATUS[value] ? value : "pendiente");
+const wlPrioritySuggestion = count => count >= 11 ? "urgente" : count >= 6 ? "alta" : count >= 3 ? "media" : "baja";
+const wlDateValue = value => {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+};
 
 function loadWaitlist() {
-  try { return JSON.parse(localStorage.getItem(WL_KEY) || "[]"); } catch(e) { return []; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(WL_KEY) || "[]");
+    return Array.isArray(raw) ? raw.map(w => {
+      const course = normalizeCourseTitle(w.course);
+      return {
+        ...w,
+        identityType: w.identityType === "telegram" || String(w.name || "").trim().startsWith("@") ? "telegram" : "name",
+        name: String(w.name || "").trim(),
+        email: normalizeEmail(w.email),
+        course,
+        courseKey: normalizeCourseKey(course),
+        status: normalizeWlStatus(w.status),
+        source: String(w.source || "telegram").toLowerCase(),
+        date: w.date || w.created || new Date().toISOString()
+      };
+    }).filter(w => w.courseKey) : [];
+  } catch(e) { return []; }
 }
 function saveWaitlist(list) {
   try { localStorage.setItem(WL_KEY, JSON.stringify(list)); } catch(e) {}
 }
+function loadWaitlistCourseMeta() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WL_COURSE_KEY) || "{}");
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch(e) { return {}; }
+}
+function saveWaitlistCourseMeta(meta) {
+  try { localStorage.setItem(WL_COURSE_KEY, JSON.stringify(meta)); } catch(e) {}
+}
 function getWaitlistEmailSelection() {
   try { return JSON.parse(localStorage.getItem(WL_SEL_KEY) || "[]"); } catch(e) { return []; }
+}
+
+function buildWaitlistCourses(items = loadWaitlist()) {
+  const stored = loadWaitlistCourseMeta();
+  const groups = new Map();
+  items.forEach(item => {
+    const key = item.courseKey || normalizeCourseKey(item.course);
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, { key, title: normalizeCourseTitle(item.course), items: [] });
+    groups.get(key).items.push(item);
+  });
+  return [...groups.values()].map(group => {
+    group.items.sort((a,b) => wlDateValue(b.date) - wlDateValue(a.date));
+    const legacy = group.items[0] || {};
+    const current = stored[group.key] || {};
+    const suggested = wlPrioritySuggestion(group.items.length);
+    group.meta = {
+      title: normalizeCourseTitle(current.title || group.title),
+      priority: current.priorityManual ? (current.priority || suggested) : (current.priority || legacy.priority || suggested),
+      priorityManual: Boolean(current.priorityManual || (!stored[group.key] && legacy.priority)),
+      status: normalizeWlStatus(current.status || legacy.status),
+      notes: String(current.notes || ""),
+      created: current.created || group.items[group.items.length - 1]?.date || new Date().toISOString(),
+      updated: current.updated || group.items[0]?.date || new Date().toISOString()
+    };
+    group.firstDate = group.items.reduce((min,w) => Math.min(min, wlDateValue(w.date) || min), Infinity);
+    group.lastDate = group.items.reduce((max,w) => Math.max(max, wlDateValue(w.date)), 0);
+    return group;
+  });
+}
+
+function ensureWlCourseMeta(key, title = "") {
+  const meta = loadWaitlistCourseMeta();
+  if (!meta[key]) meta[key] = { title: normalizeCourseTitle(title), status:"pendiente", priority:wlPrioritySuggestion(1), priorityManual:false, notes:"", created:new Date().toISOString(), updated:new Date().toISOString() };
+  saveWaitlistCourseMeta(meta);
+  return meta[key];
 }
 
 function populateWaitlistCourseFilter() {
   const sel = $("#filterWaitlistCourse");
   if (!sel) return;
   const current = sel.value;
-  const courses = [...new Set(loadWaitlist().filter(w => w.status !== "archivado").map(w => w.course))].sort();
+  const courses = buildWaitlistCourses().filter(g => g.meta.status !== "archivado").map(g => g.meta.title).sort((a,b) => a.localeCompare(b,"es"));
   sel.innerHTML = `<option value="">Todos los cursos solicitados</option>` +
     courses.map(c => `<option value="${esc(c)}"${c === current ? " selected" : ""}>${esc(c)}</option>`).join("");
 }
@@ -7986,9 +8058,9 @@ function initWaitlist() {
   $("#wlExportBtn")?.addEventListener("click", wlExportCSV);
   $("#wlSearch")?.addEventListener("input", debounce(renderWaitlist, 200));
   $("#wlStatusFilter")?.addEventListener("change", renderWaitlist);
-  $("#wlGroupBy")?.addEventListener("change", renderWaitlist);
   $("#wlPriorityFilter")?.addEventListener("change", renderWaitlist);
   $("#wlSourceFilter")?.addEventListener("change", renderWaitlist);
+  $("#wlSort")?.addEventListener("change", renderWaitlist);
   $("#wlImportBtn")?.addEventListener("click", openWlImportModal);
 
   // Modal
@@ -7996,105 +8068,161 @@ function initWaitlist() {
   $("#wlCancelBtn")?.addEventListener("click", closeWlModal);
   $("#wlModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeWlModal(); });
   $("#wlSaveBtn")?.addEventListener("click", saveWlFromModal);
+  $("#wlDuplicateClose")?.addEventListener("click", closeWlDuplicateModal);
+  $("#wlDuplicateCancel")?.addEventListener("click", closeWlDuplicateModal);
+  $("#wlDuplicateModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeWlDuplicateModal(); });
+  $("#wlDuplicateOpen")?.addEventListener("click", () => {
+    const pending = _wlPendingDuplicate;
+    closeWlDuplicateModal(); closeWlModal();
+    if (pending) openWlCourse(pending.courseKey);
+  });
+  $("#wlDuplicateUpdate")?.addEventListener("click", () => {
+    const pending = _wlPendingDuplicate;
+    closeWlDuplicateModal();
+    if (pending) commitWlRecord(pending.id, pending.data);
+  });
+  $("#wlFieldIdentityType")?.addEventListener("change", updateWlIdentityField);
+  $("#wlFieldCourse")?.addEventListener("input", renderWlCourseSuggestions);
+  $("#wlFieldCourse")?.addEventListener("focus", renderWlCourseSuggestions);
+  document.addEventListener("click", e => { if (!e.target.closest(".wl-course-picker")) $("#wlCourseSuggestions")?.classList.add("hidden"); });
   initWlImporter();
 
-  // Acciones masivas
+  // Acciones masivas de interesados
   $("#wlBulkEmail")?.addEventListener("click", wlSendSelectedToEmail);
-  $("#wlBulkNotified")?.addEventListener("click", () => wlBulkSetStatus("notificado"));
-  $("#wlBulkArchive")?.addEventListener("click", () => wlBulkSetStatus("archivado"));
+  $("#wlBulkCopy")?.addEventListener("click", wlCopySelectedEmails);
+  $("#wlBulkExport")?.addEventListener("click", wlExportSelected);
   $("#wlBulkDelete")?.addEventListener("click", wlBulkDelete);
+
+  // Panel de curso
+  $("#wlCourseModalClose")?.addEventListener("click", closeWlCourseModal);
+  $("#wlCourseModal")?.addEventListener("click", e => { if (e.target === e.currentTarget) closeWlCourseModal(); });
+  $("#wlCoursePriority")?.addEventListener("change", e => wlSetCoursePriority(_wlOpenCourseKey, e.target.value));
+  $("#wlCourseStatus")?.addEventListener("change", e => wlSetCourseStatus(_wlOpenCourseKey, e.target.value));
+  $("#wlCourseNotes")?.addEventListener("change", e => wlSetCourseNotes(_wlOpenCourseKey, e.target.value));
+  $("#wlCourseAddPerson")?.addEventListener("click", () => openWlModal(null, _wlOpenCourseKey));
+  $("#wlCoursePrepare")?.addEventListener("click", () => wlPrepareCourseCampaign(_wlOpenCourseKey));
+  $("#wlCourseSelectAll")?.addEventListener("change", e => wlSelectCourse(_wlOpenCourseKey, e.target.checked));
+  $("#wlCourseBulkEmail")?.addEventListener("click", wlSendSelectedToEmail);
+  $("#wlCourseBulkCopy")?.addEventListener("click", wlCopySelectedEmails);
+  $("#wlCourseBulkExport")?.addEventListener("click", wlExportSelected);
+  $("#wlCourseBulkDelete")?.addEventListener("click", wlBulkDelete);
 
   renderWaitlist();
 }
 
-function openWlModal(id) {
+function updateWlIdentityField() {
+  const isTelegram = $("#wlFieldIdentityType")?.value === "telegram";
+  if ($("#wlIdentityLabel")) $("#wlIdentityLabel").textContent = isTelegram ? "Usuario de Telegram *" : "Nombre del cliente *";
+  if ($("#wlFieldName")) $("#wlFieldName").placeholder = isTelegram ? "Ej: @juanperez" : "Ej: Juan Pérez";
+}
+
+function renderWlCourseSuggestions() {
+  const input = $("#wlFieldCourse");
+  const box = $("#wlCourseSuggestions");
+  if (!input || !box) return;
+  const term = normalizeCourseKey(input.value);
+  const courses = buildWaitlistCourses().filter(g => !term || g.key.includes(term)).slice(0,8);
+  const exact = courses.find(g => g.key === term);
+  box.innerHTML = courses.map(g => `<button type="button" class="wl-course-option" data-key="${esc(encodeURIComponent(g.key))}"><strong>${esc(g.meta.title)}</strong><span>${g.items.length} interesado${g.items.length !== 1 ? "s" : ""}</span></button>`).join("") +
+    (term && !exact ? `<button type="button" class="wl-course-option wl-course-create" data-create="1">+ Crear “${esc(normalizeCourseTitle(input.value))}”</button>` : "");
+  box.classList.toggle("hidden", !box.innerHTML);
+  box.querySelectorAll(".wl-course-option").forEach(btn => btn.addEventListener("click", () => {
+    if (btn.dataset.create) {
+      $("#wlFieldCourseKey").value = normalizeCourseKey(input.value);
+      $("#wlCourseHint").textContent = `Se creará el curso “${normalizeCourseTitle(input.value)}”.`;
+    } else {
+      const key = decodeURIComponent(btn.dataset.key);
+      const group = buildWaitlistCourses().find(g => g.key === key);
+      input.value = group?.meta.title || input.value;
+      $("#wlFieldCourseKey").value = key;
+      $("#wlCourseHint").textContent = `${group?.items.length || 0} interesados registrados; se añadirá a este curso.`;
+    }
+    box.classList.add("hidden");
+  }));
+}
+
+function openWlModal(id, courseKey = "") {
   const modal = $("#wlModal");
   if (!modal) return;
   const item = id ? loadWaitlist().find(w => w.id === id) : null;
-  $("#wlModalTitle").textContent = item ? "Editar solicitud" : "Nueva solicitud";
+  const group = courseKey ? buildWaitlistCourses().find(g => g.key === courseKey) : null;
+  $("#wlModalTitle").textContent = item ? "Editar interesado" : group ? "Agregar interesado" : "Nueva solicitud";
   $("#wlFieldId").value       = item?.id || "";
+  $("#wlFieldIdentityType").value = item?.identityType || "name";
   $("#wlFieldName").value     = item?.name || "";
   $("#wlFieldEmail").value    = item?.email || "";
-  $("#wlFieldCourse").value   = item?.course || "";
-  $("#wlFieldCategory").value = item?.category || "";
-  $("#wlFieldSource").value   = item?.source || "manual";
-  $("#wlFieldPriority").value = item?.priority || "media";
-  $("#wlFieldStatus").value   = item?.status || "pendiente";
-  $("#wlFieldDate").value     = (item?.date || new Date().toISOString()).slice(0, 10);
+  $("#wlFieldCourse").value   = item?.course || group?.meta.title || "";
+  $("#wlFieldCourseKey").value= item?.courseKey || group?.key || "";
+  $("#wlFieldSource").value   = WL_SOURCE[item?.source] ? item.source : "telegram";
   $("#wlFieldNotes").value    = item?.notes || "";
-  $("#wlFieldPhone").value    = item?.phone || "";
-  $("#wlFieldContact").value  = item?.contact || "email";
-  $("#wlFieldUrl").value      = item?.url || "";
-  $("#wlFieldTags").value     = (item?.tags || []).join(", ");
-  $("#wlFieldNotifiedDate").value = item?.notifiedDate || "";
-  $("#wlFieldResponse").value = item?.response || "";
-  $("#wlFieldConsent").checked = Boolean(item?.consent);
-
-  // Sugerencias de cursos ya solicitados
-  const dl = $("#wlCourseDatalist");
-  if (dl) {
-    const courses = [...new Set(loadWaitlist().map(w => w.course))].sort();
-    dl.innerHTML = courses.map(c => `<option value="${esc(c)}">`).join("");
-  }
+  $("#wlCourseHint").textContent = group ? `${group.items.length} interesados registrados; se añadirá a este curso.` : "Escribe para buscar entre los cursos ya solicitados.";
+  updateWlIdentityField();
+  $("#wlCourseSuggestions")?.classList.add("hidden");
   modal.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
   setTimeout(() => $("#wlFieldName")?.focus(), 60);
 }
 
-function closeWlModal() { $("#wlModal")?.classList.add("hidden"); }
+function closeWlModal() { $("#wlModal")?.classList.add("hidden"); if ($("#wlCourseModal")?.classList.contains("hidden")) document.body.style.overflow = ""; }
 
 function saveWlFromModal() {
   const name   = $("#wlFieldName").value.trim();
   const email  = normalizeEmail($("#wlFieldEmail").value);
-  const course = $("#wlFieldCourse").value.trim();
+  const typedCourse = normalizeCourseTitle($("#wlFieldCourse").value);
+  const courseKey = normalizeCourseKey(typedCourse);
+  const existingCourse = buildWaitlistCourses().find(g => g.key === courseKey);
+  const course = existingCourse?.meta.title || typedCourse;
   if (!name || !email || !course) { toast("⚠ Nombre, email y curso son obligatorios", "warning"); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast("⚠ Email no válido", "warning"); return; }
+  if ($("#wlFieldIdentityType").value === "telegram" && !name.startsWith("@")) { toast("⚠ El usuario de Telegram debe comenzar con @", "warning"); return; }
 
-  const list = loadWaitlist();
-  let id   = $("#wlFieldId").value;
-  const duplicate = !id && list.find(w => normalizeEmail(w.email) === email && String(w.course || "").trim().toLowerCase() === course.toLowerCase() && w.status !== "archivado");
-  if (duplicate) {
-    const choice = prompt("Ya existe una solicitud activa con este email y curso.\nEscribe 1 para actualizarla, 2 para crear otra, o pulsa Cancelar.", "1");
-    if (choice === null || !["1", "2"].includes(choice.trim())) return;
-    if (choice.trim() === "1") id = duplicate.id;
-  }
   const data = {
-    name, email, course,
-    category: $("#wlFieldCategory").value.trim(),
-    source:   $("#wlFieldSource").value,
-    priority: $("#wlFieldPriority").value,
-    status:   $("#wlFieldStatus").value,
-    date:     $("#wlFieldDate").value || new Date().toISOString().slice(0, 10),
-    notes:    $("#wlFieldNotes").value.trim(),
-    phone:    $("#wlFieldPhone")?.value.trim() || "",
-    contact:  $("#wlFieldContact")?.value || "email",
-    url:      $("#wlFieldUrl")?.value.trim() || "",
-    tags:     ($("#wlFieldTags")?.value || "").split(",").map(x => x.trim()).filter(Boolean),
-    notifiedDate: $("#wlFieldNotifiedDate")?.value || "",
-    response: $("#wlFieldResponse")?.value || "",
-    consent: Boolean($("#wlFieldConsent")?.checked)
+    identityType: $("#wlFieldIdentityType").value,
+    name, email, course, courseKey,
+    source: $("#wlFieldSource").value,
+    notes: $("#wlFieldNotes").value.trim()
   };
+  const list = loadWaitlist();
+  const id = $("#wlFieldId").value;
+  const duplicate = list.find(w => w.id !== id && normalizeEmail(w.email) === email && (w.courseKey || normalizeCourseKey(w.course)) === courseKey);
+  if (duplicate) {
+    _wlPendingDuplicate = { id:duplicate.id, data, courseKey };
+    $("#wlDuplicateMessage").textContent = `Este correo ya está registrado como interesado en ${course}. Puedes abrir el registro existente, actualizar su información o cancelar.`;
+    $("#wlDuplicateModal")?.classList.remove("hidden");
+    return;
+  }
+  commitWlRecord(id, data);
+}
+
+function closeWlDuplicateModal() {
+  $("#wlDuplicateModal")?.classList.add("hidden");
+  _wlPendingDuplicate = null;
+}
+
+function commitWlRecord(id, data) {
+  const list = loadWaitlist();
+  const now = new Date().toISOString();
+  const existingCourse = buildWaitlistCourses(list).find(g => g.key === data.courseKey);
   if (id) {
     const idx = list.findIndex(w => w.id === id);
-    if (idx >= 0) list[idx] = { ...list[idx], ...data, updated: new Date().toISOString() };
-    toast("✓ Solicitud actualizada", "success");
+    if (idx >= 0) list[idx] = { ...list[idx], ...data, updated: now };
+    toast("✓ Interesado actualizado", "success");
   } else {
-    list.unshift({ id: "wl_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), created: new Date().toISOString(), ...data });
+    const meta = existingCourse?.meta || { status:"pendiente", priority:wlPrioritySuggestion(1) };
+    list.unshift({ id: "wl_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), created: now, date: now, status:normalizeWlStatus(meta.status), ...data });
     toast("✓ Solicitud registrada", "success");
   }
   saveWaitlist(list);
   closeWlModal();
   renderWaitlist();
+  if (_wlOpenCourseKey === data.courseKey && !$("#wlCourseModal")?.classList.contains("hidden")) renderWlCourseDetail();
 }
 
 function wlSetStatus(id, status) {
   const list = loadWaitlist();
   const it = list.find(w => w.id === id);
   if (!it) return;
-  it.status = status;
-  it.updated = new Date().toISOString();
-  saveWaitlist(list);
-  renderWaitlist();
-  toast(`Estado → ${WL_STATUS[status]?.label || status}`, "success");
+  wlSetCourseStatus(it.courseKey || normalizeCourseKey(it.course), normalizeWlStatus(status));
 }
 
 function wlDelete(id) {
@@ -8102,17 +8230,8 @@ function wlDelete(id) {
   saveWaitlist(loadWaitlist().filter(w => w.id !== id));
   _wlSelected.delete(id);
   renderWaitlist();
-  toast("Solicitud eliminada", "success");
-}
-
-function wlBulkSetStatus(status) {
-  if (!_wlSelected.size) return;
-  const list = loadWaitlist();
-  list.forEach(w => { if (_wlSelected.has(w.id)) { w.status = status; w.updated = new Date().toISOString(); } });
-  saveWaitlist(list);
-  toast(`${_wlSelected.size} solicitudes → ${WL_STATUS[status]?.label || status}`, "success");
-  _wlSelected.clear();
-  renderWaitlist();
+  if (_wlOpenCourseKey) renderWlCourseDetail();
+  toast("Interesado eliminado", "success");
 }
 
 function wlBulkDelete() {
@@ -8121,7 +8240,8 @@ function wlBulkDelete() {
   saveWaitlist(loadWaitlist().filter(w => !_wlSelected.has(w.id)));
   _wlSelected.clear();
   renderWaitlist();
-  toast("Solicitudes eliminadas", "success");
+  if (_wlOpenCourseKey) renderWlCourseDetail();
+  toast("Interesados eliminados", "success");
 }
 
 function wlSendSelectedToEmail() {
@@ -8131,136 +8251,105 @@ function wlSendSelectedToEmail() {
   const sel  = list.filter(w => { const k = w.email.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
                    .map(w => ({ email: w.email, name: w.name || w.email, course: w.course }));
   try { localStorage.setItem(WL_SEL_KEY, JSON.stringify(sel)); } catch(e) {}
+  closeWlCourseModal();
   switchView("oportunidades");
   const seg = $("#emailSegment");
   if (seg) { seg.value = "waitlist"; seg.dispatchEvent(new Event("change")); }
   toast(`📩 ${sel.length} correos enviados al compositor de Email Marketing`, "success");
 }
 
-function wlFilteredItems() {
+async function wlCopySelectedEmails() {
+  const emails = [...new Set(loadWaitlist().filter(w => _wlSelected.has(w.id)).map(w => normalizeEmail(w.email)).filter(Boolean))];
+  if (!emails.length) return toast("Selecciona al menos un interesado", "warning");
+  try { await navigator.clipboard.writeText(emails.join(", ")); }
+  catch(e) {
+    const area = Object.assign(document.createElement("textarea"), { value:emails.join(", ") });
+    document.body.appendChild(area); area.select(); document.execCommand("copy"); area.remove();
+  }
+  toast(`${emails.length} correos copiados`, "success");
+}
+
+function wlFilteredCourses() {
   const q      = ($("#wlSearch")?.value || "").trim().toLowerCase();
   const status = $("#wlStatusFilter")?.value || "all";
   const priority = $("#wlPriorityFilter")?.value || "all";
   const source = $("#wlSourceFilter")?.value || "all";
-  let list = loadWaitlist();
-  if (status !== "all") list = list.filter(w => w.status === status);
-  else list = list.filter(w => w.status !== "archivado"); // por defecto ocultar archivados
-  if (priority !== "all") list = list.filter(w => w.priority === priority);
-  if (source !== "all") list = list.filter(w => w.source === source);
-  if (q) list = list.filter(w =>
-    (w.name || "").toLowerCase().includes(q) ||
-    (w.email || "").toLowerCase().includes(q) ||
-    (w.course || "").toLowerCase().includes(q)
-  );
-  return list;
+  const order = $("#wlSort")?.value || "most";
+  let courses = buildWaitlistCourses();
+  courses = courses.filter(g => status === "all" ? g.meta.status !== "archivado" : g.meta.status === status);
+  if (priority !== "all") courses = courses.filter(g => g.meta.priority === priority);
+  if (source !== "all") courses = courses.filter(g => g.items.some(w => w.source === source));
+  if (q) courses = courses.filter(g => [g.meta.title, ...g.items.flatMap(w => [w.name,w.email])].join(" ").toLowerCase().includes(q));
+  const priorityRank = { urgente:4, alta:3, media:2, baja:1 };
+  courses.sort((a,b) => order === "least" ? a.items.length-b.items.length : order === "recent" ? b.lastDate-a.lastDate : order === "oldest" ? a.firstDate-b.firstDate : order === "priority" ? (priorityRank[b.meta.priority]-priorityRank[a.meta.priority]) || b.items.length-a.items.length : order === "alpha" ? a.meta.title.localeCompare(b.meta.title,"es") : b.items.length-a.items.length);
+  return courses;
 }
 
-function wlRowHTML(w) {
-  const st  = WL_STATUS[w.status] || WL_STATUS.pendiente;
-  const checked = _wlSelected.has(w.id) ? " checked" : "";
-  const nextBtn = w.status === "conseguido"
-    ? `<button class="chip" onclick="wlSetStatus('${esc(w.id)}','notificado')" title="Marcar como notificado">🔔 Notificar</button>`
-    : w.status === "notificado"
-      ? `<button class="chip" onclick="wlSetStatus('${esc(w.id)}','compro')" title="El cliente compró">💰 Compró</button>`
-      : "";
-  return `<div class="wl-row" data-id="${esc(w.id)}">
-    <input type="checkbox" class="wl-check" data-id="${esc(w.id)}"${checked}>
-    <div class="wl-main">
-      <div class="wl-name"><button type="button" class="link-button" onclick="openCustomerModal(decodeURIComponent('${encodeURIComponent(w.email || w.name)}'))">${esc(w.name)}</button> <span class="wl-priority wl-pr-${esc(w.priority || "media")}" title="Prioridad">${WL_PRIORITY[w.priority] || ""}</span></div>
-      <div class="wl-meta">${esc(w.email)}${w.phone ? ` · ${esc(w.phone)}` : ""} · ${esc(WL_SOURCE[w.source] || w.source || "")} · ${esc((w.date || "").slice(0, 10))}${w.consent ? " · ✓ consentimiento" : ""}${w.notes ? ` · 📝 ${esc(w.notes.slice(0, 60))}${w.notes.length > 60 ? "…" : ""}` : ""}</div>
+function wlFilteredItems() { return wlFilteredCourses().flatMap(g => g.items); }
+
+function wlCourseCardHTML(group) {
+  const st = WL_STATUS[group.meta.status] || WL_STATUS.pendiente;
+  const encoded = encodeURIComponent(group.key);
+  const last = group.lastDate ? new Date(group.lastDate).toLocaleDateString("es-PE") : "—";
+  return `<article class="wl-course-card ${group.meta.status === "conseguido" ? "is-conseguido" : ""}">
+    <div class="wl-course-card-head">
+      <button type="button" class="wl-course-title-btn" onclick="openWlCourse(decodeURIComponent('${encoded}'))">${esc(group.meta.title)}</button>
+      <span class="wl-course-count">${group.items.length} interesado${group.items.length !== 1 ? "s" : ""}</span>
     </div>
-    <div class="wl-course" title="Curso solicitado">${esc(w.course)}${w.category ? `<small>${esc(w.category)}</small>` : ""}</div>
-    <span class="wl-status ${st.cls}">${st.label}</span>
-    <div class="wl-actions">
-      ${nextBtn}
-      <button class="chip" onclick="openWlModal('${esc(w.id)}')" title="Editar">✏️</button>
-      <button class="chip" onclick="wlSetStatus('${esc(w.id)}','archivado')" title="Archivar">🗄</button>
-      <button class="chip wl-del" onclick="wlDelete('${esc(w.id)}')" title="Eliminar">🗑</button>
+    <p class="wl-course-sub">Última solicitud: ${esc(last)} · Primera: ${esc(group.firstDate < Infinity ? new Date(group.firstDate).toLocaleDateString("es-PE") : "—")}</p>
+    <div class="wl-course-badges"><span class="wl-priority-pill">${WL_PRIORITY[group.meta.priority]}</span><span class="wl-status ${st.cls}">${st.label}</span></div>
+    <div class="wl-course-card-actions">
+      <button class="chip" onclick="openWlCourse(decodeURIComponent('${encoded}'))">Ver ${group.items.length} interesado${group.items.length !== 1 ? "s" : ""}</button>
+      <button class="chip" onclick="openWlModal(null,decodeURIComponent('${encoded}'))">+ Añadir</button>
+      ${group.meta.status === "conseguido" ? `<button class="chip" onclick="wlPrepareCourseCampaign(decodeURIComponent('${encoded}'))">Preparar campaña</button>` : ""}
+      <select class="wl-card-status" aria-label="Estado de ${esc(group.meta.title)}" onchange="wlSetCourseStatus(decodeURIComponent('${encoded}'),this.value)">${Object.entries(WL_STATUS).map(([value,data]) => `<option value="${value}"${value === group.meta.status ? " selected" : ""}>${data.label}</option>`).join("")}</select>
     </div>
-  </div>`;
+  </article>`;
 }
 
 function renderWaitlist() {
   const box = $("#wlList");
   if (!box) { updateWaitlistNavCount(); return; }
 
-  const all  = loadWaitlist();
-  const list = wlFilteredItems();
+  const all = loadWaitlist();
+  const allCourses = buildWaitlistCourses(all);
+  const courses = wlFilteredCourses();
 
   // ── KPIs ──
   const kpis = $("#wlKpis");
   if (kpis) {
-    const active     = all.filter(w => w.status !== "archivado");
-    const pendientes = all.filter(w => ["pendiente", "buscando"].includes(w.status)).length;
-    const conseguidos= all.filter(w => w.status === "conseguido").length;
-    const compraron  = all.filter(w => w.status === "compro").length;
-    const cursos     = new Set(active.map(w => w.course)).size;
-    const notificados = all.filter(w => ["notificado", "compro"].includes(w.status)).length;
-    const conv       = notificados ? (compraron / notificados * 100).toFixed(0) : 0;
+    const activeCourses = allCourses.filter(g => g.meta.status !== "archivado");
+    const activePeople = activeCourses.flatMap(g => g.items);
+    const interestedEmails = new Set(activePeople.map(w => normalizeEmail(w.email)).filter(Boolean));
+    const buyerEmails = new Set((state.orders || []).filter(o => ["completed","processing"].includes(statusNorm(o.status))).map(o => normalizeEmail(o.customer_email)).filter(Boolean));
+    const converted = [...interestedEmails].filter(email => buyerEmails.has(email)).length;
+    const conv = interestedEmails.size ? Math.round(converted / interestedEmails.size * 100) : 0;
     kpis.innerHTML = [
-      ["Solicitudes activas", active.length, "Sin contar archivadas"],
-      ["Pendientes / buscando", pendientes, "Cursos por conseguir"],
-      ["Conseguidos sin notificar", conseguidos, "Listos para avisar"],
-      ["Cursos distintos", cursos, "Demanda única"],
-      ["Conversión a compra", conv + "%", `${compraron} compraron de ${notificados} notificados`]
+      ["Cursos solicitados", activeCourses.length, "Cursos distintos"],
+      ["Interesados", activePeople.length, "Personas registradas"],
+      ["Pendientes / buscando", activeCourses.filter(g => ["pendiente","buscando"].includes(g.meta.status)).length, "Cursos por conseguir"],
+      ["Conseguidos", activeCourses.filter(g => g.meta.status === "conseguido").length, "Listos para campaña"],
+      ["Conversión", conv + "%", `${converted} interesados compraron`]
     ].map(([l, v, s]) => `<article class="kpi"><label>${l}</label><strong>${v}</strong><p>${s}</p></article>`).join("");
   }
 
-  // ── Lista / agrupada ──
-  const groupBy = $("#wlGroupBy")?.value || "none";
-  if (!list.length) {
-    box.innerHTML = `<div class="wl-empty">📥 ${all.length ? "No hay solicitudes con estos filtros." : "No hay solicitudes todavía."}<br><small>Registra el interés de un cliente con «+ Nueva solicitud» y notifícale cuando consigas el curso.</small></div>`;
-  } else if (groupBy === "course") {
-    const groups = {};
-    list.forEach(w => { (groups[w.course] ??= []).push(w); });
-    box.innerHTML = Object.entries(groups)
-      .sort((a, b) => b[1].length - a[1].length)
-      .map(([course, items]) => `<details class="wl-group" open>
-        <summary><span class="wl-group-title">🎓 ${esc(course)}</span>
-          <span class="wl-group-tools"><span class="badge">${items.length} interesado${items.length !== 1 ? "s" : ""}</span>
-          <button class="chip" onclick="event.preventDefault();wlExportCourse('${esc(course).replace(/'/g, "\\'")}')" title="Exportar interesados de este curso">⬇ CSV</button>
-          <button class="chip" onclick="event.preventDefault();wlSelectCourse('${esc(course).replace(/'/g, "\\'")}')" title="Seleccionar todos">☑ Seleccionar</button></span>
-        </summary>
-        ${items.map(wlRowHTML).join("")}
-      </details>`).join("");
-  } else {
-    box.innerHTML = list.map(wlRowHTML).join("");
-  }
-
-  // Checkboxes
-  box.querySelectorAll(".wl-check").forEach(chk => {
-    chk.addEventListener("change", () => {
-      if (chk.checked) _wlSelected.add(chk.dataset.id);
-      else _wlSelected.delete(chk.dataset.id);
-      updateWlBulkBar();
-    });
-  });
+  box.innerHTML = courses.length ? `<div class="wl-course-grid">${courses.map(wlCourseCardHTML).join("")}</div>` : `<div class="wl-empty">📥 ${all.length ? "No hay cursos con estos filtros." : "No hay solicitudes todavía."}<br><small>Registra el interés de una persona con «+ Nueva solicitud».</small></div>`;
   updateWlBulkBar();
 
   // ── Interesados por curso ──
   const byCourseBox = $("#wlByCourse");
   if (byCourseBox) {
-    const active = all.filter(w => w.status !== "archivado");
-    const counts = {};
-    active.forEach(w => { counts[w.course] = (counts[w.course] || 0) + 1; });
-    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    const max = Math.max(...entries.map(e => e[1]), 1);
+    const entries = allCourses.filter(g => g.meta.status !== "archivado").sort((a,b) => b.items.length-a.items.length);
     $("#wlCourseBadge") && ($("#wlCourseBadge").textContent = `${entries.length} cursos`);
-    byCourseBox.innerHTML = entries.length ? `<div class="payment-bars">` + entries.map(([course, n]) => `
-      <button type="button" class="pb-row wl-course-action" data-course="${esc(course)}">
-        <span class="pb-label" title="${esc(course)}">${esc(course)}</span>
-        <div class="pb-track"><div class="pb-fill" style="width:${(n / max * 100).toFixed(1)}%"></div></div>
-        <span class="pb-val">${n} interesado${n !== 1 ? "s" : ""}</span>
+    const maxCount = Math.max(...entries.map(g => g.items.length), 1);
+    byCourseBox.innerHTML = entries.length ? `<div class="payment-bars">` + entries.map((g,index) => `
+      <button type="button" class="pb-row wl-course-action" data-key="${esc(encodeURIComponent(g.key))}">
+        <span class="pb-label" title="${esc(g.meta.title)}">${index + 1}. ${esc(g.meta.title)}</span>
+        <div class="pb-track"><div class="pb-fill" style="width:${(g.items.length / maxCount * 100).toFixed(1)}%"></div></div>
+        <span class="pb-val">${g.items.length}</span>
       </button>`).join("") + `</div>`
       : `<p style="color:var(--muted);font-size:13px">Aún no hay demanda registrada.</p>`;
-    byCourseBox.querySelectorAll(".wl-course-action").forEach(btn => btn.addEventListener("click", () => {
-      const group = $("#wlGroupBy");
-      if (group) group.value = "course";
-      const search = $("#wlSearch");
-      if (search) search.value = btn.dataset.course;
-      renderWaitlist();
-      $("#wlList")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }));
+    byCourseBox.querySelectorAll(".wl-course-action").forEach(btn => btn.addEventListener("click", () => openWlCourse(decodeURIComponent(btn.dataset.key))));
   }
 
   updateWaitlistNavCount();
@@ -8272,24 +8361,30 @@ function updateWlBulkBar() {
   bar.classList.toggle("hidden", !_wlSelected.size);
   const c = $("#wlBulkCount");
   if (c) c.textContent = `${_wlSelected.size} seleccionado${_wlSelected.size !== 1 ? "s" : ""}`;
+  const courseBar = $("#wlCourseBulk");
+  if (courseBar) courseBar.classList.toggle("hidden", !_wlSelected.size);
+  if ($("#wlCourseBulkCount")) $("#wlCourseBulkCount").textContent = `${_wlSelected.size} seleccionado${_wlSelected.size !== 1 ? "s" : ""}`;
 }
 
 function updateWaitlistNavCount() {
   const el = $("#navWaitlistCount");
   if (!el) return;
-  const n = loadWaitlist().filter(w => ["pendiente", "buscando", "conseguido"].includes(w.status)).length;
+  const n = buildWaitlistCourses().filter(g => ["pendiente", "buscando", "conseguido"].includes(g.meta.status)).length;
   el.textContent = n;
   el.style.display = n ? "" : "none";
 }
 
-function wlSelectCourse(course) {
-  loadWaitlist().filter(w => w.course === course && w.status !== "archivado").forEach(w => _wlSelected.add(w.id));
-  renderWaitlist();
+function wlSelectCourse(courseKey, selected = true) {
+  const group = buildWaitlistCourses().find(g => g.key === courseKey);
+  if (!group) return;
+  group.items.forEach(w => selected ? _wlSelected.add(w.id) : _wlSelected.delete(w.id));
+  renderWlCourseDetail();
+  updateWlBulkBar();
 }
 
 function _wlToCSV(items) {
-  const head = ["Nombre", "Email", "Curso solicitado", "Categoría", "Origen", "Prioridad", "Estado", "Fecha", "Notas"];
-  const rows = items.map(w => [w.name, w.email, w.course, w.category || "", WL_SOURCE[w.source] || w.source || "", w.priority || "", WL_STATUS[w.status]?.label.replace(/^[^\w]+/, "") || w.status, (w.date || "").slice(0, 10), (w.notes || "").replace(/\r?\n/g, " ")]);
+  const head = ["tipo_identificacion", "nombre_o_usuario", "email", "curso_solicitado", "origen", "fecha_solicitud", "notas"];
+  const rows = items.map(w => [w.identityType === "telegram" ? "Usuario de Telegram" : "Nombre del cliente", w.name, normalizeEmail(w.email), w.course, WL_SOURCE[w.source] || w.source || "", (w.date || "").slice(0, 10), (w.notes || "").replace(/\r?\n/g, " ")]);
   return [head, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
 }
 
@@ -8308,11 +8403,106 @@ function wlExportCSV() {
 }
 
 function wlExportCourse(course) {
-  const list = loadWaitlist().filter(w => w.course === course && w.status !== "archivado");
+  const key = normalizeCourseKey(course);
+  const group = buildWaitlistCourses().find(g => g.key === key || g.key === course);
+  const list = group?.items || [];
   if (!list.length) { toast("Nada que exportar", "warning"); return; }
   const slug = course.toLowerCase().replace(/[^\w]+/g, "-").slice(0, 50);
   _wlDownloadCSV(_wlToCSV(list), `interesados-${slug}.csv`);
   toast(`${list.length} interesados exportados`, "success");
+}
+
+function wlExportSelected() {
+  const list = loadWaitlist().filter(w => _wlSelected.has(w.id));
+  if (!list.length) return toast("Selecciona interesados para exportar", "warning");
+  _wlDownloadCSV(_wlToCSV(list), `interesados-seleccionados-${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function wlSetCourseStatus(key, status) {
+  if (!key || !WL_STATUS[status]) return;
+  const meta = loadWaitlistCourseMeta();
+  const group = buildWaitlistCourses().find(g => g.key === key);
+  meta[key] = { ...(meta[key] || group?.meta || {}), title:group?.meta.title || meta[key]?.title || key, status, updated:new Date().toISOString() };
+  saveWaitlistCourseMeta(meta);
+  const list = loadWaitlist();
+  list.forEach(w => { if (w.courseKey === key) w.status = status; });
+  saveWaitlist(list);
+  renderWaitlist();
+  if (_wlOpenCourseKey === key) renderWlCourseDetail();
+  toast(`Curso → ${WL_STATUS[status].label}`, "success");
+}
+
+function wlSetCoursePriority(key, priority) {
+  if (!key || !WL_PRIORITY[priority]) return;
+  const meta = loadWaitlistCourseMeta();
+  const group = buildWaitlistCourses().find(g => g.key === key);
+  meta[key] = { ...(meta[key] || group?.meta || {}), title:group?.meta.title || meta[key]?.title || key, priority, priorityManual:true, updated:new Date().toISOString() };
+  saveWaitlistCourseMeta(meta);
+  const list = loadWaitlist();
+  list.forEach(w => { if (w.courseKey === key) w.priority = priority; });
+  saveWaitlist(list);
+  renderWaitlist(); renderWlCourseDetail();
+}
+
+function wlSetCourseNotes(key, notes) {
+  if (!key) return;
+  const meta = loadWaitlistCourseMeta();
+  const group = buildWaitlistCourses().find(g => g.key === key);
+  meta[key] = { ...(meta[key] || group?.meta || {}), title:group?.meta.title || key, notes:String(notes || "").trim(), updated:new Date().toISOString() };
+  saveWaitlistCourseMeta(meta);
+  toast("Notas del curso guardadas", "success");
+}
+
+function openWlCourse(key) {
+  _wlOpenCourseKey = key;
+  _wlSelected.clear();
+  renderWlCourseDetail();
+  $("#wlCourseModal")?.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+}
+
+function closeWlCourseModal() {
+  $("#wlCourseModal")?.classList.add("hidden");
+  _wlOpenCourseKey = "";
+  _wlSelected.clear();
+  document.body.style.overflow = "";
+  updateWlBulkBar();
+}
+
+function renderWlCourseDetail() {
+  if (!_wlOpenCourseKey) return;
+  const group = buildWaitlistCourses().find(g => g.key === _wlOpenCourseKey);
+  if (!group) { closeWlCourseModal(); return; }
+  $("#wlCourseModalKey").value = group.key;
+  $("#wlCourseModalTitle").textContent = group.meta.title;
+  $("#wlCourseModalMeta").textContent = `${group.items.length} interesado${group.items.length !== 1 ? "s" : ""} · Primera solicitud ${group.firstDate < Infinity ? new Date(group.firstDate).toLocaleDateString("es-PE") : "—"} · Última ${group.lastDate ? new Date(group.lastDate).toLocaleDateString("es-PE") : "—"}`;
+  $("#wlCoursePriority").value = group.meta.priority;
+  $("#wlCourseStatus").value = group.meta.status;
+  $("#wlCourseNotes").value = group.meta.notes || "";
+  $("#wlCoursePrepare").classList.toggle("hidden", group.meta.status !== "conseguido");
+  $("#wlCourseSelectAll").checked = group.items.length > 0 && group.items.every(w => _wlSelected.has(w.id));
+  const people = $("#wlCoursePeople");
+  people.innerHTML = group.items.length ? group.items.map(w => `<div class="wl-person-row" data-id="${esc(w.id)}">
+    <input type="checkbox" class="wl-check" data-id="${esc(w.id)}"${_wlSelected.has(w.id) ? " checked" : ""}>
+    <div class="wl-person-name"><strong>${esc(w.name || w.email)}</strong><small>${w.identityType === "telegram" ? "Usuario de Telegram" : "Nombre del cliente"}${w.notes ? ` · ${esc(w.notes.slice(0,65))}${w.notes.length > 65 ? "…" : ""}` : ""}</small></div>
+    <div class="wl-person-email">${esc(w.email)}</div>
+    <div class="wl-person-meta">${esc(WL_SOURCE[w.source] || w.source || "—")}</div>
+    <div class="wl-person-meta">${esc(new Date(w.date || w.created).toLocaleDateString("es-PE"))}</div>
+    <div class="wl-person-actions"><button class="chip" onclick="wlCopyEmail('${esc(w.email)}')" title="Copiar correo">⧉</button><button class="chip" onclick="openCustomerModal(decodeURIComponent('${encodeURIComponent(w.email || w.name)}'))" title="Abrir cliente">👤</button><button class="chip" onclick="openWlModal('${esc(w.id)}','${esc(encodeURIComponent(group.key))}')" title="Editar">✏️</button><button class="chip wl-del" onclick="wlDelete('${esc(w.id)}')" title="Eliminar">🗑</button></div>
+  </div>`).join("") : `<div class="wl-course-empty">No hay interesados registrados.</div>`;
+  people.querySelectorAll(".wl-check").forEach(chk => chk.addEventListener("change", () => { chk.checked ? _wlSelected.add(chk.dataset.id) : _wlSelected.delete(chk.dataset.id); renderWlCourseDetail(); updateWlBulkBar(); }));
+  updateWlBulkBar();
+}
+
+async function wlCopyEmail(email) {
+  try { await navigator.clipboard.writeText(email); toast("Correo copiado", "success"); } catch(e) { toast(email, "success"); }
+}
+
+function wlPrepareCourseCampaign(key) {
+  const group = buildWaitlistCourses().find(g => g.key === key);
+  if (!group) return;
+  _wlSelected = new Set(group.items.filter(w => w.email).map(w => w.id));
+  wlSendSelectedToEmail();
 }
 
 // =============================================================
@@ -8428,25 +8618,28 @@ function normalizeImportRow(raw, index) {
   const normalized = {};
   Object.entries(raw || {}).forEach(([k,v]) => { normalized[String(k).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")] = v; });
   const pick = (...keys) => keys.map(k => normalized[k]).find(v => v !== undefined && String(v).trim() !== "");
+  const identityRaw = String(pick("tipo_identificacion","tipo identificacion","identificacion") || "Nombre del cliente").trim().toLowerCase();
+  const sourceRaw = String(pick("origen","source") || "telegram").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const sourceMap = { telegram:"telegram", web:"web", "clientes de la competencia":"competencia", competencia:"competencia", "701":"701", toulh:"toulh", lux:"lux" };
+  const dateRaw = pick("fecha_solicitud","fecha solicitud","fecha","date");
+  const parsedDate = dateRaw instanceof Date ? dateRaw : dateRaw ? new Date(dateRaw) : new Date();
+  const course = normalizeCourseTitle(pick("curso_solicitado","curso solicitado","curso","course") || "");
   const item = {
-    name: String(pick("nombre","name","cliente") || "").trim(),
+    identityType: identityRaw.includes("telegram") ? "telegram" : "name",
+    name: String(pick("nombre_o_usuario","nombre o usuario","nombre","usuario","name","cliente") || "").trim(),
     email: normalizeEmail(pick("email","correo","correo electronico")),
-    course: String(pick("curso","course","curso solicitado","producto") || "").trim(),
-    category: String(pick("categoria","category","tipo") || "").trim(),
-    source: String(pick("origen","source","canal") || "manual").trim().toLowerCase(),
-    priority: String(pick("prioridad","priority") || "media").trim().toLowerCase(),
-    status: String(pick("estado","status") || "pendiente").trim().toLowerCase(),
-    date: String(pick("fecha","date","fecha de solicitud") || new Date().toISOString().slice(0,10)).slice(0,10),
-    phone: String(pick("telefono","phone","whatsapp") || "").trim(),
+    course,
+    courseKey: normalizeCourseKey(course),
+    source: sourceMap[sourceRaw] || sourceRaw,
+    date: Number.isNaN(parsedDate.getTime()) ? new Date().toISOString() : parsedDate.toISOString(),
     notes: String(pick("notas","notes","comentarios") || "").trim(),
-    consent: ["si","sí","yes","true","1"].includes(String(pick("consentimiento","consent") || "").trim().toLowerCase())
   };
   const errors = [];
-  if (!item.name) errors.push("Falta nombre");
+  if (!item.name) errors.push("Falta nombre o usuario");
+  if (item.identityType === "telegram" && !item.name.startsWith("@")) errors.push("El usuario de Telegram debe comenzar con @");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.email)) errors.push("Email inválido");
   if (!item.course) errors.push("Falta curso");
-  if (!WL_STATUS[item.status]) errors.push("Estado no reconocido");
-  if (!WL_PRIORITY[item.priority]) errors.push("Prioridad no reconocida");
+  if (!WL_SOURCE[item.source]) errors.push("Origen no reconocido");
   return errors.length ? { row:index + 2, error:errors.join("; "), data:raw } : item;
 }
 
@@ -8455,17 +8648,19 @@ async function parseWlImportFile(e) {
   if (!file) return;
   try {
     if (!window.XLSX) throw new Error("No se pudo cargar el lector XLSX.");
-    const wb = XLSX.read(await file.arrayBuffer(), { type:"array", cellDates:true });
+    const isCsv = file.name.toLowerCase().endsWith(".csv");
+    const source = isCsv ? await file.text() : await file.arrayBuffer();
+    const wb = XLSX.read(source, { type:isCsv ? "string" : "array", cellDates:true });
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:"" });
     const parsed = rows.map(normalizeImportRow);
     _wlImportParsed = { valid: parsed.filter(x => !x.error), errors: parsed.filter(x => x.error), file:file.name };
     $("#wlImportSummary").className = `data-state ${_wlImportParsed.errors.length ? "state-warning" : "state-success"}`;
-    $("#wlImportSummary").innerHTML = `<strong>${_wlImportParsed.valid.length} filas válidas · ${_wlImportParsed.errors.length} con errores</strong><span>Mapeo detectado: nombre, email, curso, categoría, origen, prioridad, estado, fecha, teléfono, notas y consentimiento.</span>`;
+    $("#wlImportSummary").innerHTML = `<strong>${_wlImportParsed.valid.length} filas válidas · ${_wlImportParsed.errors.length} con errores</strong><span>Columnas: tipo_identificacion, nombre_o_usuario, email, curso_solicitado, origen, fecha_solicitud y notas.</span>`;
     $("#wlImportConfirm").disabled = !_wlImportParsed.valid.length;
     $("#wlImportErrors").disabled = !_wlImportParsed.errors.length;
-    $("#wlImportPreview").innerHTML = `<table class="crm-table"><thead><tr><th>Nombre</th><th>Email</th><th>Curso</th><th>Estado</th><th>Resultado</th></tr></thead><tbody>${
-      parsed.slice(0,20).map(x => x.error ? `<tr><td colspan="4">${esc(JSON.stringify(x.data).slice(0,180))}</td><td style="color:var(--bad)">${esc(x.error)}</td></tr>` :
-      `<tr><td>${esc(x.name)}</td><td>${esc(x.email)}</td><td>${esc(x.course)}</td><td>${esc(x.status)}</td><td style="color:var(--good)">Válida</td></tr>`).join("")
+    $("#wlImportPreview").innerHTML = `<table class="crm-table"><thead><tr><th>Identificación</th><th>Nombre / usuario</th><th>Email</th><th>Curso</th><th>Origen</th><th>Resultado</th></tr></thead><tbody>${
+      parsed.slice(0,20).map(x => x.error ? `<tr><td colspan="5">${esc(JSON.stringify(x.data).slice(0,180))}</td><td style="color:var(--bad)">${esc(x.error)}</td></tr>` :
+      `<tr><td>${x.identityType === "telegram" ? "Usuario de Telegram" : "Nombre del cliente"}</td><td>${esc(x.name)}</td><td>${esc(x.email)}</td><td>${esc(x.course)}</td><td>${esc(WL_SOURCE[x.source])}</td><td style="color:var(--good)">Válida</td></tr>`).join("")
     }</tbody></table>`;
   } catch(err) {
     $("#wlImportSummary").className = "data-state state-error";
@@ -8477,11 +8672,13 @@ function confirmWlImport() {
   const policy = $("#wlDuplicatePolicy")?.value || "skip";
   const list = loadWaitlist();
   let imported = 0;
-  _wlImportParsed.valid.forEach(row => {
-    const idx = list.findIndex(w => normalizeEmail(w.email) === row.email && String(w.course || "").trim().toLowerCase() === row.course.toLowerCase());
+  _wlImportParsed.valid.forEach(rawRow => {
+    const canonicalCourse = list.find(w => (w.courseKey || normalizeCourseKey(w.course)) === rawRow.courseKey)?.course || rawRow.course;
+    const row = { ...rawRow, course:canonicalCourse };
+    const idx = list.findIndex(w => normalizeEmail(w.email) === row.email && (w.courseKey || normalizeCourseKey(w.course)) === row.courseKey);
     if (idx >= 0 && policy === "skip") return;
     if (idx >= 0 && policy === "update") list[idx] = { ...list[idx], ...row, updated:new Date().toISOString() };
-    else list.unshift({ id:"wl_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7), created:new Date().toISOString(), ...row });
+    else list.unshift({ id:"wl_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7), created:new Date().toISOString(), status:"pendiente", ...row });
     imported++;
   });
   saveWaitlist(list);
