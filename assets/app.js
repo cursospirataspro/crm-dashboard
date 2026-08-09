@@ -6013,8 +6013,8 @@ function _smartUpdateCounters() {
   // Actualizar KPI "Seleccionados"
   const kpisDiv = $("#smartCourseKpis");
   if (kpisDiv) {
-    const kpiCards = kpisDiv.querySelectorAll("div > div:first-child");
-    if (kpiCards[3]) kpiCards[3].textContent = `☑️ ${selCount}`;
+    const selectedValue = kpisDiv.children[3]?.firstElementChild;
+    if (selectedValue) selectedValue.textContent = `☑️ ${selCount}`;
   }
 
   // Actualizar banner
