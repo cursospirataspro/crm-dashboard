@@ -3945,10 +3945,6 @@ function bind() {
   $("#emailSendBrevoBtn")?.addEventListener("click", sendViaBrevo);
   $("#clearCampaignHistoryBtn")?.addEventListener("click", clearCampaignHistory);
 
-  // ── Stripe ──
-  $("#stripeRefreshBtn")?.addEventListener("click", renderStripeView);
-  $("#stripeSearch")?.addEventListener("input", renderStripeView);
-
   // ── Navegación: grupos, tabs, acordeones y lista de espera ──
   initNavGroups();
   initCrmTabs();
@@ -4201,70 +4197,23 @@ function renderVIPPanel() {
 // =============================================================
 // STRIPE VIEW — panel con pedidos via Stripe
 // =============================================================
-// Pedidos del rango propio de la vista Stripe (no del filtro principal).
-let _stripeRange = { key: "", orders: null, source: null, loadingKey: "", failedKey: "" };
+// Usa los filtros generales de la cabecera (Periodo, Estado, País, Buscar):
+// `state.filtered` ya viene filtrado; aquí sólo se separa lo pagado con Stripe.
+function stripeViewOrders(filteredOrders) {
+  return (filteredOrders || []).filter(o => orderGateway(o) === "stripe");
+}
 
 function renderStripeView() {
-  const search = ($("#stripeSearch")?.value || "").trim().toLowerCase();
-  const source = $("#stripeSource")?.value || "woocommerce";
-  const days = Number($("#stripeDatePreset")?.value || 30);
-  // Mismo criterio que el filtro principal: «últimos N días» incluye hoy.
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - (days - 1));
-  cutoff.setHours(0, 0, 0, 0);
   const stateEl = $("#stripeDataState");
-  const statusEl = $("#stripeStatus");
   const metaEl = $("#stripeSyncMeta");
+  const filtered = stripeViewOrders(state.filtered);
+  const periodLabel = $("#rangePreset")?.selectedOptions?.[0]?.textContent?.trim() || "el periodo elegido";
 
-  // La vista usa su propio periodo: si el filtro principal cargó otro rango,
-  // se piden a WooCommerce los pedidos de estos N días.
-  let pool = state.orders;
-  let loadingOwnRange = false;
-  if (CONFIG.mode === "api") {
-    const rangeKey = `${localDateStr(cutoff)}|${localDateStr(new Date())}`;
-    if (_stripeRange.key === rangeKey && _stripeRange.source === state.orders && _stripeRange.orders) {
-      pool = _stripeRange.orders;
-    } else if (_stripeRange.failedKey !== rangeKey && document.getElementById("view-stripe")?.offsetParent) {
-      // Sólo se consulta cuando la vista Stripe está a la vista.
-      loadingOwnRange = true;
-      if (_stripeRange.loadingKey !== rangeKey) {
-        const sourceOrders = state.orders;
-        _stripeRange.loadingKey = rangeKey;
-        fetchWooOrdersRange(localDateStr(cutoff), localDateStr(new Date()))
-          .then(orders => { _stripeRange = { key: rangeKey, orders, source: sourceOrders, loadingKey: "", failedKey: "" }; })
-          .catch(err => { console.warn("[Stripe · WooCommerce]", err); _stripeRange.loadingKey = ""; _stripeRange.failedKey = rangeKey; })
-          .finally(() => renderStripeView());
-      }
-    }
+  if (stateEl) {
+    stateEl.className = filtered.length ? "data-state hidden" : "data-state state-empty";
+    stateEl.innerHTML = `<strong>Cero transacciones Stripe</strong><span>No hay pedidos pagados con Stripe para los filtros de arriba (${esc(periodLabel)}).</span>`;
   }
-  const stripeOrders = pool.filter(o => siteDate(o.date) >= cutoff && orderGateway(o) === "stripe");
-  if (source === "api") {
-    if (stateEl) {
-      stateEl.className = "data-state state-not-connected";
-      stateEl.innerHTML = `<strong>Stripe API no conectada</strong><span>Para mostrar comisiones, reembolsos y disputas reales, configura un proxy seguro de Stripe en WordPress. Nunca se expone la clave secreta en este navegador.</span>`;
-    }
-    if (statusEl) statusEl.textContent = "Sin conexión directa · no se muestran estimaciones como datos reales";
-  } else {
-    if (stateEl) {
-      stateEl.className = stripeOrders.length ? "data-state hidden" : "data-state state-empty";
-      stateEl.innerHTML = `<strong>Cero transacciones Stripe</strong><span>La conexión con WooCommerce funciona, pero no hay pedidos Stripe en los últimos ${days} días.</span>`;
-    }
-    if (statusEl) statusEl.textContent = source === "combined"
-      ? "Combinado · API no conectada, usando WooCommerce con la comisión guardada en cada pedido"
-      : "WooCommerce · cobros reales y comisión guardada en cada pedido";
-  }
-  if (metaEl) metaEl.textContent = loadingOwnRange
-    ? `Cargando los pedidos Stripe de los últimos ${days} días…`
-    : `Última actualización: ${new Date().toLocaleString("es-PE")} · ${stripeOrders.length} registros · ${days} días · Fuente: ${source}`;
-
-  const visibleSourceOrders = source === "api" ? [] : stripeOrders;
-  const filtered = search
-    ? visibleSourceOrders.filter(o =>
-        (o.customer || "").toLowerCase().includes(search) ||
-        (o.customer_email || "").toLowerCase().includes(search) ||
-        (o.products || []).some(p => (p.name || "").toLowerCase().includes(search))
-      )
-    : visibleSourceOrders;
+  if (metaEl) metaEl.textContent = `${periodLabel} · ${filtered.length} pedidos Stripe · comisión guardada por Stripe en cada pedido`;
 
   // KPIs
   const paid = filtered.filter(o => ["completed", "processing"].includes(statusNorm(o.status)));
@@ -7244,7 +7193,7 @@ const VIEW_HERO = {
   courses:       ["Rendimiento de cursos", "Analiza ingresos, ventas, compradores, precios y desempeño de cada curso.", "CRM GLOBAL · CURSOS"],
   geo:           ["Distribución geográfica", "Explora clientes, pedidos e ingresos por país y ciudad.", "CRM GLOBAL · GEOGRAFÍA"],
   paypal:        ["Pagos por PayPal", "Consulta transacciones, comisiones, ingresos netos, clientes y distribución geográfica de PayPal.", "CRM GLOBAL · PAGOS · PAYPAL"],
-  stripe:        ["Pagos por Stripe", "Analiza cobros, comisiones estimadas, ingresos netos, productos y transacciones procesadas por Stripe.", "CRM GLOBAL · PAGOS · STRIPE"],
+  stripe:        ["Pagos por Stripe", "Analiza cobros, comisiones, ingresos netos, productos y transacciones procesadas por Stripe.", "CRM GLOBAL · PAGOS · STRIPE"],
   oportunidades: ["Email Marketing y audiencias", "Crea segmentos, analiza horarios de compra y prepara campañas para tus clientes.", "CRM GLOBAL · EMAIL MARKETING"],
   waitlist:      ["Solicitudes y lista de espera", "Registra clientes interesados en cursos todavía no disponibles y notifícalos cuando los consigas.", "CRM GLOBAL · SOLICITUDES DE CURSOS"],
   settings:      ["Integraciones y estado del sistema", "Administra WooCommerce, PayPal, Stripe, servicios de email y sincronización de datos.", "CRM GLOBAL · INTEGRACIONES"]
@@ -9363,8 +9312,6 @@ function initCompletionLayer() {
   $("#explorerStatus")?.addEventListener("change", renderDataExplorer);
   $("#explorerExport")?.addEventListener("click", explorerExport);
   $("#explorerEmail")?.addEventListener("click", explorerToEmail);
-  $("#stripeSource")?.addEventListener("change", renderStripeView);
-  $("#stripeDatePreset")?.addEventListener("change", renderStripeView);
   $("#runDiagnosticsBtn")?.addEventListener("click", () => { renderIntegrationDiagnostics(); toast("Diagnóstico actualizado", "success"); });
   document.querySelectorAll("details.acc").forEach((d, i) => {
     const key = `crm_acc_${d.id || i}`;

@@ -54,6 +54,17 @@ test('PayPal: sólo cursos de pedidos PayPal que cuentan; nada de Stripe ni canc
   ]);
 });
 
+test('la vista Stripe usa los filtros generales: no tiene periodo ni buscador propios', () => {
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  for (const id of ['stripeSource', 'stripeDatePreset', 'stripeRefreshBtn', 'stripeSearch']) {
+    assert.ok(!html.includes(`id="${id}"`), `${id} no debe existir en index.html`);
+    assert.ok(!source.includes(`#${id}`), `${id} no debe usarse en app.js`);
+  }
+  const body = slice('function renderStripeView', '// KPIs');
+  assert.match(body, /stripeViewOrders\(state\.filtered\)/);
+  assert.ok(!body.includes('state.orders'), 'no debe leer pedidos fuera del filtro general');
+});
+
 test('la suma por curso de cada pasarela es igual al total de esa pasarela', () => {
   for (const gateway of ['stripe', 'paypal']) {
     const own = orders.filter(o => orderGateway(o) === gateway && o.status === 'completed');
