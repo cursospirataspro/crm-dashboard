@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.7.0
+ * Version:      2.8.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -223,8 +223,11 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     // Rango de fechas inclusivo (inicio del día "from" → final del día "to")
     $date_range = $from . 'T00:00:00' . '...' . $to . 'T23:59:59';
 
+    $date_type = cpp_crm_analytics_date_type();
+
     $cache_key = 'cpp_crm_overview_' . md5( implode( '|', [
-        '2.4.0',
+        '2.8.0',
+        $date_type,
         $from,
         $to,
         (string) $limit,
@@ -236,25 +239,26 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         return rest_ensure_response( $cached );
     }
 
-    // Una sola consulta paginada obtiene los pedidos y el total.
-    $query = wc_get_orders( [
-        'limit'        => $limit,
-        'page'         => $page,
-        'paginate'     => true,
-        'orderby'      => 'date',
-        'order'        => 'DESC',
-        'status'       => [ 'completed', 'processing', 'pending', 'cancelled', 'refunded', 'on-hold' ],
-        'date_created' => $date_range,
-        'return'       => 'objects',
-    ] );
-
-    if ( ! is_object( $query ) || ! isset( $query->orders ) ) {
-        return new WP_Error( 'orders_query_failed', 'No se pudieron consultar los pedidos.', [ 'status' => 500 ] );
+    // Índice de pedidos del periodo, con el mismo criterio que WooCommerce Analytics:
+    // los pedidos que generan ingresos se asignan al periodo por la fecha que usa
+    // Analytics (por defecto la de pago), no por la de creación.
+    $index = cpp_crm_dashboard_order_index( $date_range, $date_type );
+    if ( is_wp_error( $index ) ) {
+        return $index;
     }
 
-    $orders       = $query->orders;
-    $total_orders = isset( $query->total ) ? (int) $query->total : count( $orders );
-    $total_pages  = isset( $query->max_num_pages ) ? (int) $query->max_num_pages : 1;
+    $total_orders = count( $index['ids'] );
+    $total_pages  = max( 1, (int) ceil( $total_orders / $limit ) );
+    $page_ids     = array_slice( $index['ids'], ( $page - 1 ) * $limit, $limit );
+    $counted      = $index['counted'];
+
+    $orders = [];
+    foreach ( $page_ids as $order_id ) {
+        $order = wc_get_order( $order_id );
+        if ( $order ) {
+            $orders[] = $order;
+        }
+    }
 
     $normalized = [];
 
@@ -278,10 +282,19 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         $name         = trim( $first . ' ' . $last );
         if ( ! $name ) $name = 'Cliente #' . $order->get_customer_id();
 
+        $created        = $order->get_date_created();
+        $in_analytics   = isset( $counted[ $order->get_id() ] );
+        $analytics_date = $in_analytics ? cpp_crm_order_analytics_date( $order, $date_type ) : null;
+        $shown_date     = $analytics_date ?: $created;
+
         $normalized[] = [
             'id'             => $order->get_id(),
             'number'         => '#' . $order->get_order_number(),
-            'date'           => $order->get_date_created() ? $order->get_date_created()->date( 'c' ) : '',
+            // Fecha con la que WooCommerce Analytics asigna el pedido al periodo.
+            'date'           => $shown_date ? $shown_date->date( 'c' ) : '',
+            'date_created'   => $created ? $created->date( 'c' ) : '',
+            // false = Analytics no lo cuenta (p. ej. en espera o reembolsado sin fecha de pago).
+            'counts_in_analytics' => $in_analytics,
             'customer'       => $name,
             'customer_email' => (string) $order->get_billing_email(),
             'status'         => cpp_crm_normalize_status( $order->get_status() ),
@@ -305,6 +318,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         'total_pages'  => $total_pages,
         'current_page' => $page,
         'per_page'     => $limit,
+        'date_type'    => $date_type,
         'orders'       => $normalized,
         'analytics'    => 1 === $page ? cpp_crm_get_analytics_totals( $from, $to ) : null,
         'generated_at' => gmdate( 'c' ),
@@ -312,6 +326,97 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
 
     set_transient( $cache_key, $response_data, MINUTE_IN_SECONDS );
     return rest_ensure_response( $response_data );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Mismo criterio de fechas que WooCommerce Analytics
+// ─────────────────────────────────────────────────────────────
+
+/** Estados que Analytics suma como ingresos (excluye pendiente, cancelado y fallido). */
+function cpp_crm_revenue_statuses() {
+    return [ 'completed', 'processing', 'on-hold', 'refunded' ];
+}
+
+/** Tipo de fecha de Analytics (Analítica → Ajustes → «Tipo de fecha»). Por defecto, la de pago. */
+function cpp_crm_analytics_date_type() {
+    $type = (string) get_option( 'woocommerce_date_type', 'date_paid' );
+    return in_array( $type, [ 'date_created', 'date_paid', 'date_completed' ], true ) ? $type : 'date_paid';
+}
+
+/** Fecha con la que Analytics asigna un pedido al periodo, o null si no tiene. */
+function cpp_crm_order_analytics_date( $order, $date_type ) {
+    if ( 'date_paid' === $date_type ) {
+        return $order->get_date_paid();
+    }
+    if ( 'date_completed' === $date_type ) {
+        return $order->get_date_completed();
+    }
+    return $order->get_date_created();
+}
+
+/**
+ * IDs de los pedidos del periodo, en el orden en que se paginan.
+ *
+ * - `counted`: pedidos con ingresos cuya fecha de Analytics cae en el periodo.
+ *   Son exactamente los que suma WooCommerce Analytics.
+ * - Después van los que Analytics no cuenta pero el CRM sigue mostrando:
+ *   pedidos con estado de ingresos sin esa fecha (p. ej. en espera sin pagar),
+ *   y los pendientes y cancelados, ambos por fecha de creación.
+ *
+ * Un pedido creado en el periodo pero pagado fuera de él no aparece: pertenece
+ * al periodo de su fecha de pago, igual que en Analytics.
+ */
+function cpp_crm_dashboard_order_index( $date_range, $date_type ) {
+    $cache_key = 'cpp_crm_index_' . md5( implode( '|', [ '2.8.0', $date_type, $date_range, cpp_crm_dashboard_cache_version() ] ) );
+    $cached    = get_transient( $cache_key );
+    if ( is_array( $cached ) && isset( $cached['ids'], $cached['counted'] ) ) {
+        return $cached;
+    }
+
+    $base = [ 'limit' => -1, 'return' => 'ids', 'orderby' => 'date', 'order' => 'DESC', 'type' => 'shop_order' ];
+
+    $counted_ids = wc_get_orders( $base + [
+        'status'   => cpp_crm_revenue_statuses(),
+        $date_type => $date_range,
+    ] );
+    $other_ids = wc_get_orders( $base + [
+        'status'       => [ 'pending', 'cancelled' ],
+        'date_created' => $date_range,
+    ] );
+    if ( ! is_array( $counted_ids ) || ! is_array( $other_ids ) ) {
+        return new WP_Error( 'orders_query_failed', 'No se pudieron consultar los pedidos.', [ 'status' => 500 ] );
+    }
+
+    $counted_ids = array_map( 'intval', $counted_ids );
+    $counted     = array_fill_keys( $counted_ids, true );
+    $undated     = [];
+
+    if ( 'date_created' !== $date_type ) {
+        $created_ids = wc_get_orders( $base + [
+            'status'       => cpp_crm_revenue_statuses(),
+            'date_created' => $date_range,
+        ] );
+        if ( ! is_array( $created_ids ) ) {
+            return new WP_Error( 'orders_query_failed', 'No se pudieron consultar los pedidos.', [ 'status' => 500 ] );
+        }
+        foreach ( array_map( 'intval', $created_ids ) as $order_id ) {
+            if ( isset( $counted[ $order_id ] ) ) {
+                continue;
+            }
+            $order = wc_get_order( $order_id );
+            // Con fecha de Analytics fuera del periodo: se cuenta en ese otro periodo.
+            if ( $order && ! cpp_crm_order_analytics_date( $order, $date_type ) ) {
+                $undated[] = $order_id;
+            }
+        }
+    }
+
+    $index = [
+        'ids'     => array_values( array_unique( array_merge( $counted_ids, $undated, array_map( 'intval', $other_ids ) ) ) ),
+        'counted' => $counted,
+    ];
+    set_transient( $cache_key, $index, MINUTE_IN_SECONDS );
+    return $index;
 }
 
 // =============================================================

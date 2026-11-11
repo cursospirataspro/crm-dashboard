@@ -341,6 +341,10 @@ async function fetchApi(r, generation) {
     throw new DOMException("Carga reemplazada por un nuevo filtro", "AbortError");
   }
 
+  // El plugin pagina primero los pedidos con ingresos y después el resto;
+  // se reordenan por fecha para que las listas queden de más reciente a más antiguo.
+  allOrders.sort((a, b) => siteDate(b.date) - siteDate(a.date));
+
   return { orders: allOrders, analytics };
 }
 
@@ -496,8 +500,13 @@ function applyFilters() {
 const WOO_ANALYTICS_REVENUE_STATUSES = new Set(["completed", "processing", "on-hold", "refunded"]);
 const isRevenueStatus = status => WOO_ANALYTICS_REVENUE_STATUSES.has(statusNorm(status));
 
+// Un pedido suma ingresos si su estado cuenta y WooCommerce Analytics lo incluye.
+// El plugin marca `counts_in_analytics: false` en los que Analytics deja fuera
+// (por ejemplo, en espera o reembolsados que nunca tuvieron fecha de pago).
+const countsAsRevenue = o => isRevenueStatus(o.status) && o.counts_in_analytics !== false;
+
 function validRevenueOrders(o) {
-  return o.filter(x => isRevenueStatus(x.status));
+  return o.filter(countsAsRevenue);
 }
 
 // Ingresos netos = subtotal - descuentos - devoluciones, igual que WooCommerce Analytics.
@@ -533,7 +542,7 @@ function customerMap(orders) {
     // Actualizar teléfono si aún no tenemos uno
     if (!map[key].phone && resolvedPhone) map[key].phone = resolvedPhone;
     map[key].orders++;
-    if (isRevenueStatus(o.status)) map[key].revenue += netRev(o);
+    if (countsAsRevenue(o)) map[key].revenue += netRev(o);
     map[key].countries.add(o.country || o.country_code || o.billing?.country || "");
     (o.products||[]).forEach(p => map[key].courses.add(p.name));
     if (new Date(o.date) > new Date(map[key].last)) map[key].last = o.date;
@@ -4472,7 +4481,7 @@ function updateGoalBar() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   });
   const current = thisMonthOrders
-    .filter(o => isRevenueStatus(o.status))
+    .filter(countsAsRevenue)
     .reduce((s, o) => s + Number(o.total || 0), 0);
   const pct = goal > 0 ? Math.min(100, (current / goal) * 100) : 0;
 
@@ -4605,7 +4614,7 @@ function renderRevenuePrediction() {
     return d.getFullYear() === year && d.getMonth() === month;
   });
   const current = thisMonthOrders
-    .filter(o => isRevenueStatus(o.status))
+    .filter(countsAsRevenue)
     .reduce((s, o) => s + Number(o.total || 0), 0);
 
   const dailyRate = dayOfMonth > 0 ? current / dayOfMonth : 0;
