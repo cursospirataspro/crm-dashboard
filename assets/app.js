@@ -528,6 +528,47 @@ function gatewayFee(o) {
   return { fee: Number(o.total || 0) * 0.029 + 0.30, real: false };
 }
 
+// Ventas por curso de UNA sola pasarela, con su comisión y su neto.
+// `orders` debe traer únicamente pedidos pagados con esa pasarela. La comisión
+// de cada pedido se reparte entre sus cursos en proporción al importe de cada uno.
+function gatewayProductStats(orders) {
+  const map = {};
+  for (const o of orders) {
+    const products = (o.products || []).filter(p => p && (p.name || p.total));
+    if (!products.length) continue;
+    const gf = gatewayFee(o);
+    const totals = products.map(p => Number(p.total || p.subtotal || 0));
+    const sumTotals = totals.reduce((s, v) => s + v, 0);
+    products.forEach((p, i) => {
+      const name  = p.name || "Producto";
+      const share = sumTotals > 0 ? totals[i] / sumTotals : 1 / products.length;
+      const row   = (map[name] ??= { name, gross: 0, fee: 0, qty: 0, estimated: false });
+      row.gross += totals[i];
+      row.fee   += gf.fee * share;
+      row.qty   += Number(p.quantity || 1);
+      if (!gf.real) row.estimated = true;
+    });
+  }
+  return Object.values(map)
+    .map(r => ({ ...r, net: r.gross - r.fee }))
+    .sort((a, b) => b.gross - a.gross);
+}
+
+function renderGatewayProducts(barsEl, badgeEl, orders, gatewayLabel, gradient) {
+  const rows = gatewayProductStats(orders);
+  if (badgeEl) badgeEl.textContent = rows.length + " cursos";
+  if (!barsEl) return;
+  const top = rows.slice(0, 10);
+  const max = Math.max(...top.map(r => r.gross), 1);
+  barsEl.innerHTML = top.map(r =>
+    `<div class="pb-row pb-wide">
+      <span class="pb-label">${esc(r.name)}<br><small style="color:var(--muted)">${r.qty} venta${r.qty !== 1 ? "s" : ""} · comisión -${fmtMoney(r.fee)}${r.estimated ? " (parte est.)" : ""} · neto <strong style="color:var(--good)">${fmtMoney(r.net)}</strong></small></span>
+      <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(r.gross / max * 100).toFixed(1)}%;background:${gradient}"></div></div>
+      <span class="pb-val">${fmtMoney(r.gross)}</span>
+    </div>`
+  ).join("") || `<p style="color:var(--muted);font-size:13px">Sin cursos vendidos por ${esc(gatewayLabel)} en el periodo.</p>`;
+}
+
 // Ingresos netos = subtotal - descuentos - devoluciones, igual que WooCommerce Analytics.
 function netRev(o) {
   const beforeRefunds = Number(o.net_total ?? o.total ?? 0);
@@ -4160,16 +4201,43 @@ function renderVIPPanel() {
 // =============================================================
 // STRIPE VIEW — panel con pedidos via Stripe
 // =============================================================
+// Pedidos del rango propio de la vista Stripe (no del filtro principal).
+let _stripeRange = { key: "", orders: null, source: null, loadingKey: "", failedKey: "" };
+
 function renderStripeView() {
   const search = ($("#stripeSearch")?.value || "").trim().toLowerCase();
   const source = $("#stripeSource")?.value || "woocommerce";
   const days = Number($("#stripeDatePreset")?.value || 30);
+  // Mismo criterio que el filtro principal: «últimos N días» incluye hoy.
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  const stripeOrders = state.orders.filter(o => new Date(o.date) >= cutoff && orderGateway(o) === "stripe");
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  cutoff.setHours(0, 0, 0, 0);
   const stateEl = $("#stripeDataState");
   const statusEl = $("#stripeStatus");
   const metaEl = $("#stripeSyncMeta");
+
+  // La vista usa su propio periodo: si el filtro principal cargó otro rango,
+  // se piden a WooCommerce los pedidos de estos N días.
+  let pool = state.orders;
+  let loadingOwnRange = false;
+  if (CONFIG.mode === "api") {
+    const rangeKey = `${localDateStr(cutoff)}|${localDateStr(new Date())}`;
+    if (_stripeRange.key === rangeKey && _stripeRange.source === state.orders && _stripeRange.orders) {
+      pool = _stripeRange.orders;
+    } else if (_stripeRange.failedKey !== rangeKey && document.getElementById("view-stripe")?.offsetParent) {
+      // Sólo se consulta cuando la vista Stripe está a la vista.
+      loadingOwnRange = true;
+      if (_stripeRange.loadingKey !== rangeKey) {
+        const sourceOrders = state.orders;
+        _stripeRange.loadingKey = rangeKey;
+        fetchWooOrdersRange(localDateStr(cutoff), localDateStr(new Date()))
+          .then(orders => { _stripeRange = { key: rangeKey, orders, source: sourceOrders, loadingKey: "", failedKey: "" }; })
+          .catch(err => { console.warn("[Stripe · WooCommerce]", err); _stripeRange.loadingKey = ""; _stripeRange.failedKey = rangeKey; })
+          .finally(() => renderStripeView());
+      }
+    }
+  }
+  const stripeOrders = pool.filter(o => siteDate(o.date) >= cutoff && orderGateway(o) === "stripe");
   if (source === "api") {
     if (stateEl) {
       stateEl.className = "data-state state-not-connected";
@@ -4185,7 +4253,9 @@ function renderStripeView() {
       ? "Combinado · API no conectada, usando WooCommerce con la comisión guardada en cada pedido"
       : "WooCommerce · cobros reales y comisión guardada en cada pedido";
   }
-  if (metaEl) metaEl.textContent = `Última actualización: ${new Date().toLocaleString("es-PE")} · ${stripeOrders.length} registros · ${days} días · Fuente: ${source}`;
+  if (metaEl) metaEl.textContent = loadingOwnRange
+    ? `Cargando los pedidos Stripe de los últimos ${days} días…`
+    : `Última actualización: ${new Date().toLocaleString("es-PE")} · ${stripeOrders.length} registros · ${days} días · Fuente: ${source}`;
 
   const visibleSourceOrders = source === "api" ? [] : stripeOrders;
   const filtered = search
@@ -4228,10 +4298,10 @@ function renderStripeView() {
   // Transacciones individuales con curso (ordenadas por fecha desc)
   const dayBarsEl = document.getElementById("stripeDayBars");
   if (dayBarsEl) {
-    const txns = [...paid].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 50);
+    const txns = [...paid].sort((a, b) => siteDate(b.date) - siteDate(a.date)).slice(0, 50);
     const maxTxn = Math.max(...txns.map(o => Number(o.total || 0)), 1);
     dayBarsEl.innerHTML = txns.map(o => {
-      const day  = new Date(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
+      const day  = siteDate(o.date).toLocaleDateString("es-PE", { day: "2-digit", month: "short" });
       const course = (o.products || [])[0]?.name || o.products?.[0] || "Producto";
       const val  = Number(o.total || 0);
       const pct  = (val / maxTxn * 100).toFixed(1);
@@ -4246,28 +4316,12 @@ function renderStripeView() {
     }).join("") || `<p style="color:var(--muted);font-size:13px;padding:8px 0">Sin ventas v&#xED;a Stripe en el periodo.</p>`;
   }
 
-  // Top productos
-  const byProduct = {};
-  paid.forEach(o => {
-    (o.products || []).forEach(p => {
-      const name = p.name || "Producto";
-      byProduct[name] = (byProduct[name] || 0) + Number(p.total || p.subtotal || 0);
-    });
-  });
-  const productEntries = Object.entries(byProduct).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const maxProd = Math.max(...productEntries.map(e => e[1]), 1);
-  const prodBadge = document.getElementById("stripeProductsBadge");
-  if (prodBadge) prodBadge.textContent = productEntries.length + " cursos";
-  const prodEl = document.getElementById("stripeProductBars");
-  if (prodEl) {
-    prodEl.innerHTML = productEntries.map(([name, v]) =>
-      `<div class="pb-row pb-wide">
-        <span class="pb-label">${esc(name)}</span>
-        <div class="pb-track" style="min-width:80px"><div class="pb-fill" style="width:${(v/maxProd*100).toFixed(1)}%;background:linear-gradient(90deg,#6366f1,#818cf8)"></div></div>
-        <span class="pb-val">${fmtMoney(v)}</span>
-      </div>`
-    ).join("") || `<p style="color:var(--muted);font-size:13px">Sin productos.</p>`;
-  }
+  // Top productos: sólo cursos de pedidos pagados con Stripe, con su comisión y neto
+  renderGatewayProducts(
+    document.getElementById("stripeProductBars"),
+    document.getElementById("stripeProductsBadge"),
+    paid, "Stripe", "linear-gradient(90deg,#6366f1,#818cf8)"
+  );
 
   // Tabla transacciones
   const txnCount = document.getElementById("stripeTxnCount");
@@ -8223,8 +8277,8 @@ function ppRenderAll(txnDetails) {
 // Devuelve el mismo formato que ppFetchTransactions para reutilizar ppRenderAll.
 function ppDetailsFromOrders(orders) {
   let withoutFee = 0;
-  const details = orders
-    .filter(o => orderGateway(o) === "paypal" && countsAsRevenue(o))
+  const paypalOrders = orders.filter(o => orderGateway(o) === "paypal" && countsAsRevenue(o));
+  const details = paypalOrders
     .map(o => {
       const refunded = statusNorm(o.status) === "refunded";
       const gf = gatewayFee(o);
@@ -8248,10 +8302,29 @@ function ppDetailsFromOrders(orders) {
         }
       };
     });
-  return { details, withoutFee };
+  return { details, withoutFee, orders: paypalOrders };
+}
+
+// Cursos vendidos por PayPal: sólo pedidos PayPal cobrados (sin reembolsados).
+// En PayPal la comisión no se estima: sin dato registrado cuenta como 0.
+function ppRenderProducts(paypalOrders) {
+  const sold = paypalOrders
+    .filter(o => statusNorm(o.status) !== "refunded")
+    .map(o => gatewayFee(o).real ? o : { ...o, gateway_fee: 0 });
+  renderGatewayProducts(
+    document.getElementById("paypalProductBars"),
+    document.getElementById("paypalProductsBadge"),
+    sold, "PayPal", "linear-gradient(90deg,#0070ba,#1546a0)"
+  );
 }
 
 async function ppLoadFromWooOrders(from, to) {
+  return ppDetailsFromOrders(await fetchWooOrdersRange(from, to));
+}
+
+// Pedidos de WooCommerce de un rango propio (fechas YYYY-MM-DD), independiente
+// del periodo elegido en el filtro principal del dashboard.
+async function fetchWooOrdersRange(from, to) {
   if (CONFIG.mode !== "api" || !CONFIG.apiBaseUrl || !CONFIG.apiToken) {
     throw new Error("Sin conexión con WordPress.");
   }
@@ -8271,7 +8344,7 @@ async function ppLoadFromWooOrders(from, to) {
     totalPages = Math.max(1, Number(data.total_pages) || 1);
     page++;
   } while (page <= totalPages && page <= 60);
-  return ppDetailsFromOrders(orders);
+  return orders;
 }
 
 function ppSplitDateRange(from, to, maxDays = 31) {
@@ -8329,6 +8402,9 @@ async function loadPaypalData() {
     }
 
     ppRenderAll(allTxns);
+    // La API de PayPal no informa el curso vendido: los cursos salen de los
+    // pedidos de WooCommerce pagados con PayPal en el mismo periodo.
+    ppLoadFromWooOrders(from, to).then(woo => ppRenderProducts(woo.orders)).catch(() => ppRenderProducts([]));
     if (statusEl) statusEl.textContent = `${allTxns.length} transacciones · ${new Date().toLocaleTimeString("es-PE")}`;
     if (stateEl) {
       stateEl.className = allTxns.length ? "data-state hidden" : "data-state state-empty";
@@ -8348,6 +8424,7 @@ async function loadPaypalData() {
       try {
         const woo = await ppLoadFromWooOrders(from, to);
         ppRenderAll(woo.details);
+        ppRenderProducts(woo.orders);
         const missing = woo.withoutFee
           ? ` ${woo.withoutFee} de ${woo.details.length} no tienen comisión registrada y se cuentan con comisión 0.`
           : "";
