@@ -16,7 +16,7 @@ const code = [
   'const statusNorm = s => String(s || "").replace(/^wc-/, "");',
   slice('const WOO_ANALYTICS_REVENUE_STATUSES', 'function validRevenueOrders'),
   slice('function orderGateway', 'function netRev') ,
-  slice('function ppDetailsFromOrders', 'async function ppLoadFromWooOrders'),
+  slice('function ppDetailsFromOrders', 'function ppRenderProducts'),
   'this.api = { orderGateway, gatewayFee, ppDetailsFromOrders };',
 ].join('\n');
 const context = {};

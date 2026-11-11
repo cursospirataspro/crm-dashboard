@@ -660,6 +660,7 @@ function renderAll() {
   renderEmailMarketing();
   renderWidgetCustomizer();
   renderStripeView();
+  renderPaypalView();
   renderWaitlist();
   renderRevenuePrediction();
   renderSalesHeatmap();
@@ -4213,7 +4214,7 @@ function renderStripeView() {
     stateEl.className = filtered.length ? "data-state hidden" : "data-state state-empty";
     stateEl.innerHTML = `<strong>Cero transacciones Stripe</strong><span>No hay pedidos pagados con Stripe para los filtros de arriba (${esc(periodLabel)}).</span>`;
   }
-  if (metaEl) metaEl.textContent = `${periodLabel} · ${filtered.length} pedidos Stripe · comisión guardada por Stripe en cada pedido`;
+  if (metaEl) metaEl.textContent = `${periodLabel} · ${filtered.length} pedidos Stripe · Fuente: WooCommerce`;
 
   // KPIs
   const paid = filtered.filter(o => ["completed", "processing"].includes(statusNorm(o.status)));
@@ -7214,8 +7215,7 @@ function switchView(id) {
       _paypalInited = true;
       initPaypalView();
     } else {
-      const gross = document.getElementById("ppGross");
-      if (!gross || gross.textContent === "—") loadPaypalData();
+      renderPaypalView();
     }
   }
   if (id === "stripe")   renderStripeView();
@@ -8267,33 +8267,50 @@ function ppRenderProducts(paypalOrders) {
   );
 }
 
-async function ppLoadFromWooOrders(from, to) {
-  return ppDetailsFromOrders(await fetchWooOrdersRange(from, to));
+// La vista PayPal usa los filtros generales de la cabecera (Periodo, Estado,
+// País, Buscar). `state.filtered` ya viene filtrado por ellos.
+// status: "unknown" | "connected" | "not-connected" (API de PayPal en WordPress).
+let _ppApi = { status: "unknown", key: "", txns: null, loading: false, pending: false };
+
+function ppHeaderRange() {
+  const r = range();
+  const today = new Date();
+  // La API de PayPal sólo permite consultar hasta 3 años hacia atrás.
+  const minFrom = new Date(today); minFrom.setFullYear(minFrom.getFullYear() - 3);
+  return {
+    from: localDateStr(r.from < minFrom ? minFrom : r.from),
+    to: localDateStr(r.to > today ? today : r.to),
+    label: $("#rangePreset")?.selectedOptions?.[0]?.textContent?.trim() || "Periodo elegido",
+  };
 }
 
-// Pedidos de WooCommerce de un rango propio (fechas YYYY-MM-DD), independiente
-// del periodo elegido en el filtro principal del dashboard.
-async function fetchWooOrdersRange(from, to) {
-  if (CONFIG.mode !== "api" || !CONFIG.apiBaseUrl || !CONFIG.apiToken) {
-    throw new Error("Sin conexión con WordPress.");
+// Sin API de PayPal: pedidos pagados con PayPal de los filtros de arriba, con
+// la comisión real que PayPal registró en cada uno.
+function ppRenderFromWoo() {
+  const { label } = ppHeaderRange();
+  const woo = ppDetailsFromOrders(state.filtered || []);
+  ppRenderAll(woo.details);
+  ppRenderProducts(woo.orders);
+  const statusEl = document.getElementById("paypalStatus");
+  const stateEl = document.getElementById("paypalDataState");
+  const metaEl = document.getElementById("paypalSyncMeta");
+  const missing = woo.withoutFee
+    ? ` ${woo.withoutFee} de ${woo.details.length} no tienen comisión registrada y se cuentan con comisión 0.`
+    : "";
+  if (statusEl) statusEl.textContent = `${woo.details.length} cobros PayPal de WooCommerce`;
+  if (stateEl) {
+    stateEl.className = "data-state state-empty";
+    stateEl.innerHTML = `<strong>Datos de WooCommerce</strong><span>La API de PayPal no está conectada. Se muestran los pedidos pagados con PayPal y la comisión real que PayPal registró en cada uno.${missing} No incluye disputas ni movimientos hechos fuera de la tienda.</span>`;
   }
-  const base = CONFIG.apiBaseUrl.replace(/\/$/, "") + "/overview";
-  const orders = [];
-  let page = 1, totalPages = 1;
-  do {
-    const url = new URL(base);
-    url.searchParams.set("from", from);
-    url.searchParams.set("to", to);
-    url.searchParams.set("page", String(page));
-    url.searchParams.set("limit", "200");
-    const res = await fetch(url, { headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken } });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data?.code) throw new Error(data?.message || `WooCommerce HTTP ${res.status}`);
-    orders.push(...(Array.isArray(data.orders) ? data.orders : []));
-    totalPages = Math.max(1, Number(data.total_pages) || 1);
-    page++;
-  } while (page <= totalPages && page <= 60);
-  return orders;
+  if (metaEl) metaEl.textContent = `${label} · ${woo.details.length} cobros PayPal · Fuente: WooCommerce`;
+  return woo;
+}
+
+// Se llama al abrir la vista y cada vez que cambian los filtros de arriba.
+function renderPaypalView() {
+  if (!document.getElementById("view-paypal")?.offsetParent) return;
+  if (_ppApi.status === "not-connected") { ppRenderFromWoo(); return; }
+  loadPaypalData();
 }
 
 function ppSplitDateRange(from, to, maxDays = 31) {
@@ -8313,47 +8330,50 @@ function ppSplitDateRange(from, to, maxDays = 31) {
 
 async function loadPaypalData() {
   const statusEl = document.getElementById("paypalStatus");
-  const btn      = document.getElementById("paypalLoadBtn");
-  const fromEl   = document.getElementById("paypalFrom");
-  const toEl     = document.getElementById("paypalTo");
-  if (!fromEl || !toEl) return;
+  // Si ya hay una carga en curso, se repite al terminar con los filtros nuevos.
+  if (_ppApi.loading) { _ppApi.pending = true; return; }
+  _ppApi.loading = true;
 
-  const from = fromEl.value || new Date(Date.now() - 30*86400000).toISOString().slice(0, 10);
-  const to   = toEl.value   || new Date().toISOString().slice(0, 10);
-  fromEl.value = from;
-  toEl.value = to;
+  const { from, to } = ppHeaderRange();
+  const rangeKey = `${from}|${to}|${loadPaypalConfig().mode}`;
   const stateEl = document.getElementById("paypalDataState");
   const metaEl = document.getElementById("paypalSyncMeta");
-  if (stateEl) {
-    stateEl.className = "data-state state-loading";
-    stateEl.innerHTML = `<span class="state-spinner"></span><strong>Cargando PayPal</strong><span>Consultando el periodo ${from} → ${to}…</span>`;
-  }
-
-  if (statusEl) statusEl.textContent = "Conectando con PayPal...";
-  if (btn) btn.disabled = true;
 
   try {
-    const chunks = ppSplitDateRange(from, to, 31);
-    const allTxns = [];
-
-    for (let i = 0; i < chunks.length; i++) {
-      const [cFrom, cTo] = chunks[i];
-      if (statusEl) statusEl.textContent = `Cargando... bloque ${i + 1}/${chunks.length} (${cFrom} → ${cTo})`;
-      const data = await ppFetchTransactions(cFrom, cTo, 1);
-      const txns = data.transaction_details || [];
-      allTxns.push(...txns);
-      // Si hay más páginas en este bloque
-      const totalPages = data.total_pages || 1;
-      for (let p = 2; p <= totalPages; p++) {
-        const pageData = await ppFetchTransactions(cFrom, cTo, p);
-        allTxns.push(...(pageData.transaction_details || []));
+    let allTxns;
+    if (_ppApi.status === "connected" && _ppApi.key === rangeKey && _ppApi.txns) {
+      allTxns = _ppApi.txns;
+    } else {
+      if (stateEl) {
+        stateEl.className = "data-state state-loading";
+        stateEl.innerHTML = `<span class="state-spinner"></span><strong>Cargando PayPal</strong><span>Consultando el periodo ${from} → ${to}…</span>`;
       }
+      if (statusEl) statusEl.textContent = "Conectando con PayPal...";
+      const chunks = ppSplitDateRange(from, to, 31);
+      allTxns = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const [cFrom, cTo] = chunks[i];
+        if (statusEl) statusEl.textContent = `Cargando... bloque ${i + 1}/${chunks.length} (${cFrom} → ${cTo})`;
+        const data = await ppFetchTransactions(cFrom, cTo, 1);
+        const txns = data.transaction_details || [];
+        allTxns.push(...txns);
+        // Si hay más páginas en este bloque
+        const totalPages = data.total_pages || 1;
+        for (let p = 2; p <= totalPages; p++) {
+          const pageData = await ppFetchTransactions(cFrom, cTo, p);
+          allTxns.push(...(pageData.transaction_details || []));
+        }
+      }
+      _ppApi.status = "connected";
+      _ppApi.key = rangeKey;
+      _ppApi.txns = allTxns;
     }
 
     ppRenderAll(allTxns);
     // La API de PayPal no informa el curso vendido: los cursos salen de los
-    // pedidos de WooCommerce pagados con PayPal en el mismo periodo.
-    ppLoadFromWooOrders(from, to).then(woo => ppRenderProducts(woo.orders)).catch(() => ppRenderProducts([]));
+    // pedidos de WooCommerce pagados con PayPal según los filtros de arriba.
+    ppRenderProducts(ppDetailsFromOrders(state.filtered || []).orders);
+    ppFilterTable($("#searchInput")?.value || "");
     if (statusEl) statusEl.textContent = `${allTxns.length} transacciones · ${new Date().toLocaleTimeString("es-PE")}`;
     if (stateEl) {
       stateEl.className = allTxns.length ? "data-state hidden" : "data-state state-empty";
@@ -8371,18 +8391,8 @@ async function loadPaypalData() {
     // WooCommerce con la comisión real que PayPal registró en cada pedido.
     if (type === "state-not-connected") {
       try {
-        const woo = await ppLoadFromWooOrders(from, to);
-        ppRenderAll(woo.details);
-        ppRenderProducts(woo.orders);
-        const missing = woo.withoutFee
-          ? ` ${woo.withoutFee} de ${woo.details.length} no tienen comisión registrada y se cuentan con comisión 0.`
-          : "";
-        if (statusEl) statusEl.textContent = `${woo.details.length} cobros PayPal de WooCommerce · ${new Date().toLocaleTimeString("es-PE")}`;
-        if (stateEl) {
-          stateEl.className = "data-state state-empty";
-          stateEl.innerHTML = `<strong>Datos de WooCommerce</strong><span>La API de PayPal no está conectada. Se muestran los pedidos pagados con PayPal y la comisión real que PayPal registró en cada uno.${missing} No incluye disputas ni movimientos hechos fuera de la tienda.</span>`;
-        }
-        if (metaEl) metaEl.textContent = `Última actualización: ${new Date().toLocaleString("es-PE")} · ${woo.details.length} registros · ${from} → ${to} · Fuente: WooCommerce`;
+        _ppApi.status = "not-connected";
+        const woo = ppRenderFromWoo();
         logSync("PayPal", "ok", `${woo.details.length} pedidos WooCommerce · ${from} → ${to}`);
         return;
       } catch (wooErr) {
@@ -8399,7 +8409,8 @@ async function loadPaypalData() {
     toast("PayPal: " + msg.substring(0, 80), "error");
     console.warn("[PayPal]", err);
   } finally {
-    if (btn) btn.disabled = false;
+    _ppApi.loading = false;
+    if (_ppApi.pending) { _ppApi.pending = false; renderPaypalView(); }
   }
 }
 
@@ -8414,23 +8425,6 @@ function ppSetMode(mode) {
   if (liveBtn) { liveBtn.style.opacity = mode === "live" ? "1" : "0.4"; liveBtn.style.background = mode === "live" ? "var(--good)" : ""; liveBtn.style.color = mode === "live" ? "#fff" : ""; }
   if (sandBtn) { sandBtn.style.opacity = mode !== "live" ? "1" : "0.4"; sandBtn.style.background = mode !== "live" ? "var(--warn,#f59e0b)" : ""; sandBtn.style.color = mode !== "live" ? "#fff" : ""; }
   if (label)   label.textContent = "Modo: " + (mode === "live" ? "Live (real)" : "Sandbox (prueba)");
-}
-
-// Aplica un preset de fecha (días atrás) a los inputs
-function ppApplyDatePreset(days) {
-  const toEl   = document.getElementById("paypalTo");
-  const fromEl = document.getElementById("paypalFrom");
-  if (!fromEl || !toEl) return;
-  const today = new Date();
-  toEl.value = today.toISOString().slice(0, 10);
-  if (days === "all") {
-    // PayPal Transaction Search API solo permite hasta 3 años hacia atrás
-    const threeYearsAgo = new Date(today);
-    threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
-    fromEl.value = threeYearsAgo.toISOString().slice(0, 10);
-  } else {
-    fromEl.value = new Date(today - days * 86400000).toISOString().slice(0, 10);
-  }
 }
 
 // Filtra la tabla de transacciones en tiempo real
@@ -8448,11 +8442,6 @@ function ppFilterTable(query) {
 }
 
 function initPaypalView() {
-  const fromEl   = document.getElementById("paypalFrom");
-  const toEl     = document.getElementById("paypalTo");
-  const btn      = document.getElementById("paypalLoadBtn");
-  const preset   = document.getElementById("ppDatePreset");
-  const searchEl = document.getElementById("ppSearch");
   const liveBtn  = document.getElementById("ppModeLive");
   const sandBtn  = document.getElementById("ppModeSandbox");
 
@@ -8460,33 +8449,13 @@ function initPaypalView() {
   const savedMode = loadPaypalConfig().mode;
   ppSetMode(savedMode);
 
-  // Fechas por defecto: últimos 30 días
-  ppApplyDatePreset(30);
+  // Botones Live / Sandbox: vuelven a consultar la API de PayPal
+  const retry = mode => { ppSetMode(mode); _ppApi.status = "unknown"; _ppApi.txns = null; loadPaypalData(); };
+  if (liveBtn) liveBtn.addEventListener("click", () => retry("live"));
+  if (sandBtn) sandBtn.addEventListener("click", () => retry("sandbox"));
 
-  // Preset de fecha cambia fechas automáticamente
-  if (preset) {
-    preset.value = "30";
-    preset.addEventListener("change", () => {
-      if (preset.value) ppApplyDatePreset(preset.value === "all" ? "all" : Number(preset.value));
-    });
-  }
-
-  // Fechas manuales limpian el preset
-  if (fromEl) fromEl.addEventListener("change", () => { if (preset) preset.value = ""; });
-  if (toEl)   toEl.addEventListener("change",   () => { if (preset) preset.value = ""; });
-
-  // Botones Live / Sandbox
-  if (liveBtn) liveBtn.addEventListener("click", () => { ppSetMode("live"); loadPaypalData(); });
-  if (sandBtn) sandBtn.addEventListener("click", () => { ppSetMode("sandbox"); loadPaypalData(); });
-
-  // Botón cargar
-  if (btn) btn.addEventListener("click", loadPaypalData);
-
-  // Búsqueda en tiempo real
-  if (searchEl) searchEl.addEventListener("input", () => ppFilterTable(searchEl.value));
-
-  // Cargar datos automáticamente
-  loadPaypalData();
+  // El periodo y la búsqueda vienen de los filtros generales de arriba
+  renderPaypalView();
 }
 
 // =============================================================
