@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.5.0
+ * Version:      2.7.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -11,6 +11,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+require_once __DIR__ . '/includes/settings.php';
 require_once __DIR__ . '/includes/email-automations.php';
 
 register_activation_hook( __FILE__, 'cpp_email_automations_activate' );
@@ -31,12 +32,11 @@ add_action( 'before_woocommerce_init', function () {
 
 // ─────────────────────────────────────────────────────────────
 // CORS limitado a estas rutas y a los orígenes configurados.
-// Define CPP_CRM_DASHBOARD_ALLOWED_ORIGINS en wp-config.php.
+// Se configuran en Ajustes → CPP CRM Dashboard o con la constante
+// CPP_CRM_DASHBOARD_ALLOWED_ORIGINS de wp-config.php (tiene prioridad).
 // ─────────────────────────────────────────────────────────────
 function cpp_crm_dashboard_allowed_origins() {
-    $configured = defined( 'CPP_CRM_DASHBOARD_ALLOWED_ORIGINS' )
-        ? CPP_CRM_DASHBOARD_ALLOWED_ORIGINS
-        : home_url();
+    $configured = cpp_crm_dashboard_configured_origins();
 
     $origins = is_array( $configured ) ? $configured : explode( ',', (string) $configured );
     $origins = array_values( array_filter( array_map( function ( $origin ) {
@@ -115,17 +115,18 @@ add_action( 'rest_api_init', function () {
 // Verificación del token de acceso
 // ─────────────────────────────────────────────────────────────
 function cpp_crm_dashboard_check_token( WP_REST_Request $request ) {
-    if ( ! defined( 'CPP_CRM_DASHBOARD_TOKEN' ) || ! CPP_CRM_DASHBOARD_TOKEN ) {
+    $expected = cpp_crm_dashboard_token();
+    if ( '' === $expected ) {
         return new WP_Error(
             'token_missing',
-            'Define CPP_CRM_DASHBOARD_TOKEN en wp-config.php.',
+            'Define el token en Ajustes → CPP CRM Dashboard o CPP_CRM_DASHBOARD_TOKEN en wp-config.php.',
             [ 'status' => 500 ]
         );
     }
 
     $incoming = $request->get_header( 'x-cpp-crm-dashboard-token' );
 
-    if ( ! $incoming || ! hash_equals( (string) CPP_CRM_DASHBOARD_TOKEN, (string) $incoming ) ) {
+    if ( ! $incoming || ! hash_equals( $expected, (string) $incoming ) ) {
         return new WP_Error( 'forbidden', 'Token inválido.', [ 'status' => 403 ] );
     }
 

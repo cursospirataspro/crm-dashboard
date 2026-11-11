@@ -4,6 +4,40 @@
 let _pushLastOrderIds = new Set();
 let _pushEnabled = false;
 
+// Conexión en un clic desde WordPress (Ajustes → CPP CRM Dashboard → «Conectar el
+// dashboard»). El plugin abre esta página con `#cpp_connect=<base64url(JSON)>`.
+// El fragmento no viaja a ningún servidor: se guarda en localStorage y se borra
+// de la barra de direcciones. Sólo se aceptan las tiendas propias de la lista,
+// para que un enlace ajeno no pueda redirigir el dashboard a otro servidor.
+const CPP_CONNECT_ALLOWED_HOSTS = ["cursospiratasprooficial.com", "cursospirataspro.com"];
+let _cppConnectResult = null;
+(function applyConnectFragment() {
+  const match = /^#cpp_connect=([A-Za-z0-9_-]+)$/.exec(location.hash || "");
+  if (!match) return;
+  try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  try {
+    const b64 = match[1].replace(/-/g, "+").replace(/_/g, "/");
+    const data = JSON.parse(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)));
+    const url = new URL(String(data.url || ""));
+    const token = String(data.token || "");
+    const okHost = CPP_CONNECT_ALLOWED_HOSTS.includes(url.hostname);
+    const okPath = /\/wp-json\/cpp-crm-dashboard\/v1\/?$/.test(url.pathname);
+    if (url.protocol !== "https:" || !okHost || !okPath || url.search || url.hash || url.username ||
+        !/^[A-Za-z0-9_.-]{32,128}$/.test(token)) {
+      _cppConnectResult = "rejected";
+      return;
+    }
+    let currency = "USD";
+    try { currency = JSON.parse(localStorage.getItem("cpp_crm_config") || "null")?.currency || "USD"; } catch (e) {}
+    localStorage.setItem("cpp_crm_config", JSON.stringify({
+      url: url.origin + url.pathname.replace(/\/$/, ""), token, currency,
+    }));
+    _cppConnectResult = url.hostname;
+  } catch (e) {
+    _cppConnectResult = "rejected";
+  }
+})();
+
 const CONFIG = (function() {
   const base = { mode: "demo", apiBaseUrl: "", apiToken: "", currency: "USD" };
   try {
@@ -3687,6 +3721,13 @@ function bind() {
     toast("Conectado a WooCommerce — cargando datos reales", "success");
     load();
   });
+
+  // Resultado de la conexión en un clic desde WordPress
+  if (_cppConnectResult === "rejected") {
+    toast("El enlace de conexión no es válido o no pertenece a una tienda autorizada", "error");
+  } else if (_cppConnectResult) {
+    toast("Dashboard conectado con " + _cppConnectResult, "success");
+  }
 
   // Restaurar config guardada
   try {

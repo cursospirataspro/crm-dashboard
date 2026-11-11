@@ -21,7 +21,25 @@ Versión mejorada del dashboard para una empresa que vende cursos digitales.
 
 Abre `index.html` en Chrome. Está en modo demo por defecto.
 
-## Conectar WooCommerce
+## Conectar WooCommerce (en un clic)
+
+1. Instala `wordpress-plugin/cpp-dashboard-crm-api.zip` desde WordPress → Plugins → Añadir → Subir, y actívalo.
+2. En WordPress abre **Ajustes → CPP CRM Dashboard**, escribe la **Dirección del dashboard**
+   (por ejemplo `https://cursospirataspro.github.io/crm-dashboard/`) y guarda.
+3. Pulsa **Conectar el dashboard**. El plugin genera el token si aún no existe y abre el
+   dashboard ya conectado; no hay que copiar ni escribir el token.
+
+El token viaja en el fragmento (`#cpp_connect=…`) de la dirección, que no se envía a ningún
+servidor; el dashboard lo guarda en el navegador y lo borra de la barra de direcciones. Sólo se
+aceptan las tiendas listadas en `CPP_CONNECT_ALLOWED_HOSTS` de `assets/app.js`. Cada navegador
+nuevo se conecta repitiendo el paso 3. Tienda actual: `https://cursospiratasprooficial.com`.
+
+El zip debe crearse con rutas `/` (no `\`): un zip hecho con rutas de Windows se instala mal en
+servidores Linux y WordPress responde «El archivo del plugin no existe».
+
+## Conectar WooCommerce (manual, con wp-config.php)
+
+Las constantes de `wp-config.php` tienen prioridad sobre los ajustes del panel.
 
 1. Sube `wordpress-plugin/cpp-dashboard-crm-api` a `wp-content/plugins/`.
 2. Activa el plugin en WordPress.

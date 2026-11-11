@@ -1480,8 +1480,8 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
             <div class="setup-step">
               <div class="step-num">3</div>
               <div>
-                <strong>Define el token en wp-config.php</strong>
-                <p>Abre <code>wp-config.php</code> (raíz del servidor) y añade antes de <code>/* That's all */</code>:</p>
+                <strong>Conecta desde WordPress (recomendado)</strong>
+                <p>En WordPress abre <strong>Ajustes → CPP CRM Dashboard</strong> y pulsa <strong>Conectar el dashboard</strong>: el token se genera solo y este dashboard queda conectado. Como alternativa manual, define el token en <code>wp-config.php</code>:</p>
                 <pre><code>define('CPP_CRM_DASHBOARD_TOKEN', 'CAMBIA_ESTO_POR_ALGO_LARGO');</code></pre>
                 <p style="color:var(--muted);font-size:12px">Usa mínimo 32 caracteres aleatorios. Este token es la contraseña del API.</p>
               </div>
@@ -1491,7 +1491,7 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
               <div>
                 <strong>Verifica que el endpoint responde</strong>
                 <p>Abre en tu navegador:</p>
-                <pre><code>https://cursospirataspro.com/wp-json/cpp-crm-dashboard/v1/overview</code></pre>
+                <pre><code>https://cursospiratasprooficial.com/wp-json/cpp-crm-dashboard/v1/overview</code></pre>
                 <p style="color:var(--muted);font-size:12px">Debe devolver <code>{"code":"forbidden"...}</code> — eso confirma que el plugin está activo y el endpoint existe.</p>
               </div>
             </div>
@@ -1503,10 +1503,10 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
           <div class="setup-form">
             <label class="sf-label">URL de tu WordPress
               <input id="cfgUrl" type="url" class="sf-input"
-                placeholder="https://cursospirataspro.com/wp-json/cpp-crm-dashboard/v1"
-                value="https://cursospirataspro.com/wp-json/cpp-crm-dashboard/v1">
+                placeholder="https://cursospiratasprooficial.com/wp-json/cpp-crm-dashboard/v1"
+                value="https://cursospiratasprooficial.com/wp-json/cpp-crm-dashboard/v1">
             </label>
-            <label class="sf-label">Token de acceso (el que pusiste en wp-config.php)
+            <label class="sf-label">Token de acceso (sólo si conectas a mano)
               <input id="cfgToken" type="password" class="sf-input"
                 placeholder="Tu token secreto">
               <button type="button" id="cfgShowToken" class="sf-toggle-pass">👁 Ver</button>
@@ -1864,6 +1864,6 @@ Si recibes este mensaje, ¡todo está configurado perfectamente! ✅</textarea>
 <script src="https://unpkg.com/globe.gl@2" id="globeGlScript"></script>
 <script src="assets/world-polys-inline.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=56"></script>
+<script src="assets/app.js?v=57"></script>
 </body>
 </html>
