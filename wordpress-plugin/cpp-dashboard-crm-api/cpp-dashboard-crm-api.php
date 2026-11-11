@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.8.0
+ * Version:      2.9.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -226,7 +226,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     $date_type = cpp_crm_analytics_date_type();
 
     $cache_key = 'cpp_crm_overview_' . md5( implode( '|', [
-        '2.8.0',
+        '2.9.0',
         $date_type,
         $from,
         $to,
@@ -286,6 +286,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
         $in_analytics   = isset( $counted[ $order->get_id() ] );
         $analytics_date = $in_analytics ? cpp_crm_order_analytics_date( $order, $date_type ) : null;
         $shown_date     = $analytics_date ?: $created;
+        $gateway_fee    = cpp_crm_order_gateway_fee( $order );
 
         $normalized[] = [
             'id'             => $order->get_id(),
@@ -302,6 +303,11 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
             'net_total'      => (float) ( $order->get_subtotal() - $order->get_discount_total() ),
             'total_refunded' => (float) $order->get_total_refunded(),
             'payment_method' => $order->get_payment_method_title() ?: (string) $order->get_payment_method(),
+            // Comisión real de la pasarela guardada en el pedido (null si la pasarela no la registró).
+            'gateway'              => $gateway_fee['gateway'],
+            'gateway_fee'          => $gateway_fee['fee'],
+            'gateway_net'          => $gateway_fee['net'],
+            'gateway_fee_currency' => $gateway_fee['currency'],
             'country_code'   => $country_code,
             'country'        => cpp_crm_country_name( $country_code ),
             'city'           => $city,
@@ -326,6 +332,103 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
 
     set_transient( $cache_key, $response_data, MINUTE_IN_SECONDS );
     return rest_ensure_response( $response_data );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Comisión real de la pasarela de pago, guardada en cada pedido
+// ─────────────────────────────────────────────────────────────
+
+/** Primer metadato numérico entre las claves dadas, o null. */
+function cpp_crm_order_meta_number( $order, array $keys ) {
+    foreach ( $keys as $key ) {
+        $value = $order->get_meta( $key, true );
+        if ( is_numeric( $value ) ) {
+            return (float) $value;
+        }
+    }
+    return null;
+}
+
+/** Primer metadato de texto no vacío entre las claves dadas, o ''. */
+function cpp_crm_order_meta_text( $order, array $keys ) {
+    foreach ( $keys as $key ) {
+        $value = $order->get_meta( $key, true );
+        if ( is_string( $value ) && '' !== $value ) {
+            return $value;
+        }
+    }
+    return '';
+}
+
+/**
+ * Comisión que cobró la pasarela, tal como la guardó su plugin en el pedido.
+ *
+ * - Stripe: `_stripe_fee`, `_stripe_net`, `_stripe_currency`.
+ * - PayPal Payments: `_ppcp_paypal_fees` (paypal_fee / net_amount) o `PayPal Transaction Fee`.
+ * - Pedidos migrados de la tienda anterior: las mismas claves con prefijo `_cpp_hist_`.
+ *
+ * Nunca se estima: si la pasarela no registró la comisión, `fee` es null.
+ */
+function cpp_crm_order_gateway_fee( $order ) {
+    $method  = strtolower( (string) $order->get_payment_method() );
+    $gateway = '';
+    if ( 0 === strpos( $method, 'stripe' ) ) {
+        $gateway = 'stripe';
+    } elseif ( 0 === strpos( $method, 'ppcp' ) || false !== strpos( $method, 'paypal' ) ) {
+        $gateway = 'paypal';
+    }
+
+    $stripe = null;
+    $fee    = cpp_crm_order_meta_number( $order, [ '_stripe_fee', '_cpp_hist_stripe_fee' ] );
+    if ( null !== $fee ) {
+        $stripe = [
+            'gateway'  => 'stripe',
+            'fee'      => round( abs( $fee ), 2 ),
+            'net'      => cpp_crm_order_meta_number( $order, [ '_stripe_net', '_cpp_hist_stripe_net' ] ),
+            'currency' => strtoupper( cpp_crm_order_meta_text( $order, [ '_stripe_currency', '_cpp_hist_stripe_currency' ] ) ),
+        ];
+    }
+
+    $paypal = null;
+    foreach ( [ '_ppcp_paypal_fees', '_cpp_hist_ppcp_paypal_fees' ] as $key ) {
+        $raw = $order->get_meta( $key, true );
+        if ( is_string( $raw ) && '' !== $raw ) {
+            $decoded = json_decode( $raw, true );
+            $raw     = is_array( $decoded ) ? $decoded : maybe_unserialize( $raw );
+        }
+        if ( is_array( $raw ) && isset( $raw['paypal_fee']['value'] ) && is_numeric( $raw['paypal_fee']['value'] ) ) {
+            $paypal = [
+                'gateway'  => 'paypal',
+                'fee'      => round( abs( (float) $raw['paypal_fee']['value'] ), 2 ),
+                'net'      => isset( $raw['net_amount']['value'] ) && is_numeric( $raw['net_amount']['value'] )
+                    ? (float) $raw['net_amount']['value'] : null,
+                'currency' => strtoupper( (string) ( $raw['paypal_fee']['currency_code'] ?? '' ) ),
+            ];
+            break;
+        }
+    }
+    if ( null === $paypal ) {
+        $fee = cpp_crm_order_meta_number( $order, [ 'PayPal Transaction Fee', '_cpp_hist_paypaltransactionfee' ] );
+        if ( null !== $fee ) {
+            $paypal = [ 'gateway' => 'paypal', 'fee' => round( abs( $fee ), 2 ), 'net' => null, 'currency' => '' ];
+        }
+    }
+
+    // Se prefiere la comisión de la pasarela con la que se pagó el pedido.
+    $found = 'paypal' === $gateway ? ( $paypal ?: $stripe ) : ( $stripe ?: $paypal );
+    if ( ! $found ) {
+        return [ 'gateway' => $gateway, 'fee' => null, 'net' => null, 'currency' => '' ];
+    }
+    if ( '' !== $gateway ) {
+        $found['gateway'] = $gateway;
+    }
+    if ( null === $found['net'] ) {
+        $found['net'] = round( (float) $order->get_total() - $found['fee'], 2 );
+    }
+    if ( '' === $found['currency'] ) {
+        $found['currency'] = (string) $order->get_currency();
+    }
+    return $found;
 }
 
 // ─────────────────────────────────────────────────────────────

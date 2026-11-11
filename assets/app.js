@@ -509,6 +509,25 @@ function validRevenueOrders(o) {
   return o.filter(countsAsRevenue);
 }
 
+// Pasarela del pedido: la informa el plugin (`gateway`); si no, se deduce del título.
+function orderGateway(o) {
+  if (o.gateway) return o.gateway;
+  const pm = (o.payment_method || "").toLowerCase();
+  if (pm.includes("paypal")) return "paypal";
+  if (pm.includes("stripe") || pm.includes("card") || pm === "wc_stripe") return "stripe";
+  return "";
+}
+
+// Comisión de la pasarela. `real: true` cuando es el importe que la pasarela
+// registró en el pedido; si no lo registró, se estima (2.9% + 0.30) y se marca.
+function gatewayFee(o) {
+  const stored = o.gateway_fee;
+  if (stored !== null && stored !== undefined && stored !== "" && Number.isFinite(Number(stored))) {
+    return { fee: Math.abs(Number(stored)), real: true };
+  }
+  return { fee: Number(o.total || 0) * 0.029 + 0.30, real: false };
+}
+
 // Ingresos netos = subtotal - descuentos - devoluciones, igual que WooCommerce Analytics.
 function netRev(o) {
   const beforeRefunds = Number(o.net_total ?? o.total ?? 0);
@@ -4147,10 +4166,7 @@ function renderStripeView() {
   const days = Number($("#stripeDatePreset")?.value || 30);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  const stripeOrders = state.orders.filter(o => {
-    const pm = (o.payment_method || "").toLowerCase();
-    return new Date(o.date) >= cutoff && (pm.includes("stripe") || pm.includes("card") || pm === "wc_stripe");
-  });
+  const stripeOrders = state.orders.filter(o => new Date(o.date) >= cutoff && orderGateway(o) === "stripe");
   const stateEl = $("#stripeDataState");
   const statusEl = $("#stripeStatus");
   const metaEl = $("#stripeSyncMeta");
@@ -4166,8 +4182,8 @@ function renderStripeView() {
       stateEl.innerHTML = `<strong>Cero transacciones Stripe</strong><span>La conexión con WooCommerce funciona, pero no hay pedidos Stripe en los últimos ${days} días.</span>`;
     }
     if (statusEl) statusEl.textContent = source === "combined"
-      ? "Combinado · API no conectada, usando WooCommerce con comisiones estimadas"
-      : "WooCommerce · cobros reales, comisiones estimadas";
+      ? "Combinado · API no conectada, usando WooCommerce con la comisión guardada en cada pedido"
+      : "WooCommerce · cobros reales y comisión guardada en cada pedido";
   }
   if (metaEl) metaEl.textContent = `Última actualización: ${new Date().toLocaleString("es-PE")} · ${stripeOrders.length} registros · ${days} días · Fuente: ${source}`;
 
@@ -4183,7 +4199,14 @@ function renderStripeView() {
   // KPIs
   const paid = filtered.filter(o => ["completed", "processing"].includes(statusNorm(o.status)));
   const total  = paid.reduce((s, o) => s + Number(o.total || 0), 0);
-  const fees   = paid.reduce((s, o) => s + (Number(o.total || 0) * 0.029 + 0.30), 0);
+  const paidFees = paid.map(gatewayFee);
+  const fees   = paidFees.reduce((s, f) => s + f.fee, 0);
+  const realFeeCount = paidFees.filter(f => f.real).length;
+  const estFeeCount  = paidFees.length - realFeeCount;
+  const feeNote = !paidFees.length ? "Sin cobros en el periodo"
+    : estFeeCount === 0 ? `Dato real de Stripe en los ${realFeeCount} cobros`
+    : realFeeCount === 0 ? `Estimada (2.9% + 0.30) · Stripe no registró la comisión`
+    : `${realFeeCount} reales · ${estFeeCount} estimadas (2.9% + 0.30)`;
   const net    = total - fees;
   const count  = paid.length;
   const avg    = count ? total / count : 0;
@@ -4193,8 +4216,8 @@ function renderStripeView() {
   const kpisEl = document.getElementById("stripeKpis");
   if (kpisEl) kpisEl.innerHTML = [
     { label: "Ingresos brutos", val: fmtMoney(total), cls: "" },
-    { label: "Comisiones estimadas", val: fmtMoney(fees), cls: "style=\"color:var(--bad)\"", sub: "2.9% + 0.30 · no es dato Stripe" },
-    { label: "Ingresos netos estimados", val: fmtMoney(net), cls: "style=\"color:var(--good)\"", sub: "Bruto menos comisión estimada" },
+    { label: estFeeCount ? "Comisiones Stripe (parte estimada)" : "Comisiones Stripe", val: "-" + fmtMoney(fees), cls: "style=\"color:var(--bad)\"", sub: feeNote },
+    { label: estFeeCount ? "Ingresos netos (parte estimada)" : "Ingresos netos", val: fmtMoney(net), cls: "style=\"color:var(--good)\"", sub: "Bruto menos comisión" },
     { label: "Transacciones", val: count, cls: "" },
     { label: "Ticket promedio", val: fmtMoney(avg), cls: "" },
     { label: "Reembolsos", val: refunds, cls: "" },
@@ -4254,8 +4277,10 @@ function renderStripeView() {
     const rows = filtered.slice(0, 200);
     tbody.innerHTML = rows.map(o => {
       const gross = Number(o.total || 0);
-      const fee   = gross * 0.029 + 0.30;
+      const gf    = gatewayFee(o);
+      const fee   = gf.fee;
       const net_  = gross - fee;
+      const est   = gf.real ? "" : ` <small style="color:var(--muted)" title="Stripe no registró la comisión de este pedido; valor estimado (2.9% + 0.30)">est.</small>`;
       const prod  = (o.products || [])[0]?.name || "—";
       return `<tr>
         <td>${fmtDate(o.date)}</td>
@@ -4264,7 +4289,7 @@ function renderStripeView() {
         <td>${esc(o.country || o.country_code || "—")}</td>
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prod)}</td>
         <td class="text-right">${fmtMoney(gross)}</td>
-        <td class="text-right" style="color:var(--bad)">-${fmtMoney(fee)}</td>
+        <td class="text-right" style="color:var(--bad)">-${fmtMoney(fee)}${est}</td>
         <td class="text-right" style="color:var(--good)">${fmtMoney(net_)}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Sin transacciones Stripe en el periodo.</td></tr>`;
@@ -8194,6 +8219,61 @@ function ppRenderAll(txnDetails) {
   }
 }
 // Divide un rango de fechas en ventanas de maxDays días
+// Cobros PayPal tomados de los pedidos de WooCommerce (sin la API de PayPal).
+// Devuelve el mismo formato que ppFetchTransactions para reutilizar ppRenderAll.
+function ppDetailsFromOrders(orders) {
+  let withoutFee = 0;
+  const details = orders
+    .filter(o => orderGateway(o) === "paypal" && countsAsRevenue(o))
+    .map(o => {
+      const refunded = statusNorm(o.status) === "refunded";
+      const gf = gatewayFee(o);
+      if (!gf.real) withoutFee++;
+      const amount = Number(o.total || 0) - Number(o.total_refunded || 0);
+      return {
+        transaction_info: {
+          transaction_id: String(o.number || o.id),
+          transaction_initiation_date: String(o.date || ""),
+          transaction_amount: { value: refunded ? -Math.abs(Number(o.total || 0)) : amount, currency_code: o.gateway_fee_currency || "USD" },
+          // Nunca se estima la comisión de PayPal: sin dato registrado cuenta como 0.
+          fee_amount: { value: gf.real ? gf.fee : 0, currency_code: o.gateway_fee_currency || "USD" },
+          transaction_status: refunded ? "V" : "S",
+          transaction_event_code: refunded ? "T1107" : "T0006",
+          transaction_subject: (o.products || [])[0]?.name || ""
+        },
+        payer_info: {
+          email_address: o.customer_email || "",
+          payer_name: { alternate_full_name: o.customer || o.customer_email || "Desconocido" },
+          address: { country_code: o.country_code || "" }
+        }
+      };
+    });
+  return { details, withoutFee };
+}
+
+async function ppLoadFromWooOrders(from, to) {
+  if (CONFIG.mode !== "api" || !CONFIG.apiBaseUrl || !CONFIG.apiToken) {
+    throw new Error("Sin conexión con WordPress.");
+  }
+  const base = CONFIG.apiBaseUrl.replace(/\/$/, "") + "/overview";
+  const orders = [];
+  let page = 1, totalPages = 1;
+  do {
+    const url = new URL(base);
+    url.searchParams.set("from", from);
+    url.searchParams.set("to", to);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("limit", "200");
+    const res = await fetch(url, { headers: { "X-CPP-CRM-Dashboard-Token": CONFIG.apiToken } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.code) throw new Error(data?.message || `WooCommerce HTTP ${res.status}`);
+    orders.push(...(Array.isArray(data.orders) ? data.orders : []));
+    totalPages = Math.max(1, Number(data.total_pages) || 1);
+    page++;
+  } while (page <= totalPages && page <= 60);
+  return ppDetailsFromOrders(orders);
+}
+
 function ppSplitDateRange(from, to, maxDays = 31) {
   const chunks = [];
   let cur = new Date(from + "T00:00:00Z");
@@ -8261,6 +8341,29 @@ async function loadPaypalData() {
     if (statusEl) { statusEl.innerHTML = "<span style='color:var(--bad)'>" + msg + "</span>"; }
     const lower = msg.toLowerCase();
     const type = lower.includes("permiso") || lower.includes("403") ? "state-permission" : lower.includes("no conectado") || lower.includes("configura") ? "state-not-connected" : "state-error";
+
+    // Sin credenciales de la API de PayPal se muestran los cobros PayPal de
+    // WooCommerce con la comisión real que PayPal registró en cada pedido.
+    if (type === "state-not-connected") {
+      try {
+        const woo = await ppLoadFromWooOrders(from, to);
+        ppRenderAll(woo.details);
+        const missing = woo.withoutFee
+          ? ` ${woo.withoutFee} de ${woo.details.length} no tienen comisión registrada y se cuentan con comisión 0.`
+          : "";
+        if (statusEl) statusEl.textContent = `${woo.details.length} cobros PayPal de WooCommerce · ${new Date().toLocaleTimeString("es-PE")}`;
+        if (stateEl) {
+          stateEl.className = "data-state state-empty";
+          stateEl.innerHTML = `<strong>Datos de WooCommerce</strong><span>La API de PayPal no está conectada. Se muestran los pedidos pagados con PayPal y la comisión real que PayPal registró en cada uno.${missing} No incluye disputas ni movimientos hechos fuera de la tienda.</span>`;
+        }
+        if (metaEl) metaEl.textContent = `Última actualización: ${new Date().toLocaleString("es-PE")} · ${woo.details.length} registros · ${from} → ${to} · Fuente: WooCommerce`;
+        logSync("PayPal", "ok", `${woo.details.length} pedidos WooCommerce · ${from} → ${to}`);
+        return;
+      } catch (wooErr) {
+        console.warn("[PayPal · WooCommerce]", wooErr);
+      }
+    }
+
     if (stateEl) {
       stateEl.className = `data-state ${type}`;
       stateEl.innerHTML = `<strong>${type === "state-permission" ? "Permisos insuficientes" : type === "state-not-connected" ? "PayPal no conectado" : "No se pudo cargar PayPal"}</strong><span>${esc(msg)}</span><button type="button" class="btn ghost" onclick="loadPaypalData()">Reintentar</button>`;
