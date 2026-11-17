@@ -6957,12 +6957,12 @@ function initSidebarToggle() {
 
   // Cerrar sidebar al clicar un item del nav en móvil
   $$(".nav-btn")?.forEach(b => b.addEventListener("click", () => {
-    if (window.innerWidth <= 768) closeMobileSidebar();
+    if (window.innerWidth <= 1100) closeMobileSidebar();
   }));
 
   // Detectar resize para resetear estado
   window.addEventListener("resize", () => {
-    if (window.innerWidth > 768) closeMobileSidebar();
+    if (window.innerWidth > 1100) closeMobileSidebar();
   });
 }
 
