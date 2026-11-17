@@ -413,11 +413,20 @@ function range() {
 // =============================================================
 let _loadInFlight = false;
 
-async function load() {
+// Huella de los pedidos: si no cambia, una actualización automática no redibuja nada.
+function ordersSignature(orders) {
+  return (orders || []).map(o => `${o.id}:${o.status}:${o.total}:${o.total_refunded || 0}`).join("|");
+}
+
+// `silent: true` es la actualización automática: sin "Cargando…", sin avisos y
+// sin redibujar la pantalla cuando los datos son los mismos.
+async function load(opts) {
+  const silent = Boolean(opts && opts.silent);
   const generation = ++_loadGeneration;
   if (_activeLoadController) _activeLoadController.abort();
   _loadInFlight = true;
-  setLoading(true);
+  if (!silent) setLoading(true);
+  const before = silent ? ordersSignature(state.orders) : null;
   const r = range();
   try {
     if (CONFIG.mode === "api") {
@@ -426,7 +435,7 @@ async function load() {
       state.orders = result.orders;
       state.analytics = result.analytics;
       $("#modeLabel").textContent = "WooCommerce API";
-      toast("Datos reales cargados desde WooCommerce", "success");
+      if (!silent) toast("Datos reales cargados desde WooCommerce", "success");
       // Sincronizar pedidos completados → GA4 (solo los que no se han enviado antes)
       syncOrdersToGA4(state.orders).catch(() => {});
     } else {
@@ -437,7 +446,9 @@ async function load() {
   } catch (e) {
     if (generation !== _loadGeneration) return;
     console.error("Error al cargar datos:", e);
-    if (CONFIG.mode === "api") {
+    if (silent) {
+      // Fallo de una actualización automática: se conservan los datos en pantalla.
+    } else if (CONFIG.mode === "api") {
       $("#modeLabel").textContent = "WooCommerce API (error)";
       toast("No se completó la carga. Se conservaron los últimos datos reales; pulsa Actualizar para reintentar.", "error");
     } else {
@@ -448,10 +459,11 @@ async function load() {
     }
   } finally {
     if (generation !== _loadGeneration) return;
-    setLoading(false);
+    if (!silent) setLoading(false);
     _loadInFlight = false;
   }
   $("#lastSync").textContent = "Actualizado: " + new Date().toLocaleString("es-PE");
+  if (silent && before === ordersSignature(state.orders)) return;
   populateCountries();
   applyFilters();
 }
@@ -3584,7 +3596,9 @@ function initPolling(minutes) {
   if (!minutes || minutes <= 0 || CONFIG.mode !== 'api') {
     if (btn)    btn.textContent    = '🔴 Live OFF';
     if (status) status.textContent = CONFIG.mode !== 'api' ? 'Conecta a WooCommerce primero.' : 'Auto-actualización desactivada.';
-    localStorage.removeItem('crm_polling_min');
+    // "0" = apagado a propósito; sin valor guardado se usa el intervalo por defecto.
+    if (CONFIG.mode === 'api') localStorage.setItem('crm_polling_min', '0');
+    else localStorage.removeItem('crm_polling_min');
     return;
   }
 
@@ -3599,7 +3613,7 @@ function initPolling(minutes) {
     if (_pollingSeconds < 0) _pollingSeconds = minutes * 60;
     const m = Math.floor(_pollingSeconds / 60);
     const s = String(_pollingSeconds % 60).padStart(2, '0');
-    if (btn)    btn.textContent    = `🟢 Live — ${m}:${s}`;
+    if (btn && btn.textContent !== '🟢 Live ON') btn.textContent = '🟢 Live ON';
     if (status) status.textContent = `Próxima actualización en ${m}:${s}`;
   }
 
@@ -3607,17 +3621,15 @@ function initPolling(minutes) {
   _pollingCountdown = setInterval(updateCountdown, 1000);
 
   _pollingTimer = setInterval(() => {
-    load().then(() => {
-      _pollingSeconds = minutes * 60;
-      toast('✅ Datos actualizados desde WooCommerce', 'success');
-    });
+    load({ silent: true }).then(() => { _pollingSeconds = minutes * 60; });
   }, minutes * 60000);
 }
 
 function autoStartPolling() {
   if (CONFIG.mode !== 'api') return;
-  // Solo se activa si el usuario guardó una preferencia explícita.
-  const saved = parseInt(localStorage.getItem('crm_polling_min') || '0');
+  // Por defecto se actualiza solo cada 5 minutos, en silencio. "0" = apagado a propósito.
+  const raw = localStorage.getItem('crm_polling_min');
+  const saved = raw === null ? 5 : (parseInt(raw) || 0);
   if (saved > 0) initPolling(saved);
 }
 
