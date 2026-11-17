@@ -2650,7 +2650,8 @@ function _initGlobeNow() {
     const grouped = groupBy(frame.orders, o => o.country_code || o.country);
     const pts = Object.entries(grouped)
       .map(([code, orders]) => {
-        const geo = COUNTRY_COORDS[code];
+        // Coordenadas del país a partir de la lista COUNTRIES (por código o nombre).
+        const geo = COUNTRIES.find(c => c.code === code || c.name === code);
         if (!geo) return null;
         return {
           code,
