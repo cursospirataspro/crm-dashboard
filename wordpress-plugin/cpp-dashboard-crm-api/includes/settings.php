@@ -42,6 +42,29 @@ function cpp_crm_dashboard_token() {
     return (string) get_option( CPP_CRM_DASHBOARD_TOKEN_OPTION, '' );
 }
 
+/**
+ * Credenciales de PayPal (modo real) para la vista PayPal del dashboard.
+ * Las constantes de wp-config.php mandan; si no existen, se usan los ajustes
+ * guardados desde esta pantalla. El modo sandbox sólo se configura por constantes.
+ *
+ * @return array{0:string,1:string} [client_id, secret]; cadenas vacías si falta alguna.
+ */
+function cpp_crm_paypal_credentials( $mode = 'live' ) {
+    if ( 'sandbox' === $mode ) {
+        return [
+            defined( 'CPP_PAYPAL_SANDBOX_CLIENT_ID' ) ? (string) CPP_PAYPAL_SANDBOX_CLIENT_ID : '',
+            defined( 'CPP_PAYPAL_SANDBOX_CLIENT_SECRET' ) ? (string) CPP_PAYPAL_SANDBOX_CLIENT_SECRET : '',
+        ];
+    }
+    if ( defined( 'CPP_PAYPAL_CLIENT_ID' ) && defined( 'CPP_PAYPAL_CLIENT_SECRET' ) ) {
+        return [ (string) CPP_PAYPAL_CLIENT_ID, (string) CPP_PAYPAL_CLIENT_SECRET ];
+    }
+    return [
+        (string) get_option( 'cpp_crm_paypal_client_id', '' ),
+        (string) get_option( 'cpp_crm_paypal_client_secret', '' ),
+    ];
+}
+
 /** Orígenes configurados (cadena separada por comas o arreglo), sin normalizar. */
 function cpp_crm_dashboard_configured_origins() {
     if ( defined( 'CPP_CRM_DASHBOARD_ALLOWED_ORIGINS' ) ) {
@@ -117,6 +140,33 @@ add_action( 'admin_post_cpp_crm_dashboard_save', function () {
         }
     }
 
+    // PayPal: vacío = conservar lo guardado. Nunca se muestra el secreto guardado.
+    if ( 'saved' === $status ) {
+        $pp_changed = false;
+        if ( ! empty( $_POST['cpp_crm_paypal_clear'] ) ) {
+            delete_option( 'cpp_crm_paypal_client_id' );
+            delete_option( 'cpp_crm_paypal_client_secret' );
+            $pp_changed = true;
+        } else {
+            foreach ( [ 'cpp_crm_paypal_client_id', 'cpp_crm_paypal_client_secret' ] as $field ) {
+                $value = isset( $_POST[ $field ] ) ? trim( (string) wp_unslash( $_POST[ $field ] ) ) : '';
+                if ( '' === $value ) {
+                    continue;
+                }
+                if ( ! preg_match( '/^[A-Za-z0-9_-]{20,200}$/', $value ) ) {
+                    $status = 'bad_paypal';
+                    continue;
+                }
+                update_option( $field, $value, false );
+                $pp_changed = true;
+            }
+        }
+        if ( $pp_changed ) {
+            // El token de acceso en caché pertenece a las credenciales anteriores.
+            delete_transient( 'cpp_paypal_access_token_live' );
+        }
+    }
+
     wp_safe_redirect( add_query_arg(
         [ 'page' => 'cpp-crm-dashboard', 'cpp_status' => $status ],
         admin_url( 'options-general.php' )
@@ -186,6 +236,11 @@ function cpp_crm_dashboard_render_settings() {
             <div class="notice notice-error"><p>
                 El token debe tener al menos <?php echo (int) CPP_CRM_DASHBOARD_MIN_TOKEN; ?> caracteres
                 y sólo letras, números, guion, guion bajo o punto. No se guardó ningún cambio.
+            </p></div>
+        <?php elseif ( 'bad_paypal' === $status ) : ?>
+            <div class="notice notice-error"><p>
+                Las credenciales de PayPal no tienen un formato válido (sólo letras, números, guion
+                y guion bajo, sin espacios). Revisa que las pegaste completas.
             </p></div>
         <?php elseif ( 'no_dashboard' === $status ) : ?>
             <div class="notice notice-error"><p>
@@ -277,6 +332,45 @@ function cpp_crm_dashboard_render_settings() {
                                 Ahora mismo se usa el valor de <code>wp-config.php</code>.
                             <?php endif; ?>
                         </p>
+                    </td>
+                </tr>
+            </table>
+
+            <h2>PayPal (opcional)</h2>
+            <p>
+                Permite que la vista PayPal del dashboard lea los movimientos reales de tu cuenta
+                (sólo lectura). Usa una app Live de PayPal con el permiso «Búsqueda de transacciones».
+                <?php
+                list( $pp_id_now, $pp_secret_now ) = cpp_crm_paypal_credentials( 'live' );
+                $pp_in_config = defined( 'CPP_PAYPAL_CLIENT_ID' ) && defined( 'CPP_PAYPAL_CLIENT_SECRET' );
+                ?>
+                <strong>Estado:</strong>
+                <?php echo ( '' !== $pp_id_now && '' !== $pp_secret_now )
+                    ? ( $pp_in_config ? 'configurado en wp-config.php.' : 'credenciales guardadas.' )
+                    : 'sin configurar.'; ?>
+            </p>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><label for="cpp_crm_paypal_client_id">Client ID</label></th>
+                    <td>
+                        <input type="password" id="cpp_crm_paypal_client_id" name="cpp_crm_paypal_client_id"
+                               class="large-text" value="" autocomplete="new-password"
+                               <?php disabled( $pp_in_config ); ?>>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row"><label for="cpp_crm_paypal_client_secret">Secret</label></th>
+                    <td>
+                        <input type="password" id="cpp_crm_paypal_client_secret" name="cpp_crm_paypal_client_secret"
+                               class="large-text" value="" autocomplete="new-password"
+                               <?php disabled( $pp_in_config ); ?>>
+                        <p class="description">
+                            Deja ambos vacíos para conservar lo guardado; nunca se muestran los valores guardados.
+                        </p>
+                        <p><label>
+                            <input type="checkbox" name="cpp_crm_paypal_clear" value="1" <?php disabled( $pp_in_config ); ?>>
+                            Borrar las credenciales de PayPal guardadas
+                        </label></p>
                     </td>
                 </tr>
             </table>

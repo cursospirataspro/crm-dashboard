@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.9.2
+ * Version:      2.10.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -235,7 +235,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     $date_type = cpp_crm_analytics_date_type();
 
     $cache_key = 'cpp_crm_overview_' . md5( implode( '|', [
-        '2.9.2',
+        '2.10.0',
         $date_type,
         $from,
         $to,
@@ -570,10 +570,10 @@ add_action( 'rest_api_init', function () {
 
 function cpp_paypal_get_token( $mode = 'live' ) {
     $sandbox = $mode === 'sandbox';
-    $client_const = $sandbox ? 'CPP_PAYPAL_SANDBOX_CLIENT_ID' : 'CPP_PAYPAL_CLIENT_ID';
-    $secret_const = $sandbox ? 'CPP_PAYPAL_SANDBOX_CLIENT_SECRET' : 'CPP_PAYPAL_CLIENT_SECRET';
-    if ( ! defined($client_const) || ! defined($secret_const) ) {
-        return new WP_Error('paypal_no_config', 'Configura las credenciales PayPal del entorno seleccionado en wp-config.php', [ 'status' => 409 ]);
+    // Constantes de wp-config.php o, en modo real, los ajustes guardados en WordPress.
+    list( $pp_client_id, $pp_client_secret ) = cpp_crm_paypal_credentials( $sandbox ? 'sandbox' : 'live' );
+    if ( '' === $pp_client_id || '' === $pp_client_secret ) {
+        return new WP_Error('paypal_no_config', 'Configura las credenciales PayPal en Ajustes → CPP CRM Dashboard (o en wp-config.php).', [ 'status' => 409 ]);
     }
 
     $cached = get_transient('cpp_paypal_access_token_' . $mode);
@@ -582,7 +582,7 @@ function cpp_paypal_get_token( $mode = 'live' ) {
     $base = $sandbox ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
     $response = wp_remote_post( $base . '/v1/oauth2/token', [
         'headers' => [
-            'Authorization' => 'Basic ' . base64_encode( constant($client_const) . ':' . constant($secret_const) ),
+            'Authorization' => 'Basic ' . base64_encode( $pp_client_id . ":" . $pp_client_secret ),
             'Content-Type'  => 'application/x-www-form-urlencoded',
         ],
         'body'    => 'grant_type=client_credentials',
