@@ -415,7 +415,8 @@ let _loadInFlight = false;
 
 // Huella de los pedidos: si no cambia, una actualización automática no redibuja nada.
 function ordersSignature(orders) {
-  return (orders || []).map(o => `${o.id}:${o.status}:${o.total}:${o.total_refunded || 0}`).join("|");
+  // Incluye la comisión: puede llegar después (el plugin la recupera de la pasarela).
+  return (orders || []).map(o => `${o.id}:${o.status}:${o.total}:${o.total_refunded || 0}:${o.gateway_fee ?? ""}`).join("|");
 }
 
 // `silent: true` es la actualización automática: sin "Cargando…", sin avisos y
