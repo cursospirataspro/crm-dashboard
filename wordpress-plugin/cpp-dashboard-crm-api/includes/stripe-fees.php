@@ -155,14 +155,25 @@ function cpp_crm_stripe_diagnostics() {
     if ( ! function_exists( 'wc_get_orders' ) ) {
         return $summary;
     }
+    // 'type' => 'shop_order': sin esto WooCommerce también devuelve los reembolsos,
+    // que son otro tipo de objeto y no tienen método de pago.
+    try {
     $orders = wc_get_orders( [
+        'type'         => 'shop_order',
         'limit'        => 600,
         'status'       => [ 'wc-completed', 'wc-processing', 'wc-refunded' ],
         'date_created' => '>' . ( time() - 90 * DAY_IN_SECONDS ),
         'orderby'      => 'date',
         'order'        => 'DESC',
     ] );
-    foreach ( $orders as $order ) {
+    } catch ( Throwable $e ) {
+        // El resumen es informativo: un fallo aquí no debe romper la pantalla de ajustes.
+        return $summary;
+    }
+    foreach ( (array) $orders as $order ) {
+        if ( ! is_object( $order ) || ! method_exists( $order, 'get_payment_method' ) ) {
+            continue;
+        }
         if ( 0 !== strpos( strtolower( (string) $order->get_payment_method() ), 'stripe' ) ) {
             continue;
         }

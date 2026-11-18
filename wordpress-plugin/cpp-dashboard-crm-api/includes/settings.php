@@ -402,7 +402,12 @@ function cpp_crm_dashboard_render_settings() {
             <?php
             $stripe_in_config = defined( 'CPP_STRIPE_RESTRICTED_KEY' ) && CPP_STRIPE_RESTRICTED_KEY;
             $stripe_ready     = cpp_crm_stripe_key_is_valid( cpp_crm_stripe_key() );
-            $stripe_diag      = cpp_crm_stripe_diagnostics();
+            // Resumen informativo: cualquier fallo al calcularlo no debe romper esta pantalla.
+            try {
+                $stripe_diag = cpp_crm_stripe_diagnostics();
+            } catch ( Throwable $e ) {
+                $stripe_diag = [ 'total' => 0, 'missing' => 0, 'with_reference' => 0, 'resolved' => 0 ];
+            }
             $stripe_error     = (string) get_option( 'cpp_crm_stripe_last_error', '' );
             ?>
             <p>
