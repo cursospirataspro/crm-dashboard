@@ -2,7 +2,7 @@
 /**
  * Plugin Name:  CPP CRM Dashboard API for WooCommerce
  * Description:  Endpoint seguro para el dashboard CRM global. Expone pedidos, clientes, país, ciudad, cursos y métricas de WooCommerce.
- * Version:      2.10.0
+ * Version:      2.11.0
  * Author:       Cursos Dashboard
  * Requires PHP: 7.4
  * WC requires at least: 5.0
@@ -12,6 +12,7 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 require_once __DIR__ . '/includes/settings.php';
+require_once __DIR__ . '/includes/stripe-fees.php';
 require_once __DIR__ . '/includes/email-automations.php';
 
 register_activation_hook( __FILE__, 'cpp_email_automations_activate' );
@@ -235,7 +236,7 @@ function cpp_crm_dashboard_overview( WP_REST_Request $request ) {
     $date_type = cpp_crm_analytics_date_type();
 
     $cache_key = 'cpp_crm_overview_' . md5( implode( '|', [
-        '2.10.0',
+        '2.11.0',
         $date_type,
         $from,
         $to,
@@ -388,14 +389,21 @@ function cpp_crm_order_gateway_fee( $order ) {
     }
 
     $stripe = null;
-    $fee    = cpp_crm_order_meta_number( $order, [ '_stripe_fee', '_cpp_hist_stripe_fee' ] );
+    // '_cpp_crm_stripe_*' es la comisión real que este plugin consultó a Stripe.
+    $fee    = cpp_crm_order_meta_number( $order, [ '_stripe_fee', '_cpp_hist_stripe_fee', '_cpp_crm_stripe_fee' ] );
     if ( null !== $fee ) {
         $stripe = [
             'gateway'  => 'stripe',
             'fee'      => round( abs( $fee ), 2 ),
-            'net'      => cpp_crm_order_meta_number( $order, [ '_stripe_net', '_cpp_hist_stripe_net' ] ),
-            'currency' => strtoupper( cpp_crm_order_meta_text( $order, [ '_stripe_currency', '_cpp_hist_stripe_currency' ] ) ),
+            'net'      => cpp_crm_order_meta_number( $order, [ '_stripe_net', '_cpp_hist_stripe_net', '_cpp_crm_stripe_net' ] ),
+            'currency' => strtoupper( cpp_crm_order_meta_text( $order, [ '_stripe_currency', '_cpp_hist_stripe_currency', '_cpp_crm_stripe_currency' ] ) ),
         ];
+    } elseif ( 'stripe' === $gateway ) {
+        // Sin comisión guardada: se consulta a Stripe (si hay clave) y queda guardada en el pedido.
+        $resolved = cpp_crm_stripe_resolve_missing_fee( $order );
+        if ( $resolved ) {
+            $stripe = [ 'gateway' => 'stripe', 'fee' => $resolved['fee'], 'net' => $resolved['net'], 'currency' => $resolved['currency'] ];
+        }
     }
 
     $paypal = null;

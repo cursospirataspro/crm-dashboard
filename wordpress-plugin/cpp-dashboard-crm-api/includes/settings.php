@@ -167,6 +167,24 @@ add_action( 'admin_post_cpp_crm_dashboard_save', function () {
         }
     }
 
+    // Stripe: sólo claves restringidas (rk_…). Vacío = conservar la guardada.
+    if ( 'saved' === $status ) {
+        if ( ! empty( $_POST['cpp_crm_stripe_clear'] ) ) {
+            delete_option( 'cpp_crm_stripe_key' );
+            delete_option( 'cpp_crm_stripe_last_error' );
+        } else {
+            $stripe_key = isset( $_POST['cpp_crm_stripe_key'] ) ? trim( (string) wp_unslash( $_POST['cpp_crm_stripe_key'] ) ) : '';
+            if ( '' !== $stripe_key ) {
+                if ( ! cpp_crm_stripe_key_is_valid( $stripe_key ) ) {
+                    $status = 'bad_stripe';
+                } else {
+                    update_option( 'cpp_crm_stripe_key', $stripe_key, false );
+                    delete_option( 'cpp_crm_stripe_last_error' );
+                }
+            }
+        }
+    }
+
     wp_safe_redirect( add_query_arg(
         [ 'page' => 'cpp-crm-dashboard', 'cpp_status' => $status ],
         admin_url( 'options-general.php' )
@@ -241,6 +259,11 @@ function cpp_crm_dashboard_render_settings() {
             <div class="notice notice-error"><p>
                 Las credenciales de PayPal no tienen un formato válido (sólo letras, números, guion
                 y guion bajo, sin espacios). Revisa que las pegaste completas.
+            </p></div>
+        <?php elseif ( 'bad_stripe' === $status ) : ?>
+            <div class="notice notice-error"><p>
+                La clave de Stripe debe ser una <strong>clave restringida</strong> (empieza por <code>rk_live_</code>).
+                No se aceptan claves secretas completas (<code>sk_…</code>). No se guardó.
             </p></div>
         <?php elseif ( 'no_dashboard' === $status ) : ?>
             <div class="notice notice-error"><p>
@@ -370,6 +393,50 @@ function cpp_crm_dashboard_render_settings() {
                         <p><label>
                             <input type="checkbox" name="cpp_crm_paypal_clear" value="1" <?php disabled( $pp_in_config ); ?>>
                             Borrar las credenciales de PayPal guardadas
+                        </label></p>
+                    </td>
+                </tr>
+            </table>
+
+            <h2>Stripe (opcional)</h2>
+            <?php
+            $stripe_in_config = defined( 'CPP_STRIPE_RESTRICTED_KEY' ) && CPP_STRIPE_RESTRICTED_KEY;
+            $stripe_ready     = cpp_crm_stripe_key_is_valid( cpp_crm_stripe_key() );
+            $stripe_diag      = cpp_crm_stripe_diagnostics();
+            $stripe_error     = (string) get_option( 'cpp_crm_stripe_last_error', '' );
+            ?>
+            <p>
+                Algunos cobros de Stripe no guardan su comisión en el pedido. Con una clave restringida de
+                <strong>sólo lectura</strong> el dashboard consulta la comisión real y la guarda en el pedido.
+                Permisos necesarios en Stripe: <em>Charges</em>, <em>PaymentIntents</em> y
+                <em>Balance transactions</em>, todos en Lectura.
+                <strong>Estado:</strong>
+                <?php echo $stripe_ready ? ( $stripe_in_config ? 'configurada en wp-config.php.' : 'clave guardada.' ) : 'sin configurar.'; ?>
+            </p>
+            <p id="cpp-crm-stripe-diag">
+                Últimos 90 días: <strong><?php echo (int) $stripe_diag['total']; ?></strong> pedidos pagados con Stripe;
+                <strong><?php echo (int) $stripe_diag['missing']; ?></strong> sin comisión guardada
+                (<?php echo (int) $stripe_diag['with_reference']; ?> con identificador del cobro, que sí se pueden consultar);
+                <strong><?php echo (int) $stripe_diag['resolved']; ?></strong> ya recuperadas desde Stripe.
+            </p>
+            <?php if ( '' !== $stripe_error ) : ?>
+                <p class="notice notice-warning inline" style="padding:8px 12px">
+                    Último aviso de Stripe: <?php echo esc_html( $stripe_error ); ?>
+                </p>
+            <?php endif; ?>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th scope="row"><label for="cpp_crm_stripe_key">Clave restringida</label></th>
+                    <td>
+                        <input type="password" id="cpp_crm_stripe_key" name="cpp_crm_stripe_key"
+                               class="large-text" value="" autocomplete="new-password"
+                               <?php disabled( $stripe_in_config ); ?>>
+                        <p class="description">
+                            Empieza por <code>rk_live_</code>. Déjala vacía para conservar la guardada; nunca se muestra.
+                        </p>
+                        <p><label>
+                            <input type="checkbox" name="cpp_crm_stripe_clear" value="1" <?php disabled( $stripe_in_config ); ?>>
+                            Borrar la clave de Stripe guardada
                         </label></p>
                     </td>
                 </tr>
