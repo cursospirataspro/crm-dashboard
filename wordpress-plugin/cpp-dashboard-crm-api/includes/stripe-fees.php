@@ -113,7 +113,10 @@ function cpp_crm_stripe_resolve_missing_fee( $order ) {
         return null;
     }
     $checked = (int) $order->get_meta( '_cpp_crm_stripe_fee_checked', true );
-    if ( $checked && ( time() - $checked ) < CPP_CRM_STRIPE_RETRY_HOURS * HOUR_IN_SECONDS ) {
+    // Un intento fallido sólo bloquea si ocurrió con la clave actual: al guardar una
+    // clave nueva (por ejemplo, con los permisos corregidos) se vuelve a intentar enseguida.
+    $key_saved_at = (int) get_option( 'cpp_crm_stripe_key_saved_at', 0 );
+    if ( $checked && $checked >= $key_saved_at && ( time() - $checked ) < CPP_CRM_STRIPE_RETRY_HOURS * HOUR_IN_SECONDS ) {
         return null;
     }
     $reference = cpp_crm_stripe_order_reference( $order );

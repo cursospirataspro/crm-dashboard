@@ -179,6 +179,7 @@ add_action( 'admin_post_cpp_crm_dashboard_save', function () {
                     $status = 'bad_stripe';
                 } else {
                     update_option( 'cpp_crm_stripe_key', $stripe_key, false );
+                    update_option( 'cpp_crm_stripe_key_saved_at', time(), false );
                     delete_option( 'cpp_crm_stripe_last_error' );
                 }
             }
